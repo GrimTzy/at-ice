@@ -13,10 +13,12 @@ function LandingPage() {
           <a href="#products" className="hover:text-blue-200 transition">Products</a>
           <a href="#contact" className="hover:text-blue-200 transition">Contact</a>
         </div>
-        <button className="bg-blue-400 hover:bg-blue-300 text-white font-bold px-6 py-2 rounded-lg transition">
+         <a href="/login">
+         <button className="bg-blue-400 hover:bg-blue-300 text-white font-bold px-6 py-2 rounded-lg transition">
           Login
-        </button>
-      </nav>
+          </button>
+           </a>
+       </nav>
 
       <hr className="border-0 h-[4px] bg-blue-400"/>
 
@@ -32,9 +34,11 @@ function LandingPage() {
         <p className="text-blue-200 text-md max-w-xl mb-8">
           Your trusted supplier of quality tube ice for commercial and industrial use in Luzon.
         </p>
-        <button className="bg-blue-400 hover:bg-blue-300 text-white font-bold px-10 py-3 rounded-lg text-lg transition">
-          Get Started
-        </button>
+        <a href="/login">
+         <button className="bg-blue-400 hover:bg-blue-300 text-white font-bold px-10 py-3 rounded-lg text-lg transition">
+            Get Started
+           </button>
+        </a>
       </div>
 
       <hr className="border-0 h-[4px] bg-blue-400"/>
