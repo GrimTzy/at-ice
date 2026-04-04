@@ -1,0 +1,107 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Product;
+use App\Models\StockMovement;
+use App\Models\InventoryAlert;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class StockMovementController extends Controller
+{
+    public function index()
+    {
+        $movements = StockMovement::with(['product', 'enteredBy', 'confirmedBy'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+        return response()->json($movements);
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'product_id'   => 'required|exists:products,id',
+            'type'         => 'required|in:stock_in,stock_out,adjustment',
+            'quantity'     => 'required|integer|min:1',
+            'reference_no' => 'nullable|string',
+            'source'       => 'nullable|string',
+            'reason'       => 'nullable|string',
+        ]);
+
+        $product = Product::findOrFail($validated['product_id']);
+
+        $movement = StockMovement::create([
+            ...$validated,
+            'stock_before' => $product->current_stock,
+            'stock_after'  => $product->current_stock,
+            'status'       => 'pending',
+            'entered_by'   => $request->user()->id,
+        ]);
+
+        return response()->json($movement->load(['product', 'enteredBy']), 201);
+    }
+
+    public function confirm(Request $request, $id)
+    {
+        $movement = StockMovement::findOrFail($id);
+
+        if ($movement->status !== 'pending') {
+            return response()->json(['message' => 'Movement already processed.'], 422);
+        }
+
+        if ($movement->entered_by === $request->user()->id) {
+            return response()->json(['message' => 'Cannot confirm your own entry. Double-entry requires a different user.'], 403);
+        }
+
+        DB::transaction(function () use ($movement, $request) {
+            $product = Product::lockForUpdate()->findOrFail($movement->product_id);
+
+            $newStock = match($movement->type) {
+                'stock_in'   => $product->current_stock + $movement->quantity,
+                'stock_out'  => $product->current_stock - $movement->quantity,
+                'adjustment' => $movement->quantity,
+            };
+
+            $movement->update([
+                'stock_before' => $product->current_stock,
+                'stock_after'  => $newStock,
+                'status'       => 'confirmed',
+                'confirmed_by' => $request->user()->id,
+                'confirmed_at' => now(),
+            ]);
+
+            $product->update(['current_stock' => $newStock]);
+
+            if ($product->isLowStock()) {
+                InventoryAlert::firstOrCreate(
+                    ['product_id' => $product->id, 'alert_type' => 'low_stock', 'is_resolved' => false],
+                    ['message' => "{$product->name} is low on stock. Current: {$newStock} {$product->unit}(s)."]
+                );
+            }
+        });
+
+        return response()->json([
+            'message'  => 'Stock movement confirmed.',
+            'movement' => $movement->fresh()->load(['product', 'enteredBy', 'confirmedBy'])
+        ]);
+    }
+
+    public function cancel(Request $request, $id)
+    {
+        $movement = StockMovement::findOrFail($id);
+
+        if ($movement->status !== 'pending') {
+            return response()->json(['message' => 'Only pending movements can be cancelled.'], 422);
+        }
+
+        $movement->update(['status' => 'cancelled']);
+        return response()->json(['message' => 'Movement cancelled.']);
+    }
+
+    public function show($id)
+    {
+        $movement = StockMovement::with(['product', 'enteredBy', 'confirmedBy'])->findOrFail($id);
+        return response()->json($movement);
+    }
+}

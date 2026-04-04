@@ -7,6 +7,9 @@ use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\StockMovementController;
+use App\Http\Controllers\InventoryAlertController;
 
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
@@ -31,6 +34,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('leave-requests/{id}', [LeaveRequestController::class, 'destroy']);
 
     Route::apiResource('payrolls', PayrollController::class);
+    // IMS Routes
+    Route::apiResource('products', ProductController::class);
+
+    Route::get('stock-movements', [StockMovementController::class, 'index']);
+    Route::post('stock-movements', [StockMovementController::class, 'store']);
+    Route::get('stock-movements/{id}', [StockMovementController::class, 'show']);
+    Route::put('stock-movements/{id}/confirm', [StockMovementController::class, 'confirm']);
+    Route::put('stock-movements/{id}/cancel', [StockMovementController::class, 'cancel']);
+
+    Route::get('inventory-alerts', [InventoryAlertController::class, 'index']);
+    Route::put('inventory-alerts/{id}/resolve', [InventoryAlertController::class, 'resolve']);
 
     // Admin only routes
     Route::middleware('role:admin')->group(function () {
