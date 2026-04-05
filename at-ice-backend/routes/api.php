@@ -10,6 +10,9 @@ use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\InventoryAlertController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\DeliveryController;
+use App\Http\Controllers\DeliveryProofController;
 
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
@@ -34,6 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('leave-requests/{id}', [LeaveRequestController::class, 'destroy']);
 
     Route::apiResource('payrolls', PayrollController::class);
+
     // IMS Routes
     Route::apiResource('products', ProductController::class);
 
@@ -45,6 +49,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('inventory-alerts', [InventoryAlertController::class, 'index']);
     Route::put('inventory-alerts/{id}/resolve', [InventoryAlertController::class, 'resolve']);
+
+    // SCM Routes
+    Route::apiResource('suppliers', SupplierController::class);
+
+    Route::get('deliveries', [DeliveryController::class, 'index']);
+    Route::post('deliveries', [DeliveryController::class, 'store']);
+    Route::get('deliveries/{id}', [DeliveryController::class, 'show']);
+    Route::put('deliveries/{id}/cancel', [DeliveryController::class, 'cancel']);
+
+    Route::post('deliveries/{id}/proof', [DeliveryProofController::class, 'store']);
+    Route::get('deliveries/{id}/proof', [DeliveryProofController::class, 'index']);
 
     // Admin only routes
     Route::middleware('role:admin')->group(function () {
