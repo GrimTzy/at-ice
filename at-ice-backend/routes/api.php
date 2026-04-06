@@ -13,6 +13,9 @@ use App\Http\Controllers\InventoryAlertController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DeliveryProofController;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PaymentController;
 
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
@@ -60,6 +63,20 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('deliveries/{id}/proof', [DeliveryProofController::class, 'store']);
     Route::get('deliveries/{id}/proof', [DeliveryProofController::class, 'index']);
+
+    // CRM
+    Route::get('customers', [CustomerController::class, 'index']);
+    Route::post('customers', [CustomerController::class, 'store']);
+    Route::get('customers/{id}', [CustomerController::class, 'show']);
+    Route::put('customers/{id}', [CustomerController::class, 'update']);
+    Route::delete('customers/{id}', [CustomerController::class, 'destroy']);
+    Route::get('orders', [OrderController::class, 'index']);
+    Route::post('orders', [OrderController::class, 'store']);
+    Route::get('orders/{id}', [OrderController::class, 'show']);
+    Route::put('orders/{id}/status', [OrderController::class, 'updateStatus']);
+    Route::put('orders/{id}/cancel', [OrderController::class, 'cancel']);
+    Route::get('payments', [PaymentController::class, 'index']);
+    Route::post('payments', [PaymentController::class, 'store']);
 
     // Admin only routes
     Route::middleware('role:admin')->group(function () {
