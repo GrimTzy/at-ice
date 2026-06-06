@@ -1,0 +1,102 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Receipt;
+use Illuminate\Http\Request;
+
+class ReceiptController extends Controller
+{
+
+    public function index(Request $request)
+    {
+        $query = Receipt::with([
+            'delivery',
+            'customer',
+            'salesman',
+            'deliveryProof',
+        ]);
+
+        if ($request->has('payment_status')) {
+            $query->where('payment_status', $request->payment_status);
+        }
+
+        if ($request->has('from')) {
+            $query->whereDate('created_at', '>=', $request->from);
+        }
+        if ($request->has('to')) {
+            $query->whereDate('created_at', '<=', $request->to);
+        }
+
+        $receipts = $query->latest()->get();
+
+        return response()->json($receipts);
+    }
+
+    public function show($id)
+    {
+        $receipt = Receipt::with([
+            'delivery',
+            'customer',
+            'salesman',
+            'deliveryProof',
+        ])->findOrFail($id);
+
+        return response()->json($receipt);
+    }
+
+    public function markAsPaid(Request $request, $id)
+    {
+        $request->validate([
+            'payment_method' => 'required|in:cash,gcash,check,bank_transfer',
+        ]);
+
+        $receipt = Receipt::findOrFail($id);
+
+        if ($receipt->payment_status === 'paid') {
+            return response()->json(['message' => 'Receipt already marked as paid.'], 422);
+        }
+
+        $receipt->update([
+            'payment_status' => 'paid',
+            'payment_method' => $request->payment_method,
+            'paid_at'        => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Receipt marked as paid successfully!',
+            'receipt' => $receipt,
+        ]);
+    }
+
+    public function overdue()
+    {
+        $receipts = Receipt::with(['customer', 'delivery'])
+            ->where('payment_status', 'unpaid')
+            ->where('created_at', '<=', now()->subDays(14))
+            ->latest()
+            ->get();
+
+        // Auto-mark as overdue in DB
+        Receipt::where('payment_status', 'unpaid')
+            ->where('created_at', '<=', now()->subDays(14))
+            ->update(['payment_status' => 'overdue']);
+
+        return response()->json($receipts);
+    }
+
+    public function summary()
+    {
+        $totalSales    = Receipt::where('payment_status', 'paid')->sum('total_amount');
+        $totalUnpaid   = Receipt::where('payment_status', 'unpaid')->sum('total_amount');
+        $totalOverdue  = Receipt::where('payment_status', 'overdue')->sum('total_amount');
+        $receiptCount  = Receipt::count();
+
+        return response()->json([
+            'total_sales'   => $totalSales,
+            'total_unpaid'  => $totalUnpaid,
+            'total_overdue' => $totalOverdue,
+            'receipt_count' => $receiptCount,
+        ]);
+    }
+}

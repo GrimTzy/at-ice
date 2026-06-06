@@ -15,8 +15,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',
-        'is_active',
+        'role',      // admin | hr | employee | driver | customer
+        'sub_role',  // checker | salesman | maintenance | null
     ];
 
     protected $hidden = [
@@ -28,14 +28,22 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'is_active' => 'boolean',
+            'password'          => 'hashed',
         ];
     }
+
+    // ─────────────────────────────────────────────
+    // ROLE HELPERS
+    // ─────────────────────────────────────────────
 
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public function isHR(): bool
+    {
+        return $this->role === 'hr';
     }
 
     public function isEmployee(): bool
@@ -51,5 +59,39 @@ class User extends Authenticatable
     public function isCustomer(): bool
     {
         return $this->role === 'customer';
+    }
+
+    // ─────────────────────────────────────────────
+    // SUB_ROLE HELPERS (Employee only)
+    // ─────────────────────────────────────────────
+
+    public function isChecker(): bool
+    {
+        return $this->role === 'employee' && $this->sub_role === 'checker';
+    }
+
+    public function isSalesman(): bool
+    {
+        return $this->role === 'employee' && $this->sub_role === 'salesman';
+    }
+
+    public function isMaintenance(): bool
+    {
+        return $this->role === 'employee' && $this->sub_role === 'maintenance';
+    }
+
+    // Generic sub_role check — useful for future sub_roles
+    public function hasSubRole(string $subRole): bool
+    {
+        return $this->role === 'employee' && $this->sub_role === $subRole;
+    }
+
+    // ─────────────────────────────────────────────
+    // RELATIONSHIPS
+    // ─────────────────────────────────────────────
+
+    public function employee()
+    {
+        return $this->hasOne(Employee::class);
     }
 }
