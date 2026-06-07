@@ -21,7 +21,7 @@ class Delivery extends Model
     ];
 
     public function driver()     { return $this->belongsTo(User::class, 'driver_id'); }
-    public function customer()   { return $this->belongsTo(User::class, 'customer_id'); }
+    public function customer()   { return $this->belongsTo(Customer::class, 'customer_id'); } // ✅ fixed
     public function supplier()   { return $this->belongsTo(Supplier::class); }
     public function preparedBy() { return $this->belongsTo(User::class, 'prepared_by'); }
     public function items()      { return $this->hasMany(DeliveryItem::class); }

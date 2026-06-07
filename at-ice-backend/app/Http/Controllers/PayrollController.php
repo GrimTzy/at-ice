@@ -59,7 +59,7 @@ class PayrollController extends Controller
             'other_deductions'     => $request->other_deductions ?? 0,
             'net_pay'              => $request->net_pay,
             'status'               => $request->status ?? 'pending',
-            'prepared_by'          => $request->prepared_by ?? 1,
+            'prepared_by'          => auth()->id(),
             'notes'                => $request->notes ?? null,
         ]);
 

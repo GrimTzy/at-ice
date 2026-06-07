@@ -44,9 +44,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('delivery-proofs/{id}',[DeliveryProofController::class, 'show']);
 
         // Receipts (Admin views + manages)
-        Route::get('receipts',                 [ReceiptController::class, 'index']);
         Route::get('receipts/overdue',         [ReceiptController::class, 'overdue']);
         Route::get('receipts/summary',         [ReceiptController::class, 'summary']);
+        Route::get('receipts',                 [ReceiptController::class, 'index']);
         Route::get('receipts/{id}',            [ReceiptController::class, 'show']);
         Route::patch('receipts/{id}/paid',     [ReceiptController::class, 'markAsPaid']);
 

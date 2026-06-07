@@ -17,17 +17,17 @@ class DeliveryController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'delivery_no'            => 'required|unique:deliveries',
-            'driver_id'              => 'required|exists:users,id',
-            'customer_id'            => 'nullable|exists:users,id',
-            'delivery_type'          => 'required|in:outbound,inbound',
-            'supplier_id'            => 'nullable|exists:suppliers,id',
-            'scheduled_date'         => 'required|date',
-            'notes'                  => 'nullable|string',
-            'items'                  => 'required|array|min:1',
-            'items.*.product_id'     => 'required|exists:products,id',
+            'delivery_no'              => 'required|unique:deliveries',
+            'driver_id'                => 'required|exists:users,id',
+            'customer_id'              => 'nullable|exists:users,id',
+            'delivery_type'            => 'required|in:outbound,inbound',
+            'supplier_id'              => 'nullable|exists:suppliers,id',
+            'scheduled_date'           => 'required|date',
+            'notes'                    => 'nullable|string',
+            'items'                    => 'required|array|min:1',
+            'items.*.product_id'       => 'required|exists:products,id',
             'items.*.quantity_ordered' => 'required|integer|min:1',
-            'items.*.unit_price'     => 'required|numeric|min:0',
+            'items.*.unit_price'       => 'required|numeric|min:0',
         ]);
 
         $data['prepared_by'] = Auth::id();
@@ -60,5 +60,28 @@ class DeliveryController extends Controller
 
         $delivery->update(['status' => 'cancelled']);
         return response()->json(['message' => 'Delivery cancelled']);
+    }
+
+    // Salesman — view assigned deliveries
+    public function myDeliveries(Request $request)
+    {
+        $deliveries = Delivery::with(['driver', 'customer', 'items.product'])
+            ->where('status', 'pending')
+            ->whereDoesntHave('proofs')
+            ->get();
+
+        return response()->json($deliveries);
+    }
+
+    // Driver — view assigned deliveries
+    public function driverDeliveries(Request $request)
+    {
+        $deliveries = Delivery::with(['customer', 'items.product', 'proofs'])
+            ->where('driver_id', $request->user()->id)
+            ->whereIn('status', ['pending', 'in_transit', 'delivered'])
+            ->orderBy('scheduled_date', 'asc')
+            ->get();
+
+        return response()->json($deliveries);
     }
 }

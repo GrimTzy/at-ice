@@ -92,4 +92,15 @@ class OrderController extends Controller
         $order->update(['status' => 'cancelled']);
         return response()->json(['message' => 'Order cancelled.']);
     }
+
+    // Customer — view own orders
+    public function myOrders(Request $request)
+    {
+        $orders = Order::with(['items.product', 'payments'])
+            ->where('customer_id', $request->user()->id)
+            ->latest()
+            ->get();
+
+        return response()->json($orders);
+    }
 }

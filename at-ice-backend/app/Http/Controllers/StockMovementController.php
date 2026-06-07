@@ -104,4 +104,41 @@ class StockMovementController extends Controller
         $movement = StockMovement::with(['product', 'enteredBy', 'confirmedBy'])->findOrFail($id);
         return response()->json($movement);
     }
+
+    // Maintenance — request stock out
+    public function requestStockOut(Request $request)
+    {
+        $validated = $request->validate([
+            'product_id'   => 'required|exists:products,id',
+            'quantity'     => 'required|integer|min:1',
+            'reason'       => 'required|string',
+            'reference_no' => 'nullable|string',
+        ]);
+
+        $product = Product::findOrFail($validated['product_id']);
+
+        if ($product->current_stock < $validated['quantity']) {
+            return response()->json([
+                'message' => 'Insufficient stock. Available: ' . $product->current_stock . ' ' . $product->unit . '(s).',
+            ], 422);
+        }
+
+        $movement = StockMovement::create([
+            'product_id'   => $validated['product_id'],
+            'type'         => 'stock_out',
+            'quantity'     => $validated['quantity'],
+            'stock_before' => $product->current_stock,
+            'stock_after'  => $product->current_stock,
+            'reference_no' => $validated['reference_no'] ?? null,
+            'source'       => 'maintenance',
+            'reason'       => $validated['reason'],
+            'status'       => 'pending',
+            'entered_by'   => $request->user()->id,
+        ]);
+
+        return response()->json([
+            'message'  => 'Stock out request submitted. Waiting for Checker confirmation.',
+            'movement' => $movement->load(['product', 'enteredBy']),
+        ], 201);
+    }
 }

@@ -71,16 +71,16 @@ class ReceiptController extends Controller
 
     public function overdue()
     {
-        $receipts = Receipt::with(['customer', 'delivery'])
-            ->where('payment_status', 'unpaid')
+        // Auto-mark as overdue FIRST
+     Receipt::where('payment_status', 'unpaid')
             ->where('created_at', '<=', now()->subDays(14))
-            ->latest()
-            ->get();
+          ->update(['payment_status' => 'overdue']);
 
-        // Auto-mark as overdue in DB
-        Receipt::where('payment_status', 'unpaid')
-            ->where('created_at', '<=', now()->subDays(14))
-            ->update(['payment_status' => 'overdue']);
+      // THEN fetch updated records
+      $receipts = Receipt::with(['customer', 'delivery'])
+         ->where('payment_status', 'overdue')
+         ->latest()
+          ->get();
 
         return response()->json($receipts);
     }

@@ -30,8 +30,12 @@ class RoleMiddleware
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
+        // ── Admin override — Admin can access everything ──
+        if ($user->role === 'admin') {
+            return $next($request);
+        }
+
         // ── Single sub_role check (e.g. 'role:employee,checker') ──
-        // If second param looks like a sub_role, treat it as sub_role filter
         $knownSubRoles = ['checker', 'salesman', 'maintenance'];
 
         if (count($roles) === 2 && in_array($roles[1], $knownSubRoles)) {
@@ -48,13 +52,7 @@ class RoleMiddleware
         }
 
         // ── Multi-role check (e.g. 'role:admin,hr') ──
-        // Admin can always access HR and Employee routes too
         if (in_array($user->role, $roles)) {
-            return $next($request);
-        }
-
-        // ── Admin override — Admin can access everything ──
-        if ($user->role === 'admin') {
             return $next($request);
         }
 

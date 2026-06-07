@@ -29,15 +29,17 @@ class EmployeeController extends Controller
             'date_hired' => 'required|date',
             'shift' => 'required|in:day,night',
             'employment_type' => 'required|in:regular,contractual,part_time',
+            'sub_role' => 'nullable|in:checker,salesman,maintenance',
         ]);
 
         // Create user account
         $user = User::create([
-            'name' => $request->first_name . ' ' . $request->last_name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => 'employee',
-            'is_active' => true,
+            'name'      => $request->first_name . ' ' . $request->last_name,
+         'email'     => $request->email,
+         'password'  => Hash::make($request->password),
+         'role'      => 'employee',
+         'sub_role'  => $request->sub_role ?? null,
+         'is_active' => true,
         ]);
 
         // Create employee record

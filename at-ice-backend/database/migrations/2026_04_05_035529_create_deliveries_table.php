@@ -15,7 +15,7 @@ return new class extends Migration
         $table->id();
         $table->string('delivery_no')->unique();
         $table->foreignId('driver_id')->constrained('users');
-        $table->foreignId('customer_id')->nullable()->constrained('users');
+        $table->foreignId('customer_id')->nullable()->constrained('customers')->nullOnDelete();
         $table->enum('delivery_type', ['outbound', 'inbound'])->default('outbound');
         $table->foreignId('supplier_id')->nullable()->constrained('suppliers');
         $table->enum('status', ['pending', 'in_transit', 'delivered', 'cancelled'])->default('pending');
