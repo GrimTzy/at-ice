@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Chart } from "chart.js/auto";
+import echo from "../echo";
 
-// ─── ICONS ────────────────────────────────────────────────────────────────────
+// ICONS 
 const Bolt       = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
 const GridIcon   = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
 const UsersIcon  = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
@@ -34,7 +35,7 @@ const PlusIcon   = () => <svg width="13" height="13" fill="none" stroke="current
 const TrendUpIcon   = () => <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>;
 const TrendDownIcon = () => <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>;
 
-// ─── MINI LINE CHART ──────────────────────────────────────────────────────────
+// MINI LINE CHART 
 function MiniChart({ id, data, color }) {
   useEffect(() => {
     const ctx = document.getElementById(id);
@@ -53,7 +54,7 @@ function MiniChart({ id, data, color }) {
   return <div className="h-9 -mx-1 -mb-1 mt-1"><canvas id={id} /></div>;
 }
 
-// ─── DONUT CHART ──────────────────────────────────────────────────────────────
+// DONUT CHART 
 function DonutChart({ id, data, colors }) {
   useEffect(() => {
     const ctx = document.getElementById(id);
@@ -68,7 +69,7 @@ function DonutChart({ id, data, colors }) {
   return <canvas id={id} className="w-[90px] h-[90px]" />;
 }
 
-// ─── SALES BAR CHART (3-dataset with toggle) ──────────────────────────────────
+// SALES BAR CHART (3-dataset with toggle)
 function SalesBarChart({ mode }) {
   useEffect(() => {
     const ctx = document.getElementById("salesChart");
@@ -132,6 +133,65 @@ const topProducts = [
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [chartMode, setChartMode] = useState("bar");
+  const [notifications, setNotifications] = useState([
+    { bg:"bg-amber-100", color:"text-amber-600", icon:<ClockIcon />,  title:"Attendance Alert",   body:"Juan Dela Cruz time in recorded at 08:02 AM",           time:"2 minutes ago",  unread:true },
+    { bg:"bg-green-100", color:"text-green-600", icon:<CheckIcon />,  title:"Delivery Completed", body:"Delivery ORD-2026-412 delivered to SM Fairview Branch",  time:"15 minutes ago", unread:true },
+    { bg:"bg-red-100",   color:"text-red-500",   icon:<AlertIcon />,  title:"Inventory Alert",    body:"TI-10KG stock is below minimum level (35 left)",         time:"25 minutes ago", unread:true },
+    { bg:"bg-red-100",   color:"text-red-500",   icon:<DollarIcon />, title:"Overdue Payment",    body:"Pickup Coffee Inc. is 18 days overdue (₱75,450.00)",     time:"1 hour ago",     unread:false },
+  ]);
+
+  useEffect(() => {
+    // Attendance notifications
+    echo.channel('attendance').listen('.attendance.recorded', (e) => {
+      setNotifications(prev => [{
+        bg:"bg-amber-100", color:"text-amber-600", icon:<ClockIcon />,
+        title:"Attendance Alert",
+        body: e.data?.message || "Attendance recorded.",
+        time:"Just now",
+        unread:true,
+      }, ...prev.slice(0, 9)]);
+    });
+
+    // Inventory low stock
+    echo.channel('inventory').listen('.low.stock.alert', (e) => {
+      setNotifications(prev => [{
+        bg:"bg-red-100", color:"text-red-500", icon:<AlertIcon />,
+        title:"Inventory Alert",
+        body: e.data?.message || "Low stock detected.",
+        time:"Just now",
+        unread:true,
+      }, ...prev.slice(0, 9)]);
+    });
+
+    // Overdue payments
+    echo.channel('payments').listen('.payment.overdue', (e) => {
+      setNotifications(prev => [{
+        bg:"bg-red-100", color:"text-red-500", icon:<DollarIcon />,
+        title:"Overdue Payment",
+        body: e.data?.message || "A payment is overdue.",
+        time:"Just now",
+        unread:true,
+      }, ...prev.slice(0, 9)]);
+    });
+
+    // Delivery status updates
+    echo.channel('deliveries').listen('.delivery.status.updated', (e) => {
+      setNotifications(prev => [{
+        bg:"bg-green-100", color:"text-green-600", icon:<TruckIcon />,
+        title:"Delivery Update",
+        body: e.data?.message || "Delivery status updated.",
+        time:"Just now",
+        unread:true,
+      }, ...prev.slice(0, 9)]);
+    });
+
+    return () => {
+      echo.leaveChannel('attendance');
+      echo.leaveChannel('inventory');
+      echo.leaveChannel('payments');
+      echo.leaveChannel('deliveries');
+    };
+  }, []);
 
   return (
     <div className="flex font-sans text-[13px] leading-relaxed bg-[#0a0d12] text-slate-800 min-h-screen">
@@ -362,12 +422,7 @@ export default function Dashboard() {
                   <div className="text-[13px] font-semibold text-slate-800">Recent Notifications</div>
                   <a className="text-[11px] text-cyan-500 cursor-pointer hover:text-cyan-400 transition-colors">View all</a>
                 </div>
-                {[
-                  { bg:"bg-amber-100", color:"text-amber-600", icon:<ClockIcon />,  title:"Attendance Alert",   body:"Juan Dela Cruz time in recorded at 08:02 AM",           time:"2 minutes ago",  unread:true },
-                  { bg:"bg-green-100", color:"text-green-600", icon:<CheckIcon />,  title:"Delivery Completed", body:"Delivery ORD-2026-412 delivered to SM Fairview Branch",  time:"15 minutes ago", unread:true },
-                  { bg:"bg-red-100",   color:"text-red-500",   icon:<AlertIcon />,  title:"Inventory Alert",    body:"TI-10KG stock is below minimum level (35 left)",         time:"25 minutes ago", unread:true },
-                  { bg:"bg-red-100",   color:"text-red-500",   icon:<DollarIcon />, title:"Overdue Payment",    body:"Pickup Coffee Inc. is 18 days overdue (₱75,450.00)",     time:"1 hour ago",     unread:false },
-                ].map((n,i,arr) => (
+                {notifications.map((n,i,arr) => (
                   <div key={i} className={`flex items-start gap-2.5 px-[18px] py-3 cursor-pointer hover:bg-slate-50 transition-colors relative ${i < arr.length-1 ? "border-b border-black/[0.09]" : ""}`}>
                     <div className={`w-[30px] h-[30px] rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 ${n.bg} ${n.color}`}>{n.icon}</div>
                     <div>
