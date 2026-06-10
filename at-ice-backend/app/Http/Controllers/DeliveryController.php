@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Events\DeliveryStatusUpdated;
 use App\Models\Delivery;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -60,6 +61,37 @@ class DeliveryController extends Controller
 
         $delivery->update(['status' => 'cancelled']);
         return response()->json(['message' => 'Delivery cancelled']);
+    }
+
+    // Driver — update delivery status (pending → in_transit → delivered)
+    public function updateStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|in:in_transit,delivered',
+        ]);
+
+        $delivery = Delivery::with('customer')->findOrFail($id);
+
+        if ($delivery->driver_id !== $request->user()->id) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $delivery->update(['status' => $request->status]);
+
+        // Fire DeliveryStatusUpdated event
+        broadcast(new DeliveryStatusUpdated([
+            'delivery_id'  => $delivery->id,
+            'delivery_no'  => $delivery->delivery_no,
+            'driver_id'    => $delivery->driver_id,
+            'customer'     => $delivery->customer?->name ?? 'Unknown',
+            'status'       => $request->status,
+            'message'      => "Delivery {$delivery->delivery_no} is now {$request->status}.",
+        ]))->toOthers();
+
+        return response()->json([
+            'message'  => 'Delivery status updated!',
+            'delivery' => $delivery,
+        ]);
     }
 
     // Salesman — view assigned deliveries

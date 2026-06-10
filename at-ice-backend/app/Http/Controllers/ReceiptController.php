@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\PaymentOverdue;
 use App\Models\Receipt;
 use Illuminate\Http\Request;
 
@@ -72,25 +73,36 @@ class ReceiptController extends Controller
     public function overdue()
     {
         // Auto-mark as overdue FIRST
-     Receipt::where('payment_status', 'unpaid')
+        Receipt::where('payment_status', 'unpaid')
             ->where('created_at', '<=', now()->subDays(14))
-          ->update(['payment_status' => 'overdue']);
+            ->update(['payment_status' => 'overdue']);
 
-      // THEN fetch updated records
-      $receipts = Receipt::with(['customer', 'delivery'])
-         ->where('payment_status', 'overdue')
-         ->latest()
-          ->get();
+        // THEN fetch updated records
+        $receipts = Receipt::with(['customer', 'delivery'])
+            ->where('payment_status', 'overdue')
+            ->latest()
+            ->get();
+
+        // Fire PaymentOverdue event for each overdue receipt
+        foreach ($receipts as $receipt) {
+            broadcast(new PaymentOverdue([
+                'receipt_id'   => $receipt->id,
+                'receipt_no'   => $receipt->receipt_no,
+                'customer'     => $receipt->customer?->name ?? 'Unknown',
+                'total_amount' => $receipt->total_amount,
+                'message'      => "Receipt {$receipt->receipt_no} is overdue!",
+            ]))->toOthers();
+        }
 
         return response()->json($receipts);
     }
 
     public function summary()
     {
-        $totalSales    = Receipt::where('payment_status', 'paid')->sum('total_amount');
-        $totalUnpaid   = Receipt::where('payment_status', 'unpaid')->sum('total_amount');
-        $totalOverdue  = Receipt::where('payment_status', 'overdue')->sum('total_amount');
-        $receiptCount  = Receipt::count();
+        $totalSales   = Receipt::where('payment_status', 'paid')->sum('total_amount');
+        $totalUnpaid  = Receipt::where('payment_status', 'unpaid')->sum('total_amount');
+        $totalOverdue = Receipt::where('payment_status', 'overdue')->sum('total_amount');
+        $receiptCount = Receipt::count();
 
         return response()->json([
             'total_sales'   => $totalSales,

@@ -133,11 +133,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // DRIVER ROUTES
     Route::middleware('role:driver')->group(function () {
 
-        Route::get('driver/deliveries', [DeliveryController::class, 'driverDeliveries']);
+        Route::get('driver/deliveries',              [DeliveryController::class, 'driverDeliveries']);
+        Route::patch('driver/deliveries/{id}/status',[DeliveryController::class, 'updateStatus']);
         Route::get('/driver/dashboard', function () {
-            return response()->json(['message' => 'Welcome Driver!']);
-        });
+           return response()->json(['message' => 'Welcome Driver!']);
     });
+});
 
     // CUSTOMER ROUTES
     Route::middleware('role:customer')->group(function () {

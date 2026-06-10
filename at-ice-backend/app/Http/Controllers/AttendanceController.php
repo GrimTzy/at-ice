@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\AttendanceRecorded;
 use App\Models\Attendance;
 use App\Models\Employee;
 use Illuminate\Http\Request;
@@ -48,6 +49,15 @@ class AttendanceController extends Controller
             'status' => $request->status,
             'notes' => $request->notes,
         ]);
+
+        // Fire AttendanceRecorded event
+        broadcast(new AttendanceRecorded([
+            'employee_id' => $attendance->employee_id,
+            'date' => $attendance->date,
+            'time_in' => $attendance->time_in,
+            'status' => $attendance->status,
+            'message' => 'Attendance recorded successfully!',
+        ]))->toOthers();
 
         return response()->json([
             'message' => 'Attendance recorded successfully!',
