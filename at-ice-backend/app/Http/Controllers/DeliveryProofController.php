@@ -38,7 +38,7 @@ class DeliveryProofController extends Controller
         $request->validate([
             'delivery_id' => 'required|exists:deliveries,id',
             'quantity'    => 'required|integer|min:1',
-            'photo'       => 'required|image|mimes:jpg,jpeg,png|max:5120', // max 5MB
+            'photo'       => 'required|image|mimes:jpg,jpeg,png|max:5120',
             'unit_price'  => 'required|numeric|min:0',
         ]);
 
@@ -55,11 +55,11 @@ class DeliveryProofController extends Controller
             $photoPath = $request->file('photo')->store('delivery_proofs', 'public');
 
             $proof = DeliveryProof::create([
-                'delivery_id' => $request->delivery_id,
-                'salesman_id' => auth()->id(),
-                'quantity'    => $request->quantity,
-                'photo_path'  => $photoPath,
-                'confirmed_at'=> now(),
+                'delivery_id'  => $request->delivery_id,
+                'salesman_id'  => auth()->id(),
+                'quantity'     => $request->quantity,
+                'photo_path'   => $photoPath,
+                'confirmed_at' => now(),
             ]);
 
             $delivery = Delivery::with('customer')->findOrFail($request->delivery_id);
@@ -79,6 +79,7 @@ class DeliveryProofController extends Controller
             ]);
 
             $delivery->update(['status' => 'delivered']);
+            event(new \App\Events\DeliveryStatusUpdated($delivery->id, 'delivered'));
 
             DB::commit();
 
@@ -96,5 +97,15 @@ class DeliveryProofController extends Controller
                 'error'   => $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function myDeliveries()
+    {
+        $deliveries = Delivery::with(['customer', 'deliveryItems'])
+            ->where('status', '!=', 'delivered')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($deliveries);
     }
 }

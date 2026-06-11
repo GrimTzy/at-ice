@@ -34,39 +34,38 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('employees', EmployeeController::class);
 
         // Delivery Management (Admin assigns deliveries)
-        Route::get('deliveries',          [DeliveryController::class, 'index']);
-        Route::post('deliveries',         [DeliveryController::class, 'store']);
-        Route::get('deliveries/{id}',     [DeliveryController::class, 'show']);
+        Route::get('deliveries',             [DeliveryController::class, 'index']);
+        Route::post('deliveries',            [DeliveryController::class, 'store']);
+        Route::get('deliveries/{id}',        [DeliveryController::class, 'show']);
         Route::put('deliveries/{id}/cancel', [DeliveryController::class, 'cancel']);
 
         // Delivery Proofs (Admin views)
-        Route::get('delivery-proofs',     [DeliveryProofController::class, 'index']);
-        Route::get('delivery-proofs/{id}',[DeliveryProofController::class, 'show']);
+        Route::get('delivery-proofs',        [DeliveryProofController::class, 'index']);
+        Route::get('delivery-proofs/{id}',   [DeliveryProofController::class, 'show']);
 
         // Receipts (Admin views + manages)
-        Route::get('receipts/overdue',         [ReceiptController::class, 'overdue']);
-        Route::get('receipts/summary',         [ReceiptController::class, 'summary']);
-        Route::get('receipts',                 [ReceiptController::class, 'index']);
-        Route::get('receipts/{id}',            [ReceiptController::class, 'show']);
-        Route::patch('receipts/{id}/paid',     [ReceiptController::class, 'markAsPaid']);
+        Route::get('receipts/overdue',       [ReceiptController::class, 'overdue']);
+        Route::get('receipts/summary',       [ReceiptController::class, 'summary']);
+        Route::get('receipts',               [ReceiptController::class, 'index']);
+        Route::get('receipts/{id}',          [ReceiptController::class, 'show']);
+        Route::patch('receipts/{id}/paid',   [ReceiptController::class, 'markAsPaid']);
 
         // CRM
-        Route::get('customers',          [CustomerController::class, 'index']);
-        Route::post('customers',         [CustomerController::class, 'store']);
-        Route::get('customers/{id}',     [CustomerController::class, 'show']);
-        Route::put('customers/{id}',     [CustomerController::class, 'update']);
-        Route::delete('customers/{id}',  [CustomerController::class, 'destroy']);
+        Route::get('customers',              [CustomerController::class, 'index']);
+        Route::post('customers',             [CustomerController::class, 'store']);
+        Route::get('customers/{id}',         [CustomerController::class, 'show']);
+        Route::put('customers/{id}',         [CustomerController::class, 'update']);
+        Route::delete('customers/{id}',      [CustomerController::class, 'destroy']);
 
-        Route::get('orders',             [OrderController::class, 'index']);
-        Route::post('orders',            [OrderController::class, 'store']);
-        Route::get('orders/{id}',        [OrderController::class, 'show']);
-        Route::put('orders/{id}/status', [OrderController::class, 'updateStatus']);
-        Route::put('orders/{id}/cancel', [OrderController::class, 'cancel']);
+        Route::get('orders',                 [OrderController::class, 'index']);
+        Route::post('orders',                [OrderController::class, 'store']);
+        Route::get('orders/{id}',            [OrderController::class, 'show']);
+        Route::put('orders/{id}/status',     [OrderController::class, 'updateStatus']);
+        Route::put('orders/{id}/cancel',     [OrderController::class, 'cancel']);
 
-        Route::get('payments',           [PaymentController::class, 'index']);
-        Route::post('payments',          [PaymentController::class, 'store']);
+        Route::get('payments',               [PaymentController::class, 'index']);
+        Route::post('payments',              [PaymentController::class, 'store']);
 
-        // User Management
         Route::get('/admin/dashboard', function () {
             return response()->json(['message' => 'Welcome Admin!']);
         });
@@ -80,20 +79,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('attendances/{id}',                   [AttendanceController::class, 'update']);
         Route::get('attendances/employee/{employee_id}', [AttendanceController::class, 'getByEmployee']);
 
-        Route::get('leave-requests',              [LeaveRequestController::class, 'index']);
-        Route::post('leave-requests',             [LeaveRequestController::class, 'store']);
-        Route::get('leave-requests/{id}',         [LeaveRequestController::class, 'show']);
-        Route::put('leave-requests/{id}/status',  [LeaveRequestController::class, 'updateStatus']);
-        Route::delete('leave-requests/{id}',      [LeaveRequestController::class, 'destroy']);
+        Route::get('leave-requests',             [LeaveRequestController::class, 'index']);
+        Route::post('leave-requests',            [LeaveRequestController::class, 'store']);
+        Route::get('leave-requests/{id}',        [LeaveRequestController::class, 'show']);
+        Route::put('leave-requests/{id}/status', [LeaveRequestController::class, 'updateStatus']);
+        Route::delete('leave-requests/{id}',     [LeaveRequestController::class, 'destroy']);
 
-        // Inside role:hr group
-        Route::get('applicants/upcoming',       [ApplicantController::class, 'upcoming']);
-        Route::get('applicants',                [ApplicantController::class, 'index']);
-        Route::post('applicants',               [ApplicantController::class, 'store']);
-        Route::get('applicants/{id}',           [ApplicantController::class, 'show']);
-        Route::put('applicants/{id}',           [ApplicantController::class, 'update']);
-        Route::patch('applicants/{id}/status',  [ApplicantController::class, 'updateStatus']);
-        Route::delete('applicants/{id}',        [ApplicantController::class, 'destroy']);
+        Route::get('applicants/upcoming',        [ApplicantController::class, 'upcoming']);
+        Route::get('applicants',                 [ApplicantController::class, 'index']);
+        Route::post('applicants',                [ApplicantController::class, 'store']);
+        Route::get('applicants/{id}',            [ApplicantController::class, 'show']);
+        Route::put('applicants/{id}',            [ApplicantController::class, 'update']);
+        Route::patch('applicants/{id}/status',   [ApplicantController::class, 'updateStatus']);
+        Route::delete('applicants/{id}',         [ApplicantController::class, 'destroy']);
 
         Route::apiResource('payrolls', PayrollController::class);
     });
@@ -103,14 +101,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::apiResource('products', ProductController::class);
 
-        Route::get('stock-movements',              [StockMovementController::class, 'index']);
-        Route::post('stock-movements',             [StockMovementController::class, 'store']);
-        Route::get('stock-movements/{id}',         [StockMovementController::class, 'show']);
-        Route::put('stock-movements/{id}/confirm', [StockMovementController::class, 'confirm']);
-        Route::put('stock-movements/{id}/cancel',  [StockMovementController::class, 'cancel']);
+        Route::get('stock-movements',               [StockMovementController::class, 'index']);
+        Route::post('stock-movements',              [StockMovementController::class, 'store']);
+        Route::get('stock-movements/{id}',          [StockMovementController::class, 'show']);
+        Route::put('stock-movements/{id}/confirm',  [StockMovementController::class, 'confirm']);
+        Route::put('stock-movements/{id}/cancel',   [StockMovementController::class, 'cancel']);
 
-        Route::get('inventory-alerts',             [InventoryAlertController::class, 'index']);
-        Route::put('inventory-alerts/{id}/resolve',[InventoryAlertController::class, 'resolve']);
+        Route::get('inventory-alerts',              [InventoryAlertController::class, 'index']);
+        Route::put('inventory-alerts/{id}/resolve', [InventoryAlertController::class, 'resolve']);
 
         Route::apiResource('suppliers', SupplierController::class);
     });
@@ -118,13 +116,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // EMPLOYEE: SALESMAN ROUTES
     Route::middleware('role:employee,salesman')->group(function () {
 
-        Route::get('my-deliveries',          [DeliveryController::class, 'myDeliveries']);
+        Route::get('my-deliveries',          [DeliveryProofController::class, 'myDeliveries']);
         Route::post('delivery-confirmation', [DeliveryProofController::class, 'confirm']);
     });
 
-    // ─────────────────────────────────────────────
     // EMPLOYEE: MAINTENANCE ROUTES
-    // ─────────────────────────────────────────────
     Route::middleware('role:employee,maintenance')->group(function () {
 
         Route::post('stock-out-request', [StockMovementController::class, 'requestStockOut']);
@@ -133,12 +129,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // DRIVER ROUTES
     Route::middleware('role:driver')->group(function () {
 
-        Route::get('driver/deliveries',              [DeliveryController::class, 'driverDeliveries']);
-        Route::patch('driver/deliveries/{id}/status',[DeliveryController::class, 'updateStatus']);
+        Route::get('driver/deliveries',               [DeliveryController::class, 'driverDeliveries']);
+        Route::patch('driver/deliveries/{id}/status', [DeliveryController::class, 'updateStatus']);
         Route::get('/driver/dashboard', function () {
-           return response()->json(['message' => 'Welcome Driver!']);
+            return response()->json(['message' => 'Welcome Driver!']);
+        });
     });
-});
 
     // CUSTOMER ROUTES
     Route::middleware('role:customer')->group(function () {
