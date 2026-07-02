@@ -17,6 +17,8 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ApplicantController;
+use App\Http\Controllers\BiController;
+use App\Http\Controllers\FaceDataController;
 
 //Public
 Route::post('/login', [AuthController::class, 'login']);
@@ -66,6 +68,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('payments',               [PaymentController::class, 'index']);
         Route::post('payments',              [PaymentController::class, 'store']);
 
+        // BUSINESS INTELLIGENCE 
+        Route::get('bi/summary',            [BiController::class, 'summary']);
+        Route::get('bi/sales-overview',     [BiController::class, 'salesOverview']);
+        Route::get('bi/delivery-stats',     [BiController::class, 'deliveryStats']);
+        Route::get('bi/inventory-summary',  [BiController::class, 'inventorySummary']);
+        Route::get('bi/attendance-today',   [BiController::class, 'attendanceToday']);
+        Route::get('bi/overdue-receipts',   [BiController::class, 'overdueReceipts']);
+        Route::get('bi/expenses',           [BiController::class, 'getExpenses']);
+        Route::post('bi/expenses',          [BiController::class, 'storeExpense']);
+        Route::get('bi/ai-summary', [BiController::class, 'aiSummary']);
+
         Route::get('/admin/dashboard', function () {
             return response()->json(['message' => 'Welcome Admin!']);
         });
@@ -94,7 +107,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('applicants/{id}',         [ApplicantController::class, 'destroy']);
 
         Route::apiResource('payrolls', PayrollController::class);
-    });
+
+        // Face Enrollment (HR manages)
+        Route::post('face-enroll',        [FaceDataController::class, 'enroll']);
+        Route::get('face-data',           [FaceDataController::class, 'index']);
+        Route::put('face-data/{id}',      [FaceDataController::class, 'update']);
+        Route::delete('face-data/{id}',   [FaceDataController::class, 'destroy']);
+});
+
+// Face Descriptors — public, used by AttendanceStation
+Route::get('face-descriptors', [FaceDataController::class, 'descriptors']);
 
     // EMPLOYEE: CHECKER ROUTES
     Route::middleware('role:employee,checker')->group(function () {

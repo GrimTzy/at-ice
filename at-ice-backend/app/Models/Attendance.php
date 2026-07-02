@@ -10,6 +10,7 @@ class Attendance extends Model
     use HasFactory;
 
     protected $fillable = [
+        'face_data_id',
         'employee_id',
         'recorded_by',
         'date',
@@ -24,6 +25,12 @@ class Attendance extends Model
         'date' => 'date',
         'hours_worked' => 'decimal:2',
     ];
+
+    // Relationship — Attendance belongs to FaceData
+    public function faceData()
+    {
+        return $this->belongsTo(FaceData::class);
+    }
 
     // Relationship — Attendance belongs to Employee
     public function employee()
