@@ -15,6 +15,9 @@ import DriverLogin from './pages/drivers/DriverLogin'
 import { DeliveriesPage } from './pages/drivers/DeliveriesPage'
 import { GpsTrackingPage } from './pages/drivers/GpsTrackingPage'
 
+// ── HR Module ──────────────────────────────────────────────────────────────
+import FaceEnrollment from './pages/hr/FaceEnrollment'
+
 // ── Employee Module ────────────────────────────────────────────────────────
 // import CheckerLogin from './pages/employees/CheckerLogin'       // Phase 13
 // import SalesmanLogin from './pages/employees/SalesmanLogin'     // Phase 13
@@ -34,6 +37,9 @@ function App() {
         {/* ── Admin Module ── */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/dashboard" element={<Dashboard />} />
+
+        {/* ── HR Module ── */}
+        <Route path="/hr/face-enrollment" element={<FaceEnrollment />} /> 
 
         {/* ── Driver Module ── */}
         <Route path="/driver/login" element={<DriverLogin />} />

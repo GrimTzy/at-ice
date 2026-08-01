@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Chart } from "chart.js/auto";
 import echo from "../../echo";
 
-// ─── ICONS ────────────────────────────────────────────────────────────────────
+// ─── ICONS
 const Bolt       = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
 const GridIcon   = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
 const UsersIcon  = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
@@ -33,7 +33,7 @@ const TrendUpIcon   = () => <svg width="11" height="11" fill="none" stroke="curr
 const TrendDownIcon = () => <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>;
 const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// ─── HELPERS
 const fmt  = (n) => "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const pct  = (n) => (n == null ? "N/A" : (n >= 0 ? "+" : "") + n + "%");
 const token = () => localStorage.getItem("token") || "";
@@ -57,7 +57,7 @@ function MiniChart({ id, data, color }) {
   return <div className="h-9 -mx-1 -mb-1 mt-1"><canvas id={id} /></div>;
 }
 
-// ─── DONUT CHART ─────────────────────────────────────────────────────────────
+// ─── DONUT CHART
 function DonutChart({ id, data, colors }) {
   useEffect(() => {
     const ctx = document.getElementById(id);
@@ -72,7 +72,7 @@ function DonutChart({ id, data, colors }) {
   return <canvas id={id} className="w-[90px] h-[90px]" />;
 }
 
-// ─── SALES BAR CHART (real data) ─────────────────────────────────────────────
+// ─── SALES BAR CHART (real data)
 function SalesBarChart({ mode, chartData }) {
   useEffect(() => {
     const ctx = document.getElementById("salesChart");
@@ -106,7 +106,7 @@ function SalesBarChart({ mode, chartData }) {
   return <canvas id="salesChart" height="180" />;
 }
 
-// ─── NAV SECTIONS ─────────────────────────────────────────────────────────────
+// ─── NAV SECTIONS
 const navSections = [
   { label:"Overview", items:[{ icon:<GridIcon />, label:"Dashboard", active:true }] },
   { label:"HRIS",     items:[{ icon:<UsersIcon />, label:"Employees" },{ icon:<ClockIcon />, label:"Attendance" },{ icon:<FileIcon />, label:"Leave Requests" },{ icon:<DollarIcon />, label:"Payroll" }] },
@@ -116,7 +116,7 @@ const navSections = [
   { label:"System",   items:[{ icon:<RolesIcon />, label:"Users & Roles" },{ icon:<SettingsIcon />, label:"Settings" },{ icon:<LogsIcon />, label:"Audit Logs" }] },
 ];
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+// ─── MAIN COMPONENT 
 export default function Dashboard() {
   const [chartMode, setChartMode] = useState("bar");
   const [biData,    setBiData]    = useState(null);
@@ -126,7 +126,7 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState([]);
   const today = new Date().toLocaleDateString("en-PH", { month:"long", day:"numeric", year:"numeric" });
 
-  // ── Fetch BI Summary ────────────────────────────────────────────────────────
+  // ── Fetch BI Summary 
   const fetchBI = useCallback(async () => {
     setLoading(true);
     try {
@@ -143,7 +143,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  // ── Fetch Gemini AI Summary ─────────────────────────────────────────────────
+  // ── Fetch Gemini AI Summary 
   const fetchAI = useCallback(async () => {
   setAiLoading(true);
   try {
@@ -162,7 +162,7 @@ export default function Dashboard() {
   }
 }, []);
 
-  // ── Initial load ────────────────────────────────────────────────────────────
+  // ── Initial load 
   useEffect(() => {
     fetchBI();
   }, []);
@@ -171,7 +171,7 @@ export default function Dashboard() {
   if (biData) fetchAI();
 }, [biData])
 
-  // ── Pusher real-time notifications ─────────────────────────────────────────
+  // ── Pusher real-time notifications
   useEffect(() => {
     echo.channel('attendance').listen('.attendance.recorded', (e) => {
       setNotifications(prev => [{ bg:"bg-amber-100", color:"text-amber-600", icon:<ClockIcon />, title:"Attendance Alert", body:e.data?.message||"Attendance recorded.", time:"Just now", unread:true }, ...prev.slice(0,9)]);
@@ -197,7 +197,7 @@ export default function Dashboard() {
     };
   }, []);
 
-  // ── Derived values from real data ──────────────────────────────────────────
+  // ── Derived values from real data
   const sales     = biData?.sales     || {};
   const deliveries= biData?.deliveries|| {};
   const inventory = biData?.inventory || {};
@@ -263,11 +263,11 @@ export default function Dashboard() {
     },
   ];
 
-  // ── Inventory donut data ────────────────────────────────────────────────────
+  // ── Inventory donut data
   const invDonutData = [inventory.in_stock||0, inventory.low_stock||0, inventory.out_of_stock||0];
   const invDonutTotal = invDonutData.reduce((a,b)=>a+b,0) || 1;
 
-  // ── Delivery donut data ─────────────────────────────────────────────────────
+  // ── Delivery donut data
   const delDonutData = [deliveries.delivered||0, deliveries.in_transit||0, deliveries.pending||0, deliveries.cancelled||0];
   const delTotal     = deliveries.total || 1;
 
