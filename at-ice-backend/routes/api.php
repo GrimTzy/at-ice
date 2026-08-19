@@ -19,6 +19,7 @@ use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ApplicantController;
 use App\Http\Controllers\BiController;
 use App\Http\Controllers\FaceDataController;
+use App\Http\Controllers\CustomerPriceController;
 
 //Public
 Route::post('/login', [AuthController::class, 'login']);
@@ -67,6 +68,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('payments',               [PaymentController::class, 'index']);
         Route::post('payments',              [PaymentController::class, 'store']);
+
+        // Customer Pricing (Admin sets per-customer unit prices for Bags/Small Sack/Big Sack)
+        Route::get('customer-prices',            [CustomerPriceController::class, 'index']);
+        Route::get('customer-prices/{customer}', [CustomerPriceController::class, 'show']);
+        Route::put('customer-prices/{customer}', [CustomerPriceController::class, 'update']);
 
         // BUSINESS INTELLIGENCE 
         Route::get('bi/summary',            [BiController::class, 'summary']);

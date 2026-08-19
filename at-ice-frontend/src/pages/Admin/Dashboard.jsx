@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Chart } from "chart.js/auto";
 import echo from "../../echo";
 
@@ -108,16 +109,22 @@ function SalesBarChart({ mode, chartData }) {
 
 // ─── NAV SECTIONS
 const navSections = [
-  { label:"Overview", items:[{ icon:<GridIcon />, label:"Dashboard", active:true }] },
+  { label:"Overview", items:[{ icon:<GridIcon />, label:"Dashboard", active:true, path:"/dashboard" }] },
   { label:"HRIS",     items:[{ icon:<UsersIcon />, label:"Employees" },{ icon:<ClockIcon />, label:"Attendance" },{ icon:<FileIcon />, label:"Leave Requests" },{ icon:<DollarIcon />, label:"Payroll" }] },
   { label:"IMS",      items:[{ icon:<BoxIcon />, label:"Products" },{ icon:<ArrowsIcon />, label:"Stock Movements" },{ icon:<AlertIcon />, label:"Inventory Alerts" }] },
   { label:"SCM",      items:[{ icon:<HomeIcon />, label:"Suppliers" },{ icon:<TruckIcon />, label:"Deliveries" },{ icon:<CheckIcon />, label:"Delivery Proofs" }] },
-  { label:"CRM",      items:[{ icon:<UserIcon />, label:"Customers" },{ icon:<CartIcon />, label:"Orders" },{ icon:<DollarIcon />, label:"Payments" }] },
+  { label:"CRM",      items:[
+      { icon:<UserIcon />, label:"Customers" },
+      { icon:<CartIcon />, label:"Orders" },
+      { icon:<DollarIcon />, label:"Payments" },
+      { icon:<DollarIcon />, label:"Customer Prices", path:"/admin/customer-prices" },
+    ] },
   { label:"System",   items:[{ icon:<RolesIcon />, label:"Users & Roles" },{ icon:<SettingsIcon />, label:"Settings" },{ icon:<LogsIcon />, label:"Audit Logs" }] },
 ];
 
 // ─── MAIN COMPONENT 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [chartMode, setChartMode] = useState("bar");
   const [biData,    setBiData]    = useState(null);
   const [loading,   setLoading]   = useState(true);
@@ -288,7 +295,11 @@ export default function Dashboard() {
             <div key={sec.label}>
               <div className="px-[18px] pt-3.5 pb-1 text-[10px] tracking-[0.1em] uppercase text-slate-400 font-medium">{sec.label}</div>
               {sec.items.map((item) => (
-                <div key={item.label} className={`flex items-center gap-2.5 px-[18px] py-[7px] text-[13px] cursor-pointer transition-all duration-100 border-l-2 ${item.active ? "text-cyan-500 bg-cyan-500/[0.08] border-cyan-500" : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50"}`}>
+                <div
+                  key={item.label}
+                  onClick={() => item.path && navigate(item.path)}
+                  className={`flex items-center gap-2.5 px-[18px] py-[7px] text-[13px] cursor-pointer transition-all duration-100 border-l-2 ${item.active ? "text-cyan-500 bg-cyan-500/[0.08] border-cyan-500" : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50"}`}
+                >
                   <span className="opacity-80">{item.icon}</span>{item.label}
                 </div>
               ))}

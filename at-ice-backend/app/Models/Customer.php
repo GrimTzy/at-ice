@@ -21,4 +21,8 @@ class Customer extends Model
     public function payments() {
         return $this->hasMany(Payment::class);
     }
+
+    public function customerPrices() {
+        return $this->hasMany(CustomerPrice::class);
+    }
 }
