@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import AdminLayout from "../../components/AdminLayout";
 
 const token = () => localStorage.getItem("token") || "";
 
@@ -133,22 +133,7 @@ export default function CustomerPriceManagement() {
     PRODUCT_ORDER.filter((p) => row.prices[p] !== null && row.prices[p] !== undefined).length;
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-5xl mx-auto p-6 space-y-4">
-
-        {/* Back button + breadcrumb */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-cyan-600 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            Back to Dashboard
-          </button>
-        </div>
-
+    <AdminLayout pageTitle="Customer Prices" breadcrumb="CRM / Customer Prices">
       {/* Header */}
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
@@ -324,8 +309,6 @@ export default function CustomerPriceManagement() {
           follow up only if Alfamart ever orders sacks, not just bags.
         </p>
       </div>
-
-      </div>
-    </div>
+    </AdminLayout>
   );
 }
