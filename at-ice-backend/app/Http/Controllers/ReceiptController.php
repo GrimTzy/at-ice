@@ -74,7 +74,7 @@ class ReceiptController extends Controller
     {
         // Auto-mark as overdue FIRST
         Receipt::where('payment_status', 'unpaid')
-            ->where('created_at', '<=', now()->subDays(14))
+            ->where('created_at', '<=', now()->subDays(15))
             ->update(['payment_status' => 'overdue']);
 
         // THEN fetch updated records

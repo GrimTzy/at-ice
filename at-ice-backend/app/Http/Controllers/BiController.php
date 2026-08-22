@@ -342,7 +342,7 @@ class BiController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function overdueReceipts()
     {
-        $cutoff = Carbon::now()->subDays(14);
+        $cutoff = Carbon::now()->subDays(15);
 
         $overdue = Receipt::with(['delivery.customer'])
             ->where('payment_status', 'unpaid')
