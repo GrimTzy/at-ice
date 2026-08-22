@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import bgImage from "../../assets/iceproduct.png";
+import logo from "../../assets/logo.png";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 const BoltIcon = () => (
@@ -101,8 +102,8 @@ export default function AdminLogin() {
 
         {/* Brand */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-white/10 border border-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-500/10 mb-4">
-            <BoltIcon />
+          <div className="w-16 h-16 bg-white/10 border border-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center overflow-hidden shadow-lg">
+           <img src={logo} alt="Bella Erin logo" className="w-full h-full object-contain p-2" />
           </div>
           <div className="text-[26px] font-semibold text-white tracking-wide leading-none">Bella Erin</div>
           <div className="text-[11px] text-cyan-400/80 tracking-[0.2em] uppercase mt-1.5">AT-ICE ERP</div>

@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import * as faceapi from "face-api.js";
 import bgImage from "../assets/iceproduct.png";
+import logo from "../assets/logo.png";
 
-// ─── ICONS (same style as AdminLogin.jsx / Dashboard.jsx) ────────────────────
 const BoltIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
@@ -58,7 +58,7 @@ export default function AttendanceStation() {
     return () => clearInterval(t);
   }, []);
 
-  // ── Load models + descriptors ──
+  // Load models + descriptors 
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -99,7 +99,7 @@ export default function AttendanceStation() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── Start webcam ──
+  // Start webcam 
   useEffect(() => {
     if (!modelsLoaded || !descriptorsLoaded) return;
     let cancelled = false;
@@ -140,7 +140,7 @@ export default function AttendanceStation() {
     }
   }, []);
 
-  // ── Detection loop ──
+  // Detection loop
   useEffect(() => {
     if (!cameraReady || !faceMatcherRef.current) return;
 
@@ -199,8 +199,8 @@ export default function AttendanceStation() {
 
         {/* Brand */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-white/10 border border-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-500/10 mb-4">
-            <BoltIcon />
+          <div className="w-16 h-16 bg-white/10 border border-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center overflow-hidden shadow-lg shadow-cyan-500/10 mb-4">
+          <img src={logo} alt="Bella Erin logo" className="w-full h-full object-contain p-2" />
           </div>
           <div className="text-[26px] font-semibold text-white tracking-wide leading-none">Bella Erin</div>
           <div className="text-[11px] text-cyan-400/80 tracking-[0.2em] uppercase mt-1.5">AT-ICE ERP</div>

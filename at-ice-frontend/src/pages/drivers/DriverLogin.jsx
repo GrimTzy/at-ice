@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import bgImage from "../../assets/iceproduct.png";
 
+
 const BoltIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
@@ -19,7 +20,7 @@ const LockIcon = () => (
     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
   </svg>
 );
-const EyeIcon = () => (
+const EyeIcon = () => ( 
   <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
     <circle cx="12" cy="12" r="3" />
@@ -95,8 +96,8 @@ export default function DriverLogin() {
 
       {/* Brand */}
       <div className="relative z-10 flex flex-col items-center pt-6 pb-2 px-6">
-        <div className="w-14 h-14 bg-white/90 border border-cyan-500/25 rounded-2xl flex items-center justify-center text-cyan-500 shadow-lg shadow-cyan-500/10 mb-3">
-          <BoltIcon />
+        <div className="w-14 h-14 bg-white/90 border border-cyan-500/25 rounded-2xl flex items-center justify-center overflow-hidden shadow-lg shadow-cyan-500/10 mb-3">
+          <img src={logo} alt="Bella Erin logo" className="w-full h-full object-contain p-1.5" />
         </div>
         <div className="text-[22px] font-semibold text-slate-800 tracking-wide leading-none">Bella Erin</div>
         <div className="text-[10px] text-slate-500 tracking-[0.18em] uppercase mt-1">AT-ICE ERP</div>

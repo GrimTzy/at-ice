@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import logo from "../../assets/logo.png";
 
-// ─── Icons ───────────────────────────────────────────────────────────────────
+// Icons
 const BoltIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
@@ -232,8 +233,8 @@ export function GpsTrackingPage() {
             >
               <BackIcon />
             </button>
-            <div className="w-7 h-7 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center text-cyan-500">
-              <BoltIcon />
+            <div className="w-7 h-7 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center overflow-hidden">
+              <img src={logo} alt="Bella Erin logo" className="w-full h-full object-contain p-1" />
             </div>
             <div>
               <div className="text-[13px] font-semibold text-slate-800 leading-none">Juan Dela Cruz</div>
