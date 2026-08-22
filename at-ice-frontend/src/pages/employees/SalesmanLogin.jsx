@@ -3,11 +3,6 @@ import { useNavigate } from "react-router-dom";
 import bgImage from "../../assets/iceproduct.png";
 import logo from "../../assets/logo.png";
 
-const BoltIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-  </svg>
-);
 const MailIcon = () => (
   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
@@ -94,8 +89,8 @@ export default function SalesmanLogin() {
 
       {/* Brand */}
       <div className="relative z-10 flex flex-col items-center pt-6 pb-2 px-6">
-        <div className="w-14 h-14 bg-white/90 border border-cyan-500/25 rounded-2xl flex items-center justify-center text-cyan-500 shadow-lg shadow-cyan-500/10 mb-3">
-          <BoltIcon />
+        <div className="w-14 h-14 bg-white/90 border border-cyan-500/25 rounded-2xl flex items-center justify-center overflow-hidden shadow-lg shadow-cyan-500/10 mb-3">
+          <img src={logo} alt="Bella Erin logo" className="w-full h-full object-contain p-1.5" />
         </div>
         <div className="text-[22px] font-semibold text-slate-800 tracking-wide leading-none">Bella Erin</div>
         <div className="text-[10px] text-slate-500 tracking-[0.18em] uppercase mt-1">AT-ICE ERP</div>
