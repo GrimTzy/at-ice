@@ -49,6 +49,11 @@ class Receipt extends Model
         return $this->belongsTo(User::class, 'salesman_id');
     }
 
+    public function items()
+    {
+        return $this->hasMany(ReceiptItem::class);
+    }
+
     public static function generateReceiptNo(): string
     {
         $date    = now()->format('Ymd');
