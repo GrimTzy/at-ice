@@ -56,6 +56,18 @@ class CustomerPriceController extends Controller
     }
 
     /**
+     * GET /api/customer-prices/{customer}/lookup
+     * Salesman-safe, read-only price lookup for a single customer.
+     * Same shape as show(), but reachable by the employee/salesman role
+     * (show() itself stays admin-only) — used by the Delivery Confirmation
+     * page to preview auto-looked-up prices before submitting.
+     */
+    public function lookup(Customer $customer)
+    {
+        return $this->show($customer);
+    }
+
+    /**
      * PUT /api/customer-prices/{customer}
      * Bulk upsert — body: { prices: { bags: 25, small_sack: 150, big_sack: 250 } }
      * Any product_type omitted or null is left untouched (not cleared).

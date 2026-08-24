@@ -146,6 +146,7 @@ Route::get('face-descriptors', [FaceDataController::class, 'descriptors']);
 
         Route::get('my-deliveries',          [DeliveryProofController::class, 'myDeliveries']);
         Route::post('delivery-confirmation', [DeliveryProofController::class, 'confirm']);
+        Route::get('customer-prices/{customer}/lookup', [CustomerPriceController::class, 'lookup']);
     });
 
     // EMPLOYEE: MAINTENANCE ROUTES
