@@ -20,7 +20,7 @@ class DeliveryController extends Controller
         $data = $request->validate([
             'delivery_no'              => 'required|unique:deliveries',
             'driver_id'                => 'required|exists:users,id',
-            'customer_id'              => 'nullable|exists:users,id',
+            'customer_id'              => 'nullable|exists:customers,id',
             'delivery_type'            => 'required|in:outbound,inbound',
             'supplier_id'              => 'nullable|exists:suppliers,id',
             'scheduled_date'           => 'required|date',
