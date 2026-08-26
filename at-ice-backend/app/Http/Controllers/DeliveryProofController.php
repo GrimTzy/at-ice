@@ -146,7 +146,7 @@ class DeliveryProofController extends Controller
 
     public function myDeliveries()
     {
-        $deliveries = Delivery::with(['customer', 'deliveryItems'])
+        $deliveries = Delivery::with(['customer', 'items.product'])
             ->where('status', '!=', 'delivered')
             ->orderBy('created_at', 'desc')
             ->get();
