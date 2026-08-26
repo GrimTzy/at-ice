@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
 
@@ -46,12 +46,6 @@ const CameraIcon = () => (
     <circle cx="12" cy="13" r="4" />
   </svg>
 );
-const XIcon = () => (
-  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
 
 // Helpers
 const token = () => localStorage.getItem("token") || "";
@@ -72,17 +66,6 @@ export default function SalesmanDashboard() {
   const [loadError, setLoadError] = useState("");
   const [filter, setFilter] = useState("All");
   const [expanded, setExpanded] = useState(null);
-
-  // Confirmation sheet state
-  const [activeDelivery, setActiveDelivery] = useState(null);
-  const [quantity, setQuantity] = useState("");
-  const [unitPrice, setUnitPrice] = useState("");
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
-  const [successReceipt, setSuccessReceipt] = useState(null);
-  const fileInputRef = useRef(null);
 
   const fetchDeliveries = async () => {
     setLoading(true);
@@ -117,69 +100,6 @@ export default function SalesmanDashboard() {
     { label: "In Transit", value: deliveries.filter((d) => d.status === "in_transit").length, color: "text-blue-500" },
     { label: "Delivered", value: deliveries.filter((d) => d.status === "delivered").length, color: "text-green-500" },
   ];
-
-  const openConfirmSheet = (d) => {
-    setActiveDelivery(d);
-    setQuantity("");
-    setUnitPrice(d.unit_price ? String(d.unit_price) : "");
-    setPhotoFile(null);
-    setPhotoPreview(null);
-    setSubmitError("");
-    setSuccessReceipt(null);
-  };
-
-  const closeConfirmSheet = () => setActiveDelivery(null);
-
-  const handlePhotoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPhotoFile(file);
-    setPhotoPreview(URL.createObjectURL(file));
-  };
-
-  const handleConfirmSubmit = async () => {
-    setSubmitError("");
-    if (!quantity || Number(quantity) <= 0) {
-      setSubmitError("Enter the exact quantity of sacks delivered.");
-      return;
-    }
-    if (!unitPrice || Number(unitPrice) <= 0) {
-      setSubmitError("Enter the unit price.");
-      return;
-    }
-    if (!photoFile) {
-      setSubmitError("Upload a photo proof of the delivery.");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const formData = new FormData();
-      formData.append("delivery_id", activeDelivery.id);
-      formData.append("quantity", quantity);
-      formData.append("unit_price", unitPrice);
-      formData.append("photo", photoFile);
-
-      const res = await fetch("/api/delivery-confirmation", {
-        method: "POST",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token()}` },
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || "Delivery confirmation failed.");
-      }
-
-      const result = await res.json();
-      setSuccessReceipt(result.receipt || result);
-      fetchDeliveries();
-    } catch (err) {
-      setSubmitError(err.message || "Something went wrong. Try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -334,7 +254,7 @@ export default function SalesmanDashboard() {
 
                     {d.status !== "delivered" && d.status !== "cancelled" && (
                       <button
-                        onClick={() => openConfirmSheet(d)}
+                        onClick={() => navigate(`/salesman/deliveries/${d.id}/confirm`)}
                         className="w-full py-3 bg-cyan-500 active:bg-cyan-600 text-white text-[12px] font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <CameraIcon />
@@ -354,186 +274,6 @@ export default function SalesmanDashboard() {
             );
           })}
       </div>
-
-      {/* ── Delivery Confirmation Bottom Sheet ── */}
-      {activeDelivery && (
-        <div className="fixed inset-0 z-50 flex items-end">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={submitting ? undefined : closeConfirmSheet}
-          />
-          <div className="relative w-full bg-white rounded-t-3xl px-5 pt-4 pb-8 max-h-[88vh] overflow-y-auto">
-            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
-
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-[14px] font-semibold text-slate-800">
-                {successReceipt ? "Confirmed" : "Confirm Delivery"}
-              </span>
-              <button onClick={closeConfirmSheet} className="text-slate-400 cursor-pointer">
-                <XIcon />
-              </button>
-            </div>
-
-            {successReceipt ? (
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
-                  <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                  <span className="text-[12px] text-green-600 font-medium">
-                    Delivery confirmed. Sale recorded automatically.
-                  </span>
-                </div>
-
-                {/* Digital receipt copy */}
-                <div className="border border-black/[0.08] rounded-2xl overflow-hidden">
-                  <div className="bg-slate-50 border-b border-black/[0.08] px-4 py-3 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-400 uppercase tracking-widest">Receipt</span>
-                    <span className="text-[12px] font-mono font-semibold text-slate-800">
-                      {successReceipt.receipt_no || "—"}
-                    </span>
-                  </div>
-                  <div className="px-4 py-3.5 flex flex-col gap-2.5">
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span className="text-slate-400">Store</span>
-                      <span className="text-slate-700 font-medium">
-                        {activeDelivery?.customer?.name || "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span className="text-slate-400">Quantity</span>
-                      <span className="text-slate-700 font-mono">
-                        {successReceipt.quantity ?? "—"} sacks
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span className="text-slate-400">Unit Price</span>
-                      <span className="text-slate-700 font-mono">
-                        ₱{Number(successReceipt.unit_price ?? 0).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[13px] pt-2 border-t border-black/[0.06]">
-                      <span className="text-slate-500 font-medium">Total Amount</span>
-                      <span className="text-slate-800 font-mono font-semibold">
-                        ₱{Number(successReceipt.total_amount ?? 0).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] mt-1">
-                      <span className="text-slate-400">Payment Status</span>
-                      <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-medium capitalize">
-                        {successReceipt.payment_status || "unpaid"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-slate-400 text-center leading-relaxed">
-                  This copy is saved to your account and visible on the Admin dashboard.
-                </p>
-
-                <button
-                  onClick={closeConfirmSheet}
-                  className="w-full py-3.5 bg-cyan-500 active:bg-cyan-600 text-white text-[13px] font-semibold rounded-xl transition-colors cursor-pointer"
-                >
-                  Done
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                <div className="text-[12px] text-slate-400">
-                  {activeDelivery.store_name || activeDelivery.customer?.name || "Store"} · DEL-
-                  {String(activeDelivery.id).padStart(4, "0")}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-                    Quantity Delivered (sacks)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    placeholder="e.g. 50"
-                    className="px-4 py-3.5 border border-black/[0.12] rounded-xl bg-slate-50/80 text-[15px] font-mono text-slate-800 outline-none focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 transition-all"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-                    Unit Price (₱)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={unitPrice}
-                    onChange={(e) => setUnitPrice(e.target.value)}
-                    placeholder="e.g. 45.00"
-                    className="px-4 py-3.5 border border-black/[0.12] rounded-xl bg-slate-50/80 text-[15px] font-mono text-slate-800 outline-none focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 transition-all"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-                    Photo Proof
-                  </label>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handlePhotoChange}
-                    className="hidden"
-                  />
-                  {photoPreview ? (
-                    <div className="relative">
-                      <img
-                        src={photoPreview}
-                        alt="Proof preview"
-                        className="w-full h-44 object-cover rounded-xl border border-black/[0.08]"
-                      />
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="absolute bottom-2 right-2 text-[11px] font-medium bg-white/90 px-2.5 py-1.5 rounded-lg border border-black/[0.08] cursor-pointer"
-                      >
-                        Retake
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="h-32 rounded-xl border-2 border-dashed border-black/[0.12] flex flex-col items-center justify-center gap-1.5 text-slate-400 cursor-pointer"
-                    >
-                      <CameraIcon />
-                      <span className="text-[12px]">Tap to take / upload photo</span>
-                    </button>
-                  )}
-                </div>
-
-                {submitError && (
-                  <div className="text-[12px] text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-                    {submitError}
-                  </div>
-                )}
-
-                <button
-                  onClick={handleConfirmSubmit}
-                  disabled={submitting}
-                  className="w-full py-3.5 bg-cyan-500 active:bg-cyan-600 text-white text-[13px] font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 shadow-lg shadow-cyan-500/25"
-                >
-                  {submitting ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      Submitting…
-                    </>
-                  ) : (
-                    "Submit Confirmation"
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

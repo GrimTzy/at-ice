@@ -24,6 +24,7 @@ import FaceEnrollment from './pages/hr/FaceEnrollment'
 // import CheckerLogin from './pages/employees/CheckerLogin'       // Phase 13
 import SalesmanLogin from './pages/employees/SalesmanLogin'
 import SalesmanDashboard from './pages/employees/SalesmanDashboard'
+import SalesmanDeliveryConfirmation from './pages/employees/SalesmanDeliveryConfirmation'
 // import MaintenanceLogin from './pages/employees/MaintenanceLogin' // Phase 13
 
 function App() {
@@ -93,6 +94,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["salesman"]}>
               <SalesmanDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/salesman/deliveries/:id/confirm"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["salesman"]}>
+              <SalesmanDeliveryConfirmation />
             </ProtectedRoute>
           }
         />
