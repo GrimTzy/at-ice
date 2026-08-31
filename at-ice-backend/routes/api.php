@@ -20,6 +20,8 @@ use App\Http\Controllers\ApplicantController;
 use App\Http\Controllers\BiController;
 use App\Http\Controllers\FaceDataController;
 use App\Http\Controllers\CustomerPriceController;
+use App\Http\Controllers\PickupLogController;
+use App\Http\Controllers\IceLoadingController;
 
 //Public
 Route::post('/login', [AuthController::class, 'login']);
@@ -73,6 +75,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('customer-prices',            [CustomerPriceController::class, 'index']);
         Route::get('customer-prices/{customer}', [CustomerPriceController::class, 'show']);
         Route::put('customer-prices/{customer}', [CustomerPriceController::class, 'update']);
+
+        // Pickup Logs (Admin full access — Alexandra/J-Maxine plant pickups, no price/receipt)
+        Route::apiResource('pickup-logs', PickupLogController::class)->only(['update', 'destroy']);
 
         // BUSINESS INTELLIGENCE 
         Route::get('bi/summary',            [BiController::class, 'summary']);
@@ -139,6 +144,16 @@ Route::get('face-descriptors', [FaceDataController::class, 'descriptors']);
         Route::put('inventory-alerts/{id}/resolve', [InventoryAlertController::class, 'resolve']);
 
         Route::apiResource('suppliers', SupplierController::class);
+
+        // Pickup Logs (Checker can log + view, cannot edit/delete — corrections go through Admin)
+        Route::get('pickup-logs',              [PickupLogController::class, 'index']);
+        Route::post('pickup-logs',             [PickupLogController::class, 'store']);
+        Route::get('pickup-logs/{pickupLog}',  [PickupLogController::class, 'show']);
+
+        // Ice Loading Count (simple count log per delivery — NOT a stock deduction)
+        Route::get('ice-loadings',                  [IceLoadingController::class, 'index']);
+        Route::post('ice-loadings',                 [IceLoadingController::class, 'store']);
+        Route::get('ice-loadings/{iceLoading}',     [IceLoadingController::class, 'show']);
     });
 
     // EMPLOYEE: SALESMAN ROUTES
