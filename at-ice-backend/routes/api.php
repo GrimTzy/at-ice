@@ -22,6 +22,7 @@ use App\Http\Controllers\FaceDataController;
 use App\Http\Controllers\CustomerPriceController;
 use App\Http\Controllers\PickupLogController;
 use App\Http\Controllers\IceLoadingController;
+use App\Http\Controllers\StockOutRequestController;
 
 //Public
 Route::post('/login', [AuthController::class, 'login']);
@@ -78,6 +79,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Pickup Logs (Admin full access — Alexandra/J-Maxine plant pickups, no price/receipt)
         Route::apiResource('pickup-logs', PickupLogController::class)->only(['update', 'destroy']);
+
+        // Stock-Out Requests (Admin approves/rejects — Maintenance submits, Checker releases)
+        Route::put('stock-out-requests/{stockOutRequest}/approve', [StockOutRequestController::class, 'approve']);
+        Route::put('stock-out-requests/{stockOutRequest}/reject',  [StockOutRequestController::class, 'reject']);
 
         // BUSINESS INTELLIGENCE 
         Route::get('bi/summary',            [BiController::class, 'summary']);
@@ -154,6 +159,9 @@ Route::get('face-descriptors', [FaceDataController::class, 'descriptors']);
         Route::get('ice-loadings',                  [IceLoadingController::class, 'index']);
         Route::post('ice-loadings',                 [IceLoadingController::class, 'store']);
         Route::get('ice-loadings/{iceLoading}',     [IceLoadingController::class, 'show']);
+
+        // Stock-Out Requests (Checker releases items after Admin approval)
+        Route::put('stock-out-requests/{stockOutRequest}/release', [StockOutRequestController::class, 'release']);
     });
 
     // EMPLOYEE: SALESMAN ROUTES
@@ -167,7 +175,9 @@ Route::get('face-descriptors', [FaceDataController::class, 'descriptors']);
     // EMPLOYEE: MAINTENANCE ROUTES
     Route::middleware('role:employee,maintenance')->group(function () {
 
-        Route::post('stock-out-request', [StockMovementController::class, 'requestStockOut']);
+        Route::get('stock-out-requests',                  [StockOutRequestController::class, 'index']);
+        Route::post('stock-out-requests',                 [StockOutRequestController::class, 'store']);
+        Route::get('stock-out-requests/{stockOutRequest}', [StockOutRequestController::class, 'show']);
     });
 
     // DRIVER ROUTES
