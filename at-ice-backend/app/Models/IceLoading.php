@@ -8,6 +8,7 @@ class IceLoading extends Model
 {
     protected $fillable = [
         'delivery_id',
+        'product_type',
         'checker_id',
         'quantity_loaded',
         'loaded_at',

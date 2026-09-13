@@ -21,7 +21,10 @@ import { GpsTrackingPage } from './pages/drivers/GpsTrackingPage'
 import FaceEnrollment from './pages/hr/FaceEnrollment'
 
 // ── Employee Module 
-// import CheckerLogin from './pages/employees/CheckerLogin'       // Phase 13
+import CheckerLogin from './pages/employees/CheckerLogin'
+import CheckerDashboard from './pages/employees/CheckerDashboard'
+import CheckerPickupLogPage from './pages/employees/CheckerPickupLogPage'
+import CheckerIceLoadingPage from './pages/employees/CheckerIceLoadingPage'
 import SalesmanLogin from './pages/employees/SalesmanLogin'
 import SalesmanDashboard from './pages/employees/SalesmanDashboard'
 import SalesmanDeliveryConfirmation from './pages/employees/SalesmanDeliveryConfirmation'
@@ -87,7 +90,31 @@ function App() {
         />
 
         {/* ── Employee Module (Phase 13) ── */}
-        {/* <Route path="/checker/login" element={<CheckerLogin />} /> */}
+        <Route path="/checker/login" element={<CheckerLogin />} />
+        <Route
+          path="/checker/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
+              <CheckerDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/checker/pickup-log"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
+              <CheckerPickupLogPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/checker/ice-loading"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
+              <CheckerIceLoadingPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/salesman/login" element={<SalesmanLogin />} />
         <Route
           path="/salesman/deliveries"
