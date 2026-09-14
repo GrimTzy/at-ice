@@ -11,7 +11,7 @@ import LandingPageCustomer from './pages/LandingPage-customer'
 import AdminLogin from './pages/admin/AdminLogin'
 import Dashboard from './pages/admin/Dashboard'
 import CustomerPriceManagement from './pages/admin/CustomerPriceManagement'
-import StockOutApprovalPage from './pages/admin/StockOutApprovalPage'
+import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
 
 // ── Driver Module
 import DriverLogin from './pages/drivers/DriverLogin'
@@ -26,6 +26,7 @@ import CheckerLogin from './pages/employees/CheckerLogin'
 import CheckerDashboard from './pages/employees/CheckerDashboard'
 import CheckerPickupLogPage from './pages/employees/CheckerPickupLogPage'
 import CheckerIceLoadingPage from './pages/employees/CheckerIceLoadingPage'
+import CheckerStockOutReleasePage from './pages/employees/CheckerStockOutReleasePage'
 import SalesmanLogin from './pages/employees/SalesmanLogin'
 import SalesmanDashboard from './pages/employees/SalesmanDashboard'
 import SalesmanDeliveryConfirmation from './pages/employees/SalesmanDeliveryConfirmation'
@@ -123,6 +124,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
               <CheckerIceLoadingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/checker/stock-out-release"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
+              <CheckerStockOutReleasePage />
             </ProtectedRoute>
           }
         />

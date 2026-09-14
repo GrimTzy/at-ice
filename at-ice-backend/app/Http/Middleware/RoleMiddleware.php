@@ -20,6 +20,7 @@ class RoleMiddleware
      *   ->middleware('role:employee,checker')      ← employee + sub_role
      *   ->middleware('role:employee,salesman')
      *   ->middleware('role:employee,maintenance')
+     *   ->middleware('role:employee,checker,maintenance') ← employee + multiple sub_roles
      *   ->middleware('role:admin,hr')              ← multiple roles allowed
      */
     public function handle(Request $request, Closure $next, string ...$roles): Response
@@ -35,14 +36,14 @@ class RoleMiddleware
             return $next($request);
         }
 
-        // ── Single sub_role check (e.g. 'role:employee,checker') ──
+        // ── Sub_role check (e.g. 'role:employee,checker' or 'role:employee,checker,maintenance') ──
         $knownSubRoles = ['checker', 'salesman', 'maintenance'];
 
-        if (count($roles) === 2 && in_array($roles[1], $knownSubRoles)) {
-            $requiredRole    = $roles[0]; // 'employee'
-            $requiredSubRole = $roles[1]; // 'checker' | 'salesman' | 'maintenance'
+        if (count($roles) >= 2 && in_array($roles[1], $knownSubRoles)) {
+            $requiredRole     = $roles[0]; // 'employee'
+            $allowedSubRoles  = array_slice($roles, 1); // ['checker'] or ['checker', 'maintenance'], etc.
 
-            if ($user->role === $requiredRole && $user->sub_role === $requiredSubRole) {
+            if ($user->role === $requiredRole && in_array($user->sub_role, $allowedSubRoles)) {
                 return $next($request);
             }
 

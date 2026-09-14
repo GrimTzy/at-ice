@@ -160,7 +160,7 @@ Route::get('face-descriptors', [FaceDataController::class, 'descriptors']);
         Route::post('ice-loadings',                 [IceLoadingController::class, 'store']);
         Route::get('ice-loadings/{iceLoading}',     [IceLoadingController::class, 'show']);
 
-        // Stock-Out Requests (Checker releases items after Admin approval)
+        // Stock-Out Requests (release only — index/show now shared below)
         Route::put('stock-out-requests/{stockOutRequest}/release', [StockOutRequestController::class, 'release']);
     });
 
@@ -175,9 +175,14 @@ Route::get('face-descriptors', [FaceDataController::class, 'descriptors']);
     // EMPLOYEE: MAINTENANCE ROUTES
     Route::middleware('role:employee,maintenance')->group(function () {
 
-        Route::get('stock-out-requests',                  [StockOutRequestController::class, 'index']);
-        Route::post('stock-out-requests',                 [StockOutRequestController::class, 'store']);
-        Route::get('stock-out-requests/{stockOutRequest}', [StockOutRequestController::class, 'show']);
+        Route::post('stock-out-requests', [StockOutRequestController::class, 'store']);
+    });
+
+    // EMPLOYEE: STOCK-OUT VIEW (shared — Checker and Maintenance can both view)
+    Route::middleware('role:employee,checker,maintenance')->group(function () {
+
+        Route::get('stock-out-requests',                   [StockOutRequestController::class, 'index']);
+        Route::get('stock-out-requests/{stockOutRequest}',  [StockOutRequestController::class, 'show']);
     });
 
     // DRIVER ROUTES
