@@ -1,0 +1,277 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
+const ChevronLeftIcon = () => (
+  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <polyline points="15 18 9 12 15 6" />
+  </svg>
+);
+const PlusIcon = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+const WrenchIcon = () => (
+  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M14.7 6.3a4 4 0 10-5.66 5.66L2 19l3 3 7.03-7.04a4 4 0 005.67-5.66l-2.83 2.83-2.12-2.12 2.83-2.83z" />
+  </svg>
+);
+const ClockIcon = () => (
+  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const STATUS_STYLES = {
+  pending:  { bg: "bg-amber-50",  border: "border-amber-200",  text: "text-amber-600",  label: "Pending" },
+  approved: { bg: "bg-cyan-50",   border: "border-cyan-200",   text: "text-cyan-600",   label: "Approved" },
+  rejected: { bg: "bg-red-50",    border: "border-red-200",    text: "text-red-500",    label: "Rejected" },
+  released: { bg: "bg-green-50",  border: "border-green-200",  text: "text-green-600",  label: "Released" },
+};
+
+export default function MaintenanceStockOutRequestPage() {
+  const navigate = useNavigate();
+  const token = localStorage.getItem("token");
+
+  const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const [itemName, setItemName] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [purpose, setPurpose] = useState("");
+
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  async function fetchRequests() {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const res = await fetch("/api/stock-out-requests", {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to load requests.");
+      setRequests(data.data || data);
+    } catch (err) {
+      setLoadError(err.message || "Something went wrong loading your requests.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setFormError("");
+
+    if (!itemName.trim() || !quantity || !purpose.trim()) {
+      setFormError("Please fill in all fields.");
+      return;
+    }
+    if (Number(quantity) < 1) {
+      setFormError("Quantity must be at least 1.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/stock-out-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          item_name: itemName.trim(),
+          quantity: Number(quantity),
+          purpose: purpose.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to submit request.");
+
+      setItemName("");
+      setQuantity("");
+      setPurpose("");
+      setShowForm(false);
+      fetchRequests();
+    } catch (err) {
+      setFormError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+
+      {/* ── Top Bar ── */}
+      <header className="bg-white border-b border-black/[0.08] px-4 pt-10 pb-4 flex-shrink-0 sticky top-0 z-20">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate("/maintenance/dashboard")}
+            className="text-slate-400 active:text-slate-600 transition-colors p-1 -ml-1 cursor-pointer flex-shrink-0"
+          >
+            <ChevronLeftIcon />
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="text-[16px] font-semibold text-slate-800 leading-tight flex items-center gap-1.5">
+              <WrenchIcon />
+              Request Stock Out
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              Request truck parts or machine components
+            </div>
+          </div>
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="flex items-center gap-1 px-3 py-2 bg-cyan-500 active:bg-cyan-600 text-white text-[12px] font-semibold rounded-lg transition-colors cursor-pointer flex-shrink-0"
+          >
+            <PlusIcon />
+            New
+          </button>
+        </div>
+      </header>
+
+      {/* ── Collapsible Form ── */}
+      {showForm && (
+        <div className="bg-white border-b border-black/[0.08] px-4 py-4 flex-shrink-0">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
+                Item Name
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Truck brake pads"
+                value={itemName}
+                onChange={(e) => setItemName(e.target.value)}
+                className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
+                Quantity
+              </label>
+              <input
+                type="number"
+                min="1"
+                placeholder="e.g. 2"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
+                Purpose
+              </label>
+              <textarea
+                placeholder="e.g. Delivery truck DEL-002 needs brake pad replacement"
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value)}
+                rows={3}
+                className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all resize-none"
+              />
+            </div>
+
+            {formError && (
+              <div className="text-[12px] text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center">
+                {formError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full py-3 bg-cyan-500 active:bg-cyan-600 text-white text-[13px] font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {submitting ? "Submitting…" : "Submit Request"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* ── Request List ── */}
+      <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
+        {loading && (
+          <div className="text-center text-[13px] text-slate-400 py-8">Loading requests…</div>
+        )}
+
+        {loadError && !loading && (
+          <div className="text-[12px] text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center">
+            {loadError}
+          </div>
+        )}
+
+        {!loading && !loadError && requests.length === 0 && (
+          <div className="text-center text-[13px] text-slate-400 py-8">
+            No stock-out requests yet. Tap "New" to submit one.
+          </div>
+        )}
+
+        {!loading && requests.map((req) => {
+          const style = STATUS_STYLES[req.status] || STATUS_STYLES.pending;
+          return (
+            <div
+              key={req.id}
+              className="bg-white border border-black/[0.08] rounded-2xl shadow-sm px-4 py-4"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[14px] font-semibold text-slate-800">
+                    {req.item_name}
+                  </div>
+                  <div className="text-[12px] text-slate-400 mt-0.5">
+                    Quantity: {req.quantity}
+                  </div>
+                </div>
+                <span
+                  className={`flex-shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-full border ${style.bg} ${style.border} ${style.text}`}
+                >
+                  {style.label}
+                </span>
+              </div>
+
+              <div className="text-[12px] text-slate-500 mt-2 leading-snug">
+                {req.purpose}
+              </div>
+
+              {req.status === "rejected" && req.rejection_reason && (
+                <div className="mt-2 text-[11px] text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  Reason: {req.rejection_reason}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1 text-[10px] text-slate-300 mt-3">
+                <ClockIcon />
+                {new Date(req.created_at).toLocaleDateString("en-PH", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -28,7 +28,9 @@ import CheckerIceLoadingPage from './pages/employees/CheckerIceLoadingPage'
 import SalesmanLogin from './pages/employees/SalesmanLogin'
 import SalesmanDashboard from './pages/employees/SalesmanDashboard'
 import SalesmanDeliveryConfirmation from './pages/employees/SalesmanDeliveryConfirmation'
-// import MaintenanceLogin from './pages/employees/MaintenanceLogin' // Phase 13
+import MaintenanceLogin from './pages/employees/MaintenanceLogin'
+import MaintenanceDashboard from './pages/employees/MaintenanceDashboard'
+import MaintenanceStockOutRequestPage from './pages/employees/MaintenanceStockOutRequestPage'
 
 function App() {
   return (
@@ -132,7 +134,23 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* <Route path="/maintenance/login" element={<MaintenanceLogin />} /> */}
+        <Route path="/maintenance/login" element={<MaintenanceLogin />} />
+        <Route
+          path="/maintenance/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
+              <MaintenanceDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/maintenance/stock-out-request"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
+              <MaintenanceStockOutRequestPage />
+            </ProtectedRoute>
+          }
+        />
 
       </Routes>
     </BrowserRouter>
