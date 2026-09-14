@@ -11,6 +11,7 @@ import LandingPageCustomer from './pages/LandingPage-customer'
 import AdminLogin from './pages/admin/AdminLogin'
 import Dashboard from './pages/admin/Dashboard'
 import CustomerPriceManagement from './pages/admin/CustomerPriceManagement'
+import StockOutApprovalPage from './pages/admin/StockOutApprovalPage'
 
 // ── Driver Module
 import DriverLogin from './pages/drivers/DriverLogin'
@@ -58,6 +59,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <CustomerPriceManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/stock-out-approvals"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <StockOutApprovalPage />
             </ProtectedRoute>
           }
         />
