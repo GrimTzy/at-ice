@@ -3,26 +3,18 @@ import { Chart } from "chart.js/auto";
 import echo from "../../echo";
 import AdminLayout from "../../components/AdminLayout";
 
-// ─── ICONS (page-specific — stat cards, charts, system status. Sidebar/topbar
-// icons now live inside AdminLayout.jsx)
 const DollarIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
 const AlertIcon  = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 const TruckIcon  = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>;
-const UsersIcon  = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
-const InfoIcon   = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
-const CalIcon    = () => <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
-const PulseIcon  = () => <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
-const WifiIcon   = () => <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>;
-const DbIcon     = () => <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>;
 const ArrowUp    = () => <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>;
 const ArrowDown  = () => <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="18 9 12 15 6 9"/></svg>;
 const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
 
-// ─── HELPERS
+// HELPERS
 const fmt  = (n) => "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const token = () => localStorage.getItem("token") || "";
 
-// ─── MINI LINE CHART ──────────────────────────────────────────────────────────
+// MINI LINE CHART
 function MiniChart({ id, data, color }) {
   useEffect(() => {
     const ctx = document.getElementById(id);
@@ -41,7 +33,7 @@ function MiniChart({ id, data, color }) {
   return <div className="h-9 -mx-1 -mb-1 mt-1"><canvas id={id} /></div>;
 }
 
-// ─── DONUT CHART
+// DONUT CHART
 function DonutChart({ id, data, colors }) {
   useEffect(() => {
     const ctx = document.getElementById(id);
@@ -56,7 +48,7 @@ function DonutChart({ id, data, colors }) {
   return <canvas id={id} className="w-[90px] h-[90px]" />;
 }
 
-// ─── SALES BAR CHART (real data)
+// SALES BAR CHART (real data)
 function SalesBarChart({ mode, chartData }) {
   useEffect(() => {
     const ctx = document.getElementById("salesChart");
@@ -90,7 +82,7 @@ function SalesBarChart({ mode, chartData }) {
   return <canvas id="salesChart" height="180" />;
 }
 
-// ─── MAIN COMPONENT
+// MAIN COMPONENT
 export default function Dashboard() {
   const [chartMode, setChartMode] = useState("bar");
   const [biData,    setBiData]    = useState(null);
@@ -99,7 +91,7 @@ export default function Dashboard() {
   const [aiLoading, setAiLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
 
-  // ── Fetch BI Summary
+  // Fetch BI Summary
   const fetchBI = useCallback(async () => {
     setLoading(true);
     try {
@@ -116,7 +108,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  // ── Fetch Gemini AI Summary
+  // Fetch Groq AI Summary
   const fetchAI = useCallback(async () => {
     setAiLoading(true);
     try {
@@ -135,7 +127,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  // ── Initial load
+  // Initial load
   useEffect(() => {
     fetchBI();
   }, []);
@@ -144,7 +136,7 @@ export default function Dashboard() {
     if (biData) fetchAI();
   }, [biData]);
 
-  // ── Pusher real-time notifications
+  // Pusher real-time notifications
   useEffect(() => {
     echo.channel('attendance').listen('.attendance.recorded', (e) => {
       setNotifications(prev => [{ bg:"bg-amber-100", color:"text-amber-600", icon:<ClockIconLocal />, title:"Attendance Alert", body:e.data?.message||"Attendance recorded.", time:"Just now", unread:true }, ...prev.slice(0,9)]);
@@ -170,7 +162,7 @@ export default function Dashboard() {
     };
   }, []);
 
-  // ── Derived values from real data
+  // Derived values from real data
   const sales     = biData?.sales     || {};
   const deliveries= biData?.deliveries|| {};
   const inventory = biData?.inventory || {};
@@ -181,64 +173,11 @@ export default function Dashboard() {
   const delMomUp    = (deliveries.mom_change_pct ?? 0) >= 0;
   const invTotal    = (inventory.low_stock || 0) + (inventory.out_of_stock || 0);
 
-  const statCards = [
-    {
-      label:"Total Sales (This Month)",
-      value: fmt(sales.this_month_total),
-      delta: loading ? "—" : `${Math.abs(sales.mom_change_pct ?? 0)}% vs last month`,
-      up: salesMomUp,
-      icon:<DollarIcon />, iconCls:"bg-blue-100 text-blue-600",
-      chartId:"chart-sales",
-      chartData:(sales.monthly_chart||[]).map(m=>m.this_year),
-      color:"#3b82f6", context: sales.current_month || "This Month",
-    },
-    {
-      label:"Total Deliveries",
-      value: loading ? "—" : String(deliveries.total || 0),
-      delta: loading ? "—" : `${Math.abs(deliveries.mom_change_pct ?? 0)}% vs last month`,
-      up: delMomUp,
-      icon:<TruckIcon />, iconCls:"bg-green-100 text-green-600",
-      chartId:"chart-del",
-      chartData: Array(12).fill(deliveries.this_month_total || 0),
-      color:"#22c55e", context:`${deliveries.delivery_rate_pct || 0}% delivered`,
-    },
-    {
-      label:"Inventory Alerts",
-      value: loading ? "—" : String(invTotal),
-      delta: `${inventory.out_of_stock || 0} out of stock`,
-      up: false,
-      icon:<AlertIcon />, iconCls:"bg-amber-100 text-amber-600",
-      chartId:"chart-inv",
-      chartData: Array(12).fill(invTotal),
-      color:"#f59e0b", context:`${inventory.low_stock || 0} low stock items`,
-    },
-    {
-      label:"Attendance Today",
-      value: loading ? "—" : `${attendance.total_in || 0}/${attendance.total_employees || 0}`,
-      delta: `${attendance.attendance_rate || 0}% attendance rate`,
-      up: (attendance.attendance_rate || 0) >= 80,
-      icon:<UsersIcon />, iconCls:"bg-cyan-100 text-cyan-600",
-      chartId:"chart-att",
-      chartData:(attendance.weekly_trend||[]).map(d=>d.count),
-      color:"#00c2ff", context:"Present today",
-    },
-    {
-      label:"Overdue Receivables",
-      value: loading ? "—" : fmt(overdue.total_overdue_amount),
-      delta: `${overdue.overdue_count || 0} Customers`,
-      up: null,
-      icon:<InfoIcon />, iconCls:"bg-red-100 text-red-500",
-      chartId:"chart-over",
-      chartData: Array(12).fill(overdue.total_overdue_amount || 0),
-      color:"#f43f5e", valueCls:"text-red-500", context:"Action needed", isAlert:true,
-    },
-  ];
-
-  // ── Inventory donut data
+  // Inventory donut data — single-hue blue palette (dark → light)
   const invDonutData = [inventory.in_stock||0, inventory.low_stock||0, inventory.out_of_stock||0];
   const invDonutTotal = invDonutData.reduce((a,b)=>a+b,0) || 1;
 
-  // ── Delivery donut data
+  // Delivery donut data — single-hue blue palette (dark → light)
   const delDonutData = [deliveries.delivered||0, deliveries.in_transit||0, deliveries.pending||0, deliveries.cancelled||0];
   const delTotal     = deliveries.total || 1;
 
@@ -256,14 +195,66 @@ export default function Dashboard() {
       }
     >
       {/* STAT CARDS */}
-      <div className="grid grid-cols-5 gap-3">
-        {statCards.map((card) => (
-          <div key={card.label} className={`bg-white border rounded-xl p-4 flex flex-col gap-2.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150 ${card.isAlert ? "border-red-300 bg-red-50/60 hover:border-red-400" : "border-black/[0.09] hover:border-black/20"}`}>
-            <div className="flex items-start justify-between">
-              <span className={`text-[11px] font-medium tracking-[0.02em] ${card.isAlert ? "text-red-400" : "text-slate-400"}`}>{card.label}</span>
-              <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${card.iconCls}`}>{card.icon}</div>
+      <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] gap-3">
+
+        {/* PRIMARY METRIC — Total Sales */}
+        <div className="bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-2 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150">
+          <span className="text-[11px] font-medium tracking-[0.02em] text-slate-400">Total Sales (This Month)</span>
+          <div className="text-[34px] font-semibold font-mono tracking-tight leading-none text-slate-800">
+            {fmt(sales.this_month_total)}
+          </div>
+          <div className={`flex items-center gap-1 text-[12px] font-medium ${salesMomUp ? "text-green-600" : "text-red-500"}`}>
+            {salesMomUp ? <ArrowUp /> : <ArrowDown />}
+            {loading ? "—" : `${Math.abs(sales.mom_change_pct ?? 0)}% vs last month`}
+          </div>
+          <div className="text-[11px] text-slate-400">{sales.current_month || "This Month"}</div>
+          {(sales.monthly_chart||[]).length > 0 && (
+            <MiniChart id="chart-sales" data={(sales.monthly_chart||[]).map(m=>m.this_year)} color="#3b82f6" />
+          )}
+        </div>
+
+        {/* SECONDARY METRICS — plain, no icon badges */}
+        {[
+          {
+            label: "Total Deliveries",
+            value: loading ? "—" : String(deliveries.total || 0),
+            up: delMomUp,
+            delta: loading ? "—" : `${Math.abs(deliveries.mom_change_pct ?? 0)}% vs last month`,
+            context: `${deliveries.delivery_rate_pct || 0}% delivered`,
+          },
+          {
+            label: "Inventory Alerts",
+            value: loading ? "—" : String(invTotal),
+            up: false,
+            delta: `${inventory.out_of_stock || 0} out of stock`,
+            context: `${inventory.low_stock || 0} low stock items`,
+          },
+          {
+            label: "Attendance Today",
+            value: loading ? "—" : `${attendance.total_in || 0}/${attendance.total_employees || 0}`,
+            up: (attendance.attendance_rate || 0) >= 80,
+            delta: `${attendance.attendance_rate || 0}% attendance rate`,
+            context: "Present today",
+          },
+          {
+            label: "Overdue Receivables",
+            value: loading ? "—" : fmt(overdue.total_overdue_amount),
+            up: null,
+            delta: `${overdue.overdue_count || 0} Customers`,
+            context: "Action needed",
+            isAlert: true,
+          },
+        ].map((card) => (
+          <div
+            key={card.label}
+            className={`bg-white border rounded-xl p-4 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150 ${card.isAlert ? "border-red-300 bg-red-50/60 hover:border-red-400" : "border-black/[0.09] hover:border-black/20"}`}
+          >
+            <span className={`text-[11px] font-medium tracking-[0.02em] ${card.isAlert ? "text-red-400" : "text-slate-400"}`}>
+              {card.label}
+            </span>
+            <div className={`text-[20px] font-semibold font-mono tracking-tight leading-none ${card.isAlert ? "text-red-500" : "text-slate-800"}`}>
+              {card.value}
             </div>
-            <div className={`text-[22px] font-semibold font-mono tracking-tight leading-none ${card.valueCls || "text-slate-800"}`}>{card.value}</div>
             {card.up !== null ? (
               <div className={`flex items-center gap-1 text-[11px] font-medium ${card.up ? "text-green-600" : "text-red-500"}`}>
                 {card.up ? <ArrowUp /> : <ArrowDown />}{card.delta}
@@ -272,7 +263,6 @@ export default function Dashboard() {
               <div className="text-[11px] text-red-400 font-medium">{card.delta} — {card.context}</div>
             )}
             {card.up !== null && <div className="text-[10px] text-slate-400">{card.context}</div>}
-            {card.chartData?.length > 0 && <MiniChart id={card.chartId} data={card.chartData} color={card.color} />}
           </div>
         ))}
       </div>
@@ -323,7 +313,7 @@ export default function Dashboard() {
           {/* Inventory + Delivery */}
           <div className="grid grid-cols-2 gap-3">
 
-            {/* Inventory Summary */}
+            {/* Inventory Summary — single-hue blue */}
             <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
               <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
                 <div className="text-[13px] font-semibold text-slate-800">Inventory Summary</div>
@@ -331,13 +321,13 @@ export default function Dashboard() {
               </div>
               <div className="flex items-start gap-6 p-[18px]">
                 <div className="w-[90px] h-[90px] flex-shrink-0">
-                  <DonutChart id="invDonut" data={invDonutData} colors={["#16a34a","#d97706","#e11d48"]} />
+                  <DonutChart id="invDonut" data={invDonutData} colors={["#0c4a6e","#0284c7","#bae6fd"]} />
                 </div>
                 <div className="flex-1 flex flex-col gap-2.5">
                   {[
-                    ["#16a34a","In Stock",     `${Math.round((inventory.in_stock||0)/invDonutTotal*100)}%`,    inventory.in_stock||0],
-                    ["#d97706","Low Stock",    `${Math.round((inventory.low_stock||0)/invDonutTotal*100)}%`,   inventory.low_stock||0],
-                    ["#e11d48","Out of Stock", `${Math.round((inventory.out_of_stock||0)/invDonutTotal*100)}%`,inventory.out_of_stock||0],
+                    ["#0c4a6e","In Stock",     `${Math.round((inventory.in_stock||0)/invDonutTotal*100)}%`,    inventory.in_stock||0],
+                    ["#0284c7","Low Stock",    `${Math.round((inventory.low_stock||0)/invDonutTotal*100)}%`,   inventory.low_stock||0],
+                    ["#bae6fd","Out of Stock", `${Math.round((inventory.out_of_stock||0)/invDonutTotal*100)}%`,inventory.out_of_stock||0],
                   ].map(([color,label,p,val]) => (
                     <div key={label} className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full flex-shrink-0" style={{background:color}} />
@@ -354,7 +344,7 @@ export default function Dashboard() {
               <div className="border-t border-black/[0.09] px-[18px] pb-3 pt-2.5">
                 <div className="text-[10px] tracking-widest uppercase text-slate-400 mb-2">Critical Stock Items</div>
                 {(inventory.critical_items||[]).length === 0 && (
-                  <div className="text-[11px] text-slate-400 py-1">No critical items 🎉</div>
+                  <div className="text-[11px] text-slate-400 py-1">No critical items</div>
                 )}
                 {(inventory.critical_items||[]).map((item, i, arr) => (
                   <div key={item.id} className={`flex justify-between items-center py-1.5 text-xs ${i < arr.length-1 ? "border-b border-black/[0.09]" : ""}`}>
@@ -367,7 +357,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Delivery Status */}
+            {/* Delivery Status — single-hue blue */}
             <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
               <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
                 <div className="text-[13px] font-semibold text-slate-800">Delivery Status</div>
@@ -375,22 +365,22 @@ export default function Dashboard() {
               </div>
               <div className="flex items-start gap-6 p-[18px]">
                 <div className="w-[90px] h-[90px] flex-shrink-0">
-                  <DonutChart id="delDonut" data={delDonutData} colors={["#2563eb","#16a34a","#d97706","#e11d48"]} />
+                  <DonutChart id="delDonut" data={delDonutData} colors={["#0c4a6e","#0284c7","#38bdf8","#bae6fd"]} />
                 </div>
                 <div className="flex-1 flex flex-col gap-2.5">
                   {[
-                    ["#2563eb","Delivered",  `${Math.round((deliveries.delivered||0)/delTotal*100)}%`,  deliveries.delivered||0,  false],
-                    ["#16a34a","In Transit", `${Math.round((deliveries.in_transit||0)/delTotal*100)}%`, deliveries.in_transit||0, false],
-                    ["#d97706","Pending",    `${Math.round((deliveries.pending||0)/delTotal*100)}%`,    deliveries.pending||0,    true ],
-                    ["#e11d48","Cancelled",  `${Math.round((deliveries.cancelled||0)/delTotal*100)}%`,  deliveries.cancelled||0,  false],
-                  ].map(([color,label,p,val,highlight]) => (
-                    <div key={label} className={`flex items-center gap-2 ${highlight ? "bg-amber-50 -mx-2 px-2 rounded-md py-0.5" : ""}`}>
+                    ["#0c4a6e","Delivered",  `${Math.round((deliveries.delivered||0)/delTotal*100)}%`,  deliveries.delivered||0],
+                    ["#0284c7","In Transit", `${Math.round((deliveries.in_transit||0)/delTotal*100)}%`, deliveries.in_transit||0],
+                    ["#38bdf8","Pending",    `${Math.round((deliveries.pending||0)/delTotal*100)}%`,    deliveries.pending||0],
+                    ["#bae6fd","Cancelled",  `${Math.round((deliveries.cancelled||0)/delTotal*100)}%`,  deliveries.cancelled||0],
+                  ].map(([color,label,p,val]) => (
+                    <div key={label} className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full flex-shrink-0" style={{background:color}} />
                       <div>
-                        <div className={`text-xs ${highlight ? "text-amber-700 font-medium" : "text-slate-500"}`}>{label} {highlight && "⚠"}</div>
+                        <div className="text-xs text-slate-500">{label}</div>
                         <div className="text-[10px] text-slate-400">{p}</div>
                       </div>
-                      <div className={`text-xs font-semibold font-mono ml-auto ${highlight ? "text-amber-600" : "text-slate-800"}`}>{val}</div>
+                      <div className="text-xs font-semibold font-mono ml-auto text-slate-800">{val}</div>
                     </div>
                   ))}
                   <div className="mt-1.5 pt-2.5 border-t border-black/[0.09] w-full">
@@ -410,7 +400,7 @@ export default function Dashboard() {
           <div className="bg-white border border-cyan-200 rounded-xl overflow-hidden">
             <div className="px-[18px] py-3.5 border-b border-cyan-100 flex items-center justify-between bg-cyan-500/[0.04]">
               <div className="text-[13px] font-semibold text-slate-800">AI Summary</div>
-              <span className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-500 rounded-full font-mono">Gemini</span>
+              <span className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-500 rounded-full font-mono">Groq</span>
             </div>
             <div className="p-[18px]">
               {aiLoading ? (
@@ -425,7 +415,7 @@ export default function Dashboard() {
                 {[
                   { dot:"bg-green-500", text:<>Delivery rate: <span className="text-slate-800 font-semibold">{deliveries.delivery_rate_pct||0}%</span> completed</> },
                   { dot:(deliveries.pending||0)>0?"bg-amber-500":"bg-green-500", text:<><span className="text-slate-800 font-semibold">{deliveries.pending||0} pending deliveries</span> today</> },
-                  { dot:(inventory.out_of_stock||0)>0?"bg-red-500":"bg-green-500", text:(inventory.out_of_stock||0)>0 ? <><span className="text-red-500 font-semibold">{inventory.out_of_stock} items out of stock</span> — reorder needed</> : <><span className="text-green-600 font-semibold">All items in stock</span> ✓</> },
+                  { dot:(inventory.out_of_stock||0)>0?"bg-red-500":"bg-green-500", text:(inventory.out_of_stock||0)>0 ? <><span className="text-red-500 font-semibold">{inventory.out_of_stock} items out of stock</span> — reorder needed</> : <><span className="text-green-600 font-semibold">All items in stock</span></> },
                 ].map((item,i) => (
                   <div key={i} className="flex items-center gap-2 text-[11px]">
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.dot}`} />
@@ -463,7 +453,7 @@ export default function Dashboard() {
       {/* OVERDUE RECEIVABLES */}
       <div className="grid grid-cols-[1fr_340px] gap-3">
 
-        {/* Attendance Summary */}
+        {/* Attendance Summary — plain, no per-status colors */}
         <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
           <div className="px-[18px] py-3.5 border-b border-black/[0.09]">
             <div className="text-[13px] font-semibold text-slate-800">Attendance Today</div>
@@ -471,14 +461,14 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-5 divide-x divide-black/[0.06]">
             {[
-              ["Present",  attendance.present||0,  "text-green-600"],
-              ["Late",     attendance.late||0,     "text-amber-500"],
-              ["Absent",   attendance.absent||0,   "text-red-500"],
-              ["Half Day", attendance.half_day||0, "text-blue-500"],
-              ["On Leave", attendance.on_leave||0, "text-purple-500"],
-            ].map(([label,val,cls]) => (
+              ["Present",  attendance.present||0],
+              ["Late",     attendance.late||0],
+              ["Absent",   attendance.absent||0],
+              ["Half Day", attendance.half_day||0],
+              ["On Leave", attendance.on_leave||0],
+            ].map(([label,val]) => (
               <div key={label} className="px-[18px] py-3 text-center">
-                <div className={`text-[22px] font-semibold font-mono ${cls}`}>{val}</div>
+                <div className="text-[22px] font-semibold font-mono text-slate-800">{val}</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">{label}</div>
               </div>
             ))}
@@ -499,7 +489,7 @@ export default function Dashboard() {
             <a className="text-[11px] text-cyan-500 cursor-pointer hover:text-cyan-400 transition-colors">View all</a>
           </div>
           {(overdue.receipts||[]).length === 0 && (
-            <div className="px-[18px] py-4 text-[11px] text-slate-400">No overdue receivables 🎉</div>
+            <div className="px-[18px] py-4 text-[11px] text-slate-400">No overdue receivables</div>
           )}
           {(overdue.receipts||[]).map((r) => (
             <div key={r.id} className="grid grid-cols-[1fr_auto_auto] gap-4 items-center px-[18px] py-2.5 border-b border-black/[0.09] last:border-b-0 hover:bg-slate-50 transition-colors cursor-pointer">
@@ -514,35 +504,8 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      {/* SYSTEM STATUS */}
-      <div className="grid grid-cols-5 gap-3">
-        {[
-          { icon:<UsersIcon />, bg:"bg-blue-100",  color:"text-blue-600",  label:"Active Users",       value:"Online",      sub:"Session active",          dot:true  },
-          { icon:<CalIcon />,   bg:"bg-green-100", color:"text-green-600", label:"Today's Attendance", value:`${attendance.total_in||0} / ${attendance.total_employees||0}`, sub:`${attendance.attendance_rate||0}%`, dot:false },
-          { icon:<PulseIcon />, bg:"bg-green-100", color:"text-green-600", label:"Server Status",      value:"Normal",      sub:"All systems operational", dot:true  },
-          { icon:<WifiIcon />,  bg:"bg-cyan-100",  color:"text-cyan-500",  label:"Pusher Status",      value:"Connected",   sub:"Real-time active",        dot:true  },
-          { icon:<DbIcon />,    bg:"bg-blue-100",  color:"text-blue-600",  label:"Database",           value:"MySQL 8.0",   sub:"Connected",               dot:true  },
-        ].map((s) => (
-          <div key={s.label} className="bg-white border border-black/[0.09] rounded-xl px-4 py-3.5 flex items-center gap-3 cursor-pointer hover:border-black/20 hover:-translate-y-px transition-all duration-150">
-            <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${s.bg} ${s.color}`}>{s.icon}</div>
-            <div>
-              <div className="text-[10px] text-slate-400 uppercase tracking-[0.07em]">{s.label}</div>
-              <div className="text-[13px] font-semibold text-slate-800 mt-0.5">{s.value}</div>
-              <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
-                {s.dot && <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />}
-                {s.sub}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
     </AdminLayout>
   );
 }
 
-// Small local alias so the Pusher listener block above (which references
-// ClockIconLocal for the attendance notification icon) has something to
-// render — kept separate from AdminLayout's own ClockIcon since Dashboard no
-// longer imports that one directly.
 const ClockIconLocal = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
