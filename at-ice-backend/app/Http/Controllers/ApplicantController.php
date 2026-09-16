@@ -75,7 +75,7 @@ class ApplicantController extends Controller
         ]);
     }
 
-    // UPDATE status only (HR — quick action)
+    // UPDATE status only (HR - quick action)
     public function updateStatus(Request $request, $id)
     {
         $request->validate([

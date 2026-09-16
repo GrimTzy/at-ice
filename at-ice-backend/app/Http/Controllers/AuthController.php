@@ -11,10 +11,8 @@ use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
-    // ─────────────────────────────────────────────
     // LOGIN with Brute Force Protection
-    // 5 attempts → 3-minute lockout (per email + IP)
-    // ─────────────────────────────────────────────
+    // 5 attempts, 3-minute lockout (per email + IP)
     public function login(Request $request)
     {
         $request->validate([
@@ -25,7 +23,7 @@ class AuthController extends Controller
         // Build a unique throttle key: email + IP
         $throttleKey = Str::lower($request->email) . '|' . $request->ip();
 
-        // ── Check if already locked out ──
+        // Check if already locked out
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
             $seconds = RateLimiter::availableIn($throttleKey);
             $minutes = ceil($seconds / 60);
@@ -36,7 +34,7 @@ class AuthController extends Controller
             ], 429);
         }
 
-        // ── Attempt login ──
+        // Attempt login
         $user = User::where('email', $request->email)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
@@ -51,7 +49,7 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // ── Success — clear throttle ──
+        // Success — clear throttle
         RateLimiter::clear($throttleKey);
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -68,9 +66,7 @@ class AuthController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────────
     // LOGOUT
-    // ─────────────────────────────────────────────
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
@@ -78,9 +74,7 @@ class AuthController extends Controller
         return response()->json(['message' => 'Logged out successfully.']);
     }
 
-    // ─────────────────────────────────────────────
     // GET CURRENT USER
-    // ─────────────────────────────────────────────
     public function me(Request $request)
     {
         return response()->json($request->user());

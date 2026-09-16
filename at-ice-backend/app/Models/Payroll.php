@@ -42,13 +42,13 @@ class Payroll extends Model
         'net_pay' => 'decimal:2',
     ];
 
-    // Relationship — Payroll belongs to Employee
+    // Relationship - Payroll belongs to Employee
     public function employee()
     {
         return $this->belongsTo(Employee::class);
     }
 
-    // Relationship — Payroll prepared by User
+    // Relationship - Payroll prepared by User
     public function preparedBy()
     {
         return $this->belongsTo(User::class, 'prepared_by');

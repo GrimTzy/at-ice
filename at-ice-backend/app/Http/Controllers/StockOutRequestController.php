@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 
 class StockOutRequestController extends Controller
 {
-    // Maintenance: view own/all requests (paginated, filterable by status)
+    // Maintenance - view own/all requests (paginated, filterable by status)
     public function index(Request $request)
     {
         $query = StockOutRequest::with(['requestedBy:id,name', 'approvedBy:id,name', 'releasedBy:id,name'])
@@ -20,7 +20,7 @@ class StockOutRequestController extends Controller
         return response()->json($query->paginate(20));
     }
 
-    // Maintenance: submit a new stock-out request
+    // Maintenance - submit a new stock-out request
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -67,7 +67,7 @@ class StockOutRequestController extends Controller
         ]);
     }
 
-    // Admin: reject a pending request
+    // Admin - reject a pending request
     public function reject(Request $request, StockOutRequest $stockOutRequest)
     {
         if ($stockOutRequest->status !== 'pending') {
@@ -91,7 +91,7 @@ class StockOutRequestController extends Controller
         ]);
     }
 
-    // Checker: release an approved request
+    // Checker - release an approved request
     public function release(StockOutRequest $stockOutRequest)
     {
         if ($stockOutRequest->status !== 'approved') {

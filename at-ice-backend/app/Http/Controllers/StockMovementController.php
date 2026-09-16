@@ -105,7 +105,7 @@ class StockMovementController extends Controller
         return response()->json($movement);
     }
 
-    // Maintenance — request stock out
+    // Maintenance - request stock out
     public function requestStockOut(Request $request)
     {
         $validated = $request->validate([

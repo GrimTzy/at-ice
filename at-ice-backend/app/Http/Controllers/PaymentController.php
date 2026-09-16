@@ -43,7 +43,7 @@ class PaymentController extends Controller
         return response()->json($payment, 201);
     }
 
-    // Customer — view own payments
+    // Customer - view own payments
     public function myPayments(Request $request)
     {
         $payments = Payment::with(['order'])

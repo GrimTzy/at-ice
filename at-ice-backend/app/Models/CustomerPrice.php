@@ -17,16 +17,13 @@ class CustomerPrice extends Model
     ];
 
     // product_type enum: bags, small_sack, big_sack
-
     public function customer()
     {
         return $this->belongsTo(Customer::class);
     }
 
-    /**
-     * Convenience lookup used by DeliveryProofController@confirm
-     * when auto-pricing the Salesman's multi-product confirmation form.
-     */
+
+    // when auto-pricing the multi-product confirmation form.
     public static function priceFor(int $customerId, string $productType): ?float
     {
         $row = static::where('customer_id', $customerId)

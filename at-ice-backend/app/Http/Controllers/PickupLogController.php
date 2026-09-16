@@ -7,9 +7,8 @@ use Illuminate\Http\Request;
 
 class PickupLogController extends Controller
 {
-    /**
-     * GET /api/pickup-logs
-     */
+
+    // GET /api/pickup-logs
     public function index(Request $request)
     {
         $query = PickupLog::with('recordedBy:id,name')
@@ -26,9 +25,8 @@ class PickupLogController extends Controller
         return response()->json($query->paginate(20));
     }
 
-    /**
-     * POST /api/pickup-logs
-     */
+
+    // POST /api/pickup-logs
     public function store(Request $request)
     {
         $validated = $request->validate([

@@ -61,7 +61,7 @@ class DeliveryProofController extends Controller
 
         $delivery = Delivery::with('customer')->findOrFail($request->delivery_id);
 
-        // Look up prices BEFORE starting the transaction / storing the photo —
+        // Look up prices BEFORE starting the transaction / storing the photo 
         // fail fast if any product has no price set for this customer.
         $lineItems     = [];
         $missingPrices = [];

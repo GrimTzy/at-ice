@@ -24,13 +24,6 @@ class IceLoadingController extends Controller
         return response()->json($query->paginate(50));
     }
 
-    /**
-     * Accepts multiple product-type quantities in ONE submission — e.g. a truck
-     * loaded with 25 Small Sacks + 50 Big Sacks (0 Bags) for the same delivery.
-     * Creates one ice_loadings row per product type with quantity > 0, all sharing
-     * the same delivery_id + loaded_at so the frontend can group them as one
-     * "loading event" with a computed total.
-     */
     public function store(Request $request)
     {
         $validated = $request->validate([

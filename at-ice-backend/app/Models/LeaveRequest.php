@@ -28,13 +28,13 @@ class LeaveRequest extends Model
         'approved_at' => 'datetime',
     ];
 
-    // Relationship — LeaveRequest belongs to Employee
+    // Relationship - LeaveRequest belongs to Employee
     public function employee()
     {
         return $this->belongsTo(Employee::class);
     }
 
-    // Relationship — LeaveRequest approved by User
+    // Relationship - LeaveRequest approved by User
     public function approvedBy()
     {
         return $this->belongsTo(User::class, 'approved_by');

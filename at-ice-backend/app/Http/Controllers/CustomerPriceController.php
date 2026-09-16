@@ -10,11 +10,9 @@ class CustomerPriceController extends Controller
 {
     protected array $productTypes = ['bags', 'small_sack', 'big_sack'];
 
-    /**
-     * GET /api/customer-prices
-     * Overview list — every customer + whichever prices are set (null if not yet set).
-     * Used by the Admin "Customer Price Management" table.
-     */
+    // GET /api/customer-prices
+    // Overview list - every customer + whichever prices are set
+    // Used by the Admin "Customer Price Management" table
     public function index()
     {
         $customers = Customer::with('customerPrices')->get();
@@ -35,10 +33,9 @@ class CustomerPriceController extends Controller
         return response()->json($result);
     }
 
-    /**
-     * GET /api/customer-prices/{customer}
-     * Prices for a single customer, one key per product type (null if unset).
-     */
+
+    // GET /api/customer-prices/{customer}
+    // Prices for a single customer, one key per product type
     public function show(Customer $customer)
     {
         $rows = CustomerPrice::where('customer_id', $customer->id)->get();
@@ -55,23 +52,16 @@ class CustomerPriceController extends Controller
         ]);
     }
 
-    /**
-     * GET /api/customer-prices/{customer}/lookup
-     * Salesman-safe, read-only price lookup for a single customer.
-     * Same shape as show(), but reachable by the employee/salesman role
-     * (show() itself stays admin-only) — used by the Delivery Confirmation
-     * page to preview auto-looked-up prices before submitting.
-     */
+
+    // GET /api/customer-prices/{customer}/lookup
     public function lookup(Customer $customer)
     {
         return $this->show($customer);
     }
 
-    /**
-     * PUT /api/customer-prices/{customer}
-     * Bulk upsert — body: { prices: { bags: 25, small_sack: 150, big_sack: 250 } }
-     * Any product_type omitted or null is left untouched (not cleared).
-     */
+
+    // PUT /api/customer-prices/{customer}
+    // Bulk upsert - body: { prices: { bags: 25, small_sack: 150, big_sack: 250 } }
     public function update(Request $request, Customer $customer)
     {
         $validated = $request->validate([

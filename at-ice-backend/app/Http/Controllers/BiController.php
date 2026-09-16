@@ -15,11 +15,9 @@ use Carbon\Carbon;
 
 class BiController extends Controller
 {
-    // ─────────────────────────────────────────────────────────────────────────
     // GET /api/bi/sales-overview
     // Returns: monthly sales totals for current year (all 12 months),
-    //          plus prev month and same month last year for comparison
-    // ─────────────────────────────────────────────────────────────────────────
+    // plus prev month and same month last year for comparison
     public function salesOverview()
     {
         $now        = Carbon::now();
@@ -114,10 +112,8 @@ class BiController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     // GET /api/bi/delivery-stats
     // Returns: delivery counts by status + this month vs last month comparison
-    // ─────────────────────────────────────────────────────────────────────────
     public function deliveryStats()
     {
         $now       = Carbon::now();
@@ -174,11 +170,9 @@ class BiController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     // GET /api/bi/inventory-summary
     // Returns: in stock / low stock / out of stock counts from products table
     // (supplies and materials only)
-    // ─────────────────────────────────────────────────────────────────────────
     public function inventorySummary()
     {
         $products = Product::where('is_active', true)->get();
@@ -213,10 +207,8 @@ class BiController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     // GET /api/bi/attendance-today
     // Returns: today's attendance summary
-    // ─────────────────────────────────────────────────────────────────────────
     public function attendanceToday()
     {
         $today = Carbon::today()->toDateString();
@@ -271,10 +263,8 @@ class BiController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     // GET /api/bi/expenses
     // Returns: all expenses, grouped by month
-    // ─────────────────────────────────────────────────────────────────────────
     public function getExpenses(Request $request)
     {
         $year = $request->query('year', Carbon::now()->year);
@@ -314,11 +304,9 @@ class BiController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     // POST /api/bi/expenses
     // Admin manually inputs expense (fuel, water, electricity, others)
     // Body: { category, amount, expense_date, notes }
-    // ─────────────────────────────────────────────────────────────────────────
     public function storeExpense(Request $request)
     {
         $validated = $request->validate([
@@ -336,10 +324,8 @@ class BiController extends Controller
         ], 201);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     // GET /api/bi/overdue-receipts
-    // Returns: unpaid receipts older than 14 days
-    // ─────────────────────────────────────────────────────────────────────────
+    // Returns: unpaid receipts older than 15 days
     public function overdueReceipts()
     {
         $cutoff = Carbon::now()->subDays(15);
@@ -368,11 +354,8 @@ class BiController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     // GET /api/bi/summary
-    // Single endpoint — returns ALL BI data in one call
-    // Frontend can hit this once instead of 5 separate requests
-    // ─────────────────────────────────────────────────────────────────────────
+    // Single endpoint - returns ALL BI data in one call
     public function summary()
     {
         $salesRequest    = request();
@@ -387,9 +370,8 @@ class BiController extends Controller
             'overdue'    => json_decode($this->overdueReceipts()->content(), true),
         ]);
     }
-    // ─────────────────────────────────────────────────────────────────────────
+
     // GET /api/bi/ai-summary
-    // ─────────────────────────────────────────────────────────────────────────
     public function aiSummary()
     {
         $data = json_decode($this->summary()->content(), true);

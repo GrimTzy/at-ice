@@ -31,25 +31,25 @@ class Employee extends Model
         'daily_rate' => 'decimal:2',
     ];
 
-    // Relationship — Employee belongs to User
+    // Relationship - Employee belongs to User
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    // Relationship — Employee has many Attendances
+    // Relationship - Employee has many Attendances
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
     }
 
-    // Relationship — Employee has many Leave Requests
+    // Relationship - Employee has many Leave Requests
     public function leaveRequests()
     {
         return $this->hasMany(LeaveRequest::class);
     }
 
-    // Relationship — Employee has many Payrolls
+    // Relationship - Employee has many Payrolls
     public function payrolls()
     {
         return $this->hasMany(Payroll::class);

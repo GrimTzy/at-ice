@@ -32,10 +32,7 @@ class User extends Authenticatable
         ];
     }
 
-    // ─────────────────────────────────────────────
     // ROLE HELPERS
-    // ─────────────────────────────────────────────
-
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
@@ -61,10 +58,7 @@ class User extends Authenticatable
         return $this->role === 'customer';
     }
 
-    // ─────────────────────────────────────────────
     // SUB_ROLE HELPERS (Employee only)
-    // ─────────────────────────────────────────────
-
     public function isChecker(): bool
     {
         return $this->role === 'employee' && $this->sub_role === 'checker';
@@ -86,10 +80,7 @@ class User extends Authenticatable
         return $this->role === 'employee' && $this->sub_role === $subRole;
     }
 
-    // ─────────────────────────────────────────────
     // RELATIONSHIPS
-    // ─────────────────────────────────────────────
-
     public function employee()
     {
         return $this->hasOne(Employee::class);
