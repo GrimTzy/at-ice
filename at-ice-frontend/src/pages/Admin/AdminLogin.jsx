@@ -29,11 +29,6 @@ const EyeOffIcon = () => (
     <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 );
-const ShieldIcon = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-);
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -103,9 +98,8 @@ export default function AdminLogin() {
           <div className="text-[26px] font-semibold text-white tracking-wide leading-none">Bella Erin</div>
           <div className="text-[11px] text-cyan-400/80 tracking-[0.2em] uppercase mt-1.5">AT-ICE ERP</div>
           <div className="flex items-center gap-1.5 mt-3 px-3.5 py-1.5 bg-cyan-500/[0.15] border border-cyan-500/30 rounded-full backdrop-blur-sm">
-            <span className="text-cyan-400"><ShieldIcon /></span>
             <span className="text-[12px] font-medium text-cyan-300 tracking-wide">Administrator Portal</span>
-          </div>
+        </div>
         </div>
 
         {/* Login Card */}
