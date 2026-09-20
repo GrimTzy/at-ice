@@ -107,6 +107,29 @@ export default function StockOutApprovalPage() {
     }
   };
 
+  const handleRelease = async (id) => {
+    setActionLoading(id);
+    setError('');
+    try {
+      const res = await fetch(`/api/stock-out-requests/${id}/release`, {
+        method: 'PUT',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Release failed.');
+      }
+      await fetchRequests();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const filtered = activeTab === 'all'
     ? requests
     : requests.filter((r) => r.status === activeTab);
@@ -162,6 +185,23 @@ export default function StockOutApprovalPage() {
                   {new Date(req.created_at).toLocaleString()}
                 </p>
 
+                {req.status === 'approved' && req.approved_by && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Approved by {req.approved_by.name}
+                    {req.approved_at ? ` · ${new Date(req.approved_at).toLocaleString()}` : ''}
+                  </p>
+                )}
+
+                {req.status === 'released' && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Approved by {req.approved_by?.name || 'Unknown'}
+                    {req.approved_at ? ` · ${new Date(req.approved_at).toLocaleString()}` : ''}
+                    {' — '}
+                    Released by {req.released_by?.name || 'Unknown'}
+                    {req.released_at ? ` · ${new Date(req.released_at).toLocaleString()}` : ''}
+                  </p>
+                )}
+
                 {req.status === 'rejected' && req.rejection_reason && (
                   <div className="mt-2 px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">
                     Reason: {req.rejection_reason}
@@ -216,6 +256,19 @@ export default function StockOutApprovalPage() {
                         </button>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* NEW: Release action for approved requests */}
+                {req.status === 'approved' && (
+                  <div className="mt-3">
+                    <button
+                      onClick={() => handleRelease(req.id)}
+                      disabled={actionLoading === req.id}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-medium disabled:opacity-50"
+                    >
+                      {actionLoading === req.id ? 'Releasing…' : 'Release'}
+                    </button>
                   </div>
                 )}
               </div>
