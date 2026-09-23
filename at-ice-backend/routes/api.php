@@ -27,6 +27,12 @@ use App\Http\Controllers\StockOutRequestController;
 //Public
 Route::post('/login', [AuthController::class, 'login']);
 
+// Face Descriptors — public, used by AttendanceStation (kiosk has no login/token)
+Route::get('face-descriptors', [FaceDataController::class, 'descriptors']);
+
+// Attendance recording — public, used by AttendanceStation (kiosk has no login/token)
+Route::post('attendances', [AttendanceController::class, 'store']);
+
 //Protected
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -104,7 +110,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:hr')->group(function () {
 
         Route::get('attendances',                        [AttendanceController::class, 'index']);
-        Route::post('attendances',                       [AttendanceController::class, 'store']);
         Route::put('attendances/{id}',                   [AttendanceController::class, 'update']);
         Route::get('attendances/employee/{employee_id}', [AttendanceController::class, 'getByEmployee']);
 
@@ -129,10 +134,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('face-data',           [FaceDataController::class, 'index']);
         Route::put('face-data/{id}',      [FaceDataController::class, 'update']);
         Route::delete('face-data/{id}',   [FaceDataController::class, 'destroy']);
-});
-
-// Face Descriptors — public, used by AttendanceStation
-Route::get('face-descriptors', [FaceDataController::class, 'descriptors']);
+    });
 
     // EMPLOYEE: CHECKER ROUTES
     Route::middleware('role:employee,checker')->group(function () {

@@ -116,6 +116,10 @@ export default function AttendanceStation() {
     };
   }, [modelsLoaded, descriptorsLoaded]);
 
+  // Records attendance via the public POST /api/attendances endpoint (no auth —
+  // this is a kiosk page with no login). Returns true only on a real 2xx success;
+  // logs the response body on failure so real errors surface in the console
+  // instead of silently looking like a "duplicate" in the UI.
   const recordAttendance = useCallback(async (faceDataId) => {
     try {
       const res = await fetch("/api/attendances", {
@@ -128,6 +132,10 @@ export default function AttendanceStation() {
           status: "present",
         }),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        console.error("Attendance post failed:", res.status, errData);
+      }
       return res.ok;
     } catch (err) {
       console.warn("Attendance post error:", err);
@@ -157,11 +165,20 @@ export default function AttendanceStation() {
           const info = window.__faceLookup?.[faceDataId];
 
           if (lastMarked && now - lastMarked < 60_000) {
+            // Client-side throttle only — this worker was already successfully
+            // recorded in this browser session within the last 60s.
             setResult({ status: "duplicate", name: info?.name, role: info?.role });
           } else {
             const ok = await recordAttendance(faceDataId);
-            recentlyMarkedRef.current.set(faceDataId, now);
-            setResult({ status: ok ? "match" : "duplicate", name: info?.name, role: info?.role });
+            if (ok) {
+              // Only mark as "recently recorded" if the POST actually succeeded —
+              // otherwise a failed request would wrongly look like "duplicate"
+              // instead of surfacing as an error.
+              recentlyMarkedRef.current.set(faceDataId, now);
+              setResult({ status: "match", name: info?.name, role: info?.role });
+            } else {
+              setResult({ status: "no-match", name: info?.name, role: info?.role });
+            }
           }
         }
         setTimeout(() => setResult(null), RESULT_DISPLAY_MS);

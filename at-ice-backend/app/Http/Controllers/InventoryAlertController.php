@@ -7,12 +7,18 @@ use Illuminate\Http\Request;
 
 class InventoryAlertController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $alerts = InventoryAlert::with('product')
-            ->where('is_resolved', false)
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $query = InventoryAlert::with('product')->orderBy('created_at', 'desc');
+
+        if ($request->query('status') === 'resolved') {
+            $query->where('is_resolved', true);
+        } elseif ($request->query('status') !== 'all') {
+            // default behavior: active/unresolved only
+            $query->where('is_resolved', false);
+        }
+
+        $alerts = $query->get();
         return response()->json($alerts);
     }
 

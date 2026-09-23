@@ -41,7 +41,7 @@ export default function CheckerStockMovementsPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [productId, setProductId] = useState("");
-  const [type, setType] = useState("in");
+  const [type, setType] = useState("stock_in");
   const [quantity, setQuantity] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -99,13 +99,13 @@ export default function CheckerStockMovementsPage() {
           product_id: productId,
           type,
           quantity: Number(quantity),
-          notes: notes || null,
+          reason: notes || null,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Could not log the movement.");
       setProductId("");
-      setType("in");
+      setType("stock_in");
       setQuantity("");
       setNotes("");
       setShowForm(false);
@@ -181,7 +181,7 @@ export default function CheckerStockMovementsPage() {
             </select>
 
             <div className="flex gap-2">
-              {["in", "out"].map((t) => (
+              {["stock_in", "stock_out"].map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -192,7 +192,7 @@ export default function CheckerStockMovementsPage() {
                       : "border-black/[0.09] text-slate-500"
                   }`}
                 >
-                  {t === "in" ? "Stock In" : "Stock Out"}
+                  {t === "stock_in" ? "Stock In" : "Stock Out"}
                 </button>
               ))}
             </div>
@@ -242,14 +242,14 @@ export default function CheckerStockMovementsPage() {
                     {m.product?.name || "Unknown product"}
                   </div>
                   <div className="text-[12px] text-slate-400 mt-0.5">
-                    {m.type === "in" ? "Stock In" : "Stock Out"} · logged by{" "}
-                    {m.created_by?.name || "—"} · {fmtDate(m.created_at)}
+                    {m.type === "stock_in" ? "Stock In" : "Stock Out"} · logged by{" "}
+                    {m.entered_by?.name || "—"} · {fmtDate(m.created_at)}
                   </div>
                   {m.notes && <div className="text-[12px] text-slate-500 mt-1">{m.notes}</div>}
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-[16px] font-semibold font-mono text-slate-800">
-                    {m.type === "out" ? "−" : "+"}
+                    {m.type === "stock_out" ? "−" : "+"}
                     {m.quantity}
                   </div>
                   <span

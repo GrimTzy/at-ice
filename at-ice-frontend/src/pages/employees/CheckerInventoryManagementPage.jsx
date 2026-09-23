@@ -7,16 +7,19 @@ import logo from "../../assets/logo.png";
  * both views read from the same underlying stock data, so they're now two
  * tabs on one page instead of two separate dashboard modules).
  *
- * ASSUMPTIONS (adjust if your actual schema differs):
+ * CORRECTED against the actual InventoryAlertController.php + InventoryAlert
+ * model shape:
  * - GET /api/products              -> [{ id, name, category, unit, current_stock, minimum_stock }]
- * - GET /api/inventory-alerts      -> [{ id, product: { id, name }, current_stock,
- *                                        minimum_stock, status: "active"|"resolved",
- *                                        created_at, resolved_at }]
+ * - GET /api/inventory-alerts?status=all
+ *                                   -> [{ id, product: { id, name, current_stock, minimum_stock },
+ *                                        is_resolved: boolean, message, created_at, resolved_at }]
  * - PUT /api/inventory-alerts/{id}/resolve
- * These are the same assumptions used in the original two separate pages —
- * not yet confirmed against the actual InventoryAlertController.php. If
- * fields don't match after testing, paste that controller and it'll get
- * corrected the same way SupplierController's mismatch was fixed.
+ *
+ * FIX (this version): alerts use `is_resolved` (boolean), NOT `status`
+ * ("active"/"resolved" strings). current_stock/minimum_stock live under
+ * `a.product`, not at the top level of the alert. Also now fetches with
+ * ?status=all so Resolved/All tabs actually return data (the backend
+ * defaulted to active-only before this).
  */
 
 const ChevronLeftIcon = () => (
@@ -101,7 +104,9 @@ export default function CheckerInventoryManagementPage() {
   async function fetchAlerts() {
     setLoadingAlerts(true);
     try {
-      const res = await fetch("/api/inventory-alerts", {
+      // ?status=all so this one fetch covers Active, Resolved, and All tabs
+      // client-side — matches the backend's status query param.
+      const res = await fetch("/api/inventory-alerts?status=all", {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return; // non-fatal — alerts tab will just show empty
@@ -151,13 +156,14 @@ export default function CheckerInventoryManagementPage() {
   }, [products]);
 
   const activeAlertCount = useMemo(
-    () => alerts.filter((a) => a.status === "active").length,
+    () => alerts.filter((a) => !a.is_resolved).length,
     [alerts]
   );
 
   const filteredAlerts = alerts.filter((a) => {
     if (alertTab === "All") return true;
-    return a.status === alertTab.toLowerCase();
+    if (alertTab === "Active") return !a.is_resolved;
+    return !!a.is_resolved; // Resolved
   });
 
   return (
@@ -308,7 +314,7 @@ export default function CheckerInventoryManagementPage() {
 
           {!loadingAlerts &&
             filteredAlerts.map((a) => {
-              const isActive = a.status === "active";
+              const isActive = !a.is_resolved;
               return (
                 <div
                   key={a.id}
@@ -324,7 +330,7 @@ export default function CheckerInventoryManagementPage() {
                       {isActive ? `Flagged ${fmtDate(a.created_at)}` : `Resolved ${fmtDate(a.resolved_at)}`}
                     </div>
                     <div className="text-[12px] text-slate-500 mt-1 font-mono">
-                      {a.current_stock} on hand · min {a.minimum_stock}
+                      {a.product?.current_stock ?? "—"} on hand · min {a.product?.minimum_stock ?? "—"}
                     </div>
                   </div>
 
