@@ -86,9 +86,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // Pickup Logs (Admin full access — Alexandra/J-Maxine plant pickups, no price/receipt)
         Route::apiResource('pickup-logs', PickupLogController::class)->only(['update', 'destroy']);
 
-        // Stock-Out Requests (Admin approves/rejects — Maintenance submits, Checker releases)
+        // Stock-Out Requests (Admin approves/rejects/releases — consolidated onto /admin/stock-out-approvals since v29.2)
         Route::put('stock-out-requests/{stockOutRequest}/approve', [StockOutRequestController::class, 'approve']);
         Route::put('stock-out-requests/{stockOutRequest}/reject',  [StockOutRequestController::class, 'reject']);
+        Route::put('stock-out-requests/{stockOutRequest}/release', [StockOutRequestController::class, 'release']);
 
         // BUSINESS INTELLIGENCE 
         Route::get('bi/summary',            [BiController::class, 'summary']);
@@ -161,9 +162,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('ice-loadings',                  [IceLoadingController::class, 'index']);
         Route::post('ice-loadings',                 [IceLoadingController::class, 'store']);
         Route::get('ice-loadings/{iceLoading}',     [IceLoadingController::class, 'show']);
-
-        // Stock-Out Requests (release only — index/show now shared below)
-        Route::put('stock-out-requests/{stockOutRequest}/release', [StockOutRequestController::class, 'release']);
     });
 
     // EMPLOYEE: SALESMAN ROUTES
