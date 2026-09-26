@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import bgImage from "../../assets/iceproduct.png";
+import logo from "../../assets/logo.png";
 
 // Icons 
 const MailIcon = () => (
@@ -65,8 +66,17 @@ export default function DriverLogin() {
         setLoading(false);
         return;
       }
+      // FIX (v29.7 follow-up): previously only set token + role, never
+      // sub_role or user — meaning DeliveriesPage.jsx / GpsTrackingPage.jsx
+      // had no way to show the real logged-in driver's name and had to
+      // fall back to hardcoded mock data ("Juan Dela Cruz"). Now sets all
+      // four session keys, matching AdminLogin.jsx and HRLogin.jsx's
+      // pattern, so any page reading localStorage's "user" object gets
+      // the real driver's name, email, and id.
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.user?.role || "driver");
+      localStorage.setItem("sub_role", data.sub_role || "");
+      localStorage.setItem("user", JSON.stringify(data.user || {}));
       navigate("/driver/deliveries");
     } catch {
       setError("Network error. Please check your connection.");

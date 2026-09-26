@@ -64,8 +64,20 @@ export default function AdminLogin() {
         setLoading(false);
         return;
       }
+      // FIX (v29.7 topbar mismatch bug): AdminLogin previously only set
+      // token + role, and never touched sub_role/user. If a previous HR
+      // (or Checker/Salesman/etc) session had left its own "user" object
+      // in localStorage, AdminLayout would read that stale object's name
+      // instead of the actual logged-in Admin's name, while the
+      // hardcoded "System Administrator" caption stayed correct — hence
+      // the "HR User / System Administrator" mismatch. Now explicitly
+      // sets (or clears) every session key on every successful login,
+      // mirroring HRLogin.jsx's pattern, so no stale data from a
+      // previous role's session can ever leak into this one.
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", userRole);
+      localStorage.setItem("sub_role", data.sub_role || "");
+      localStorage.setItem("user", JSON.stringify(data.user || {}));
       window.location.href = "/dashboard";
     } catch {
       setError("Network error. Please check your connection.");
