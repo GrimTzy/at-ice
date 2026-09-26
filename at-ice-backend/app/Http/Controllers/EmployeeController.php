@@ -10,9 +10,24 @@ use Illuminate\Support\Facades\Hash;
 class EmployeeController extends Controller
 {
     // GET all employees
+    // NOTE (v29.7): scope widened to also include Driver accounts (role:
+    // driver on the users table) alongside Checker/Salesman/Maintenance
+    // (role: employee, sub_role in [...]). Drivers keep their own separate
+    // login/routes (role:driver, /driver/login unchanged) — this filter
+    // only controls who shows up on the Employees management page, not
+    // how anyone logs in. Still excludes Admin/HR — see the original
+    // defensive-filter note this replaces, same reasoning applies.
     public function index()
     {
-        $employees = Employee::with('user')->where('is_active', true)->get();
+        $employees = Employee::with('user')
+            ->where('is_active', true)
+            ->whereHas('user', function ($q) {
+                $q->where(function ($q2) {
+                    $q2->where('role', 'employee')
+                       ->whereIn('sub_role', ['checker', 'salesman', 'maintenance']);
+                })->orWhere('role', 'driver');
+            })
+            ->get();
         return response()->json($employees);
     }
 
@@ -29,17 +44,26 @@ class EmployeeController extends Controller
             'date_hired' => 'required|date',
             'shift' => 'required|in:day,night',
             'employment_type' => 'required|in:regular,contractual,part_time',
-            'sub_role' => 'nullable|in:checker,salesman,maintenance',
+            // 'driver' added (v29.7) — Driver is now manageable from this
+            // page, but is NOT a real sub_role; see below, it maps to its
+            // own top-level `role` instead so /driver/login and
+            // role:driver routes keep working unchanged.
+            'sub_role' => 'nullable|in:checker,salesman,maintenance,driver',
         ]);
+
+        $isDriver = $request->sub_role === 'driver';
 
         // Create user account
         $user = User::create([
             'name'      => $request->first_name . ' ' . $request->last_name,
-         'email'     => $request->email,
-         'password'  => Hash::make($request->password),
-         'role'      => 'employee',
-         'sub_role'  => $request->sub_role ?? null,
-         'is_active' => true,
+            'email'     => $request->email,
+            'password'  => Hash::make($request->password),
+            // Driver keeps its own top-level role, not employee+sub_role —
+            // this is what keeps /driver/login and role:driver routes
+            // working exactly as before, with no changes needed there.
+            'role'      => $isDriver ? 'driver' : 'employee',
+            'sub_role'  => $isDriver ? null : ($request->sub_role ?? null),
+            'is_active' => true,
         ]);
 
         // Create employee record

@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeePerformanceController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\PayrollController;
@@ -42,8 +43,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
 
-        // Employee Management
-        Route::apiResource('employees', EmployeeController::class);
+        // Employees — READ ONLY overview for Admin (Name/Position/Role/Shift
+        // only, per team decision). Reuses EmployeeController@index() so
+        // both Admin's and HR's employee lists stay in sync automatically —
+        // same filtered dataset, different route/gate. Full CRUD, Payroll,
+        // and Performance are HR-only, see role:hr group below.
+        Route::get('employees-summary', [EmployeeController::class, 'index']);
 
         // Delivery Management (Admin assigns deliveries)
         Route::get('deliveries',             [DeliveryController::class, 'index']);
@@ -110,6 +115,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // HR ROUTES
     Route::middleware('role:hr')->group(function () {
 
+        // Employee Management — full CRUD (create, edit, deactivate)
+        Route::apiResource('employees', EmployeeController::class);
+
+        // Payroll — full CRUD, computation happens on the frontend
+        // (Sweldong Pinoy-style: SSS/PhilHealth/Pag-IBIG/withholding tax),
+        // this endpoint just stores whatever computed values are sent.
+        Route::apiResource('payrolls', PayrollController::class);
+
+        // Employee Performance — new (v29.7), HR-only reviews per employee
+        Route::apiResource('employee-performance', EmployeePerformanceController::class);
+
         Route::get('attendances',                        [AttendanceController::class, 'index']);
         Route::put('attendances/{id}',                   [AttendanceController::class, 'update']);
         Route::get('attendances/employee/{employee_id}', [AttendanceController::class, 'getByEmployee']);
@@ -127,8 +143,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('applicants/{id}',            [ApplicantController::class, 'update']);
         Route::patch('applicants/{id}/status',   [ApplicantController::class, 'updateStatus']);
         Route::delete('applicants/{id}',         [ApplicantController::class, 'destroy']);
-
-        Route::apiResource('payrolls', PayrollController::class);
 
         // Face Enrollment (HR manages)
         Route::post('face-enroll',        [FaceDataController::class, 'enroll']);
