@@ -12,6 +12,7 @@ import AdminLogin from './pages/admin/AdminLogin'
 import Dashboard from './pages/admin/Dashboard'
 import CustomerPriceManagement from './pages/admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
+import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
 
 // ── Driver Module
 import DriverLogin from './pages/drivers/DriverLogin'
@@ -22,6 +23,7 @@ import { GpsTrackingPage } from './pages/drivers/GpsTrackingPage'
 import HRLogin from './pages/hr/HRLogin'
 import HRDashboard from './pages/hr/HRDashboard'
 import FaceEnrollment from './pages/hr/FaceEnrollment'
+import EmployeesPage from './pages/hr/EmployeesPage'
 
 // ── Employee Module 
 import CheckerLogin from './pages/employees/CheckerLogin'
@@ -83,6 +85,17 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* View-only Employees overview for Admin — Name/Position/Role/Shift
+            only, backed by GET /api/employees-summary. Full CRUD + Payroll
+            + Performance live under HR at /hr/employees below. */}
+        <Route
+          path="/admin/employees"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <EmployeesOverviewPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* ── HR Module ── */}
         <Route path="/hr/login" element={<HRLogin />} />
@@ -99,6 +112,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["hr"]}>
               <FaceEnrollment />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/hr/employees"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <EmployeesPage />
             </ProtectedRoute>
           }
         />

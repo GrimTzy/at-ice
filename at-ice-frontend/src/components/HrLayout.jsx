@@ -27,7 +27,7 @@ const navSections = [
   {
     label: "HRIS",
     items: [
-      { icon: <UsersIcon />, label: "Employees" },
+      { icon: <UsersIcon />, label: "Employees", path: "/hr/employees" },
       { icon: <ClockIcon />, label: "Attendance" },
       { icon: <UserPlusIcon />, label: "Face Enrollment", path: "/hr/face-enrollment" },
       { icon: <FileIcon />, label: "Leave Requests" },

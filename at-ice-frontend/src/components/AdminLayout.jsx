@@ -1,40 +1,21 @@
 // src/components/AdminLayout.jsx
 //
-// Shared sidebar + topbar shell for all Admin pages. Extracted from what used
-// to be hardcoded inside Dashboard.jsx. Any admin page (Dashboard,
-// CustomerPriceManagement, StockOutApprovalPage, and future ones) should
-// render its content as children of this layout instead of duplicating the
-// sidebar/topbar markup.
+// Shared sidebar + topbar shell for all Admin pages.
 //
-// Usage:
-//   <AdminLayout pageTitle="Customer Prices" breadcrumb="Customer Prices">
-//     ...page content...
-//   </AdminLayout>
-//
-// Pass `headerActions` for page-specific topbar buttons (e.g. Dashboard's
-// "Refresh" button) — they render just left of the date badge.
-//
-// NOTE (v29.5 audit): sidebar previously listed several items with no
-// `path` — either because they belong to a different module (Attendance,
-// Leave Requests, Payroll are HR's; Products, Stock Movements, Inventory
-// Alerts, Suppliers are Checker's) or had no backend/page built at all
-// (Users & Roles, Settings, Audit Logs). Those were removed. Items that ARE
-// Admin's responsibility but don't have a page built yet (Employees,
-// Deliveries, Delivery Proofs, Customers, Orders, Payments) are kept
-// without a `path` as a visible to-build list, same convention as
-// HrLayout.jsx. Stock-Out Approvals was added — it already has a working
-// backend + page (StockOutApprovalPage.jsx) but was missing from the
-// sidebar since v29.2's consolidation.
+// UPDATE (v29.6, then corrected): Employees was briefly removed from this
+// sidebar entirely under the assumption that HR would fully own it. That
+// was wrong — Admin keeps a VIEW-ONLY Employees page (Name/Position/Role/
+// Shift only, no create/edit/deactivate, no Payroll), backed by a
+// read-only backend route (GET /api/employees-summary). Full CRUD +
+// Payroll + Performance live under HR at /hr/employees.
 
 import { useNavigate, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import bgImage from "../assets/iceproduct.png";
 
-// ─── ICONS (sidebar/topbar only — page-specific icons stay in each page file)
 const GridIcon     = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
 const UsersIcon    = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 const DollarIcon   = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
-const HomeIcon     = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
 const TruckIcon    = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>;
 const CheckIcon    = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
 const UserIcon     = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>;
@@ -45,12 +26,9 @@ const ChevRight    = () => <svg width="10" height="10" fill="none" stroke="curre
 const CalIcon      = () => <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
 const LogOutIcon   = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
-// ─── NAV SECTIONS
-// Items without a `path` are not built yet (same convention as HrLayout.jsx) —
-// they stay visible as a to-build checklist but are not clickable.
 const navSections = [
   { label:"Overview", items:[{ icon:<GridIcon />, label:"Dashboard", path:"/dashboard" }] },
-  { label:"HRIS",     items:[{ icon:<UsersIcon />, label:"Employees" }] },
+  { label:"HRIS",     items:[{ icon:<UsersIcon />, label:"Employees", path:"/admin/employees" }] },
   { label:"SCM",      items:[
       { icon:<TruckIcon />, label:"Deliveries" },
       { icon:<CheckIcon />, label:"Delivery Proofs" },
@@ -79,7 +57,6 @@ export default function AdminLayout({ pageTitle, breadcrumb, headerActions, chil
   return (
     <div className="flex font-sans text-[13px] leading-relaxed bg-[#0a0d12] text-slate-800 min-h-screen">
 
-      {/* ── SIDEBAR ── */}
       <aside className="w-[220px] min-h-screen bg-white border-r border-black/[0.09] flex flex-col flex-shrink-0 sticky top-0 h-screen overflow-y-auto">
         <div
           className="px-[18px] pt-5 pb-4 border-b border-black/[0.09] flex items-center gap-2.5 cursor-pointer"
@@ -128,10 +105,8 @@ export default function AdminLayout({ pageTitle, breadcrumb, headerActions, chil
         </div>
       </aside>
 
-      {/* ── MAIN ── */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
 
-        {/* ── TOPBAR ── */}
         <header className="h-14 bg-white border-b border-black/[0.09] flex items-center px-6 gap-4 flex-shrink-0 sticky top-0 z-10">
           <div>
             <div className="text-base font-semibold text-slate-800">{pageTitle}</div>
@@ -158,7 +133,6 @@ export default function AdminLayout({ pageTitle, breadcrumb, headerActions, chil
           </div>
         </header>
 
-        {/* ── CONTENT (background image + light overlay for readability) ── */}
         <main
           className="flex-1 overflow-y-auto p-6 pb-8 flex flex-col gap-4"
           style={{
