@@ -13,6 +13,7 @@ import Dashboard from './pages/admin/Dashboard'
 import CustomerPriceManagement from './pages/admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
+import CustomersPage from './pages/Admin/CustomersPage'
 
 // ── Driver Module
 import DriverLogin from './pages/drivers/DriverLogin'
@@ -93,6 +94,17 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <EmployeesOverviewPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Customers — full CRUD for Customer CRM records, plus a
+            "Create Login" action per row that provisions a Customer
+            Portal account (role: customer) for an existing record. */}
+        <Route
+          path="/admin/customers"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <CustomersPage />
             </ProtectedRoute>
           }
         />

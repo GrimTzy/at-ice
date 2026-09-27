@@ -9,10 +9,14 @@ class Customer extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'customer_code', 'name', 'branch_code', 'address', 'city',
+        'user_id', 'customer_code', 'name', 'branch_code', 'address', 'city',
         'province', 'latitude', 'longitude', 'contact_person', 'contact_number', 'email',
         'mop', 'is_active', 'notes'
     ];
+
+    public function user() {
+        return $this->belongsTo(User::class);
+    }
 
     public function orders() {
         return $this->hasMany(Order::class);

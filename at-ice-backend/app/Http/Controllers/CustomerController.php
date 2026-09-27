@@ -2,13 +2,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\User;
 use App\Services\GeocodingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class CustomerController extends Controller
 {
     public function index() {
-        return response()->json(Customer::where('is_active', true)->get());
+        return response()->json(
+            Customer::with('user:id,email')->where('is_active', true)->get()
+        );
     }
 
     public function store(Request $request) {
@@ -20,10 +25,6 @@ class CustomerController extends Controller
 
         $data = $request->all();
 
-        // Geocode the address into lat/lng if address fields were provided.
-        // Silently leaves lat/lng null on failure — a missing pin later is
-        // recoverable (re-save the customer), a blocked customer creation
-        // over a geocoding hiccup is not.
         if ($request->filled('address') || $request->filled('city')) {
             $coords = GeocodingService::geocode(
                 $request->input('address', ''),
@@ -48,9 +49,6 @@ class CustomerController extends Controller
         $customer = Customer::findOrFail($id);
         $data = $request->all();
 
-        // Re-geocode only when the address actually changed, so we don't
-        // hammer Nominatim on every unrelated field edit (e.g. just
-        // updating contact_number).
         $addressChanged = $request->filled('address') && $request->input('address') !== $customer->address
             || $request->filled('city') && $request->input('city') !== $customer->city
             || $request->filled('province') && $request->input('province') !== $customer->province;
@@ -74,5 +72,43 @@ class CustomerController extends Controller
     public function destroy($id) {
         Customer::findOrFail($id)->delete();
         return response()->json(['message' => 'Customer deleted.']);
+    }
+
+    // Creates a Customer Portal login account for an existing Customer
+    public function createAccount($id)
+    {
+        $customer = Customer::findOrFail($id);
+
+        if ($customer->user_id) {
+            return response()->json(['message' => 'This customer already has a login account.'], 422);
+        }
+
+        $baseSlug = Str::slug($customer->name . '-' . ($customer->branch_code ?: $customer->city));
+        $loginEmail = $baseSlug . '@atice-portal.com';
+
+        $suffix = 1;
+        $candidate = $loginEmail;
+        while (User::where('email', $candidate)->exists()) {
+            $suffix++;
+            $candidate = $baseSlug . '-' . $suffix . '@atice-portal.com';
+        }
+        $loginEmail = $candidate;
+
+        $plainPassword = Str::random(10);
+
+        $user = User::create([
+            'name'     => $customer->name,
+            'email'    => $loginEmail,
+            'password' => Hash::make($plainPassword),
+            'role'     => 'customer',
+        ]);
+
+        $customer->update(['user_id' => $user->id]);
+
+        return response()->json([
+            'message'  => 'Login account created.',
+            'email'    => $loginEmail,
+            'password' => $plainPassword,
+        ], 201);
     }
 }

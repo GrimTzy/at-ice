@@ -8,6 +8,10 @@
 // Shift only, no create/edit/deactivate, no Payroll), backed by a
 // read-only backend route (GET /api/employees-summary). Full CRUD +
 // Payroll + Performance live under HR at /hr/employees.
+//
+// UPDATE (this session): Customers now has a real path — full CRUD +
+// "Create Login" (Customer Portal account provisioning) at
+// /admin/customers, replacing the unclickable placeholder.
 
 import { useNavigate, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
@@ -35,7 +39,7 @@ const navSections = [
       { icon:<ClipboardIcon />, label:"Stock-Out Approvals", path:"/admin/stock-out-approvals" },
     ] },
   { label:"CRM",      items:[
-      { icon:<UserIcon />, label:"Customers" },
+      { icon:<UserIcon />, label:"Customers", path:"/admin/customers" },
       { icon:<CartIcon />, label:"Orders" },
       { icon:<DollarIcon />, label:"Payments" },
       { icon:<DollarIcon />, label:"Customer Prices", path:"/admin/customer-prices" },

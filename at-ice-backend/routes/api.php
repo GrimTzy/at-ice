@@ -73,6 +73,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('customers/{id}',         [CustomerController::class, 'show']);
         Route::put('customers/{id}',         [CustomerController::class, 'update']);
         Route::delete('customers/{id}',      [CustomerController::class, 'destroy']);
+        Route::post('customers/{id}/create-account', [CustomerController::class, 'createAccount']);
 
         Route::get('orders',                 [OrderController::class, 'index']);
         Route::post('orders',                [OrderController::class, 'store']);
