@@ -34,7 +34,7 @@ const navSections = [
   { label:"Overview", items:[{ icon:<GridIcon />, label:"Dashboard", path:"/dashboard" }] },
   { label:"HRIS",     items:[{ icon:<UsersIcon />, label:"Employees", path:"/admin/employees" }] },
   { label:"SCM",      items:[
-      { icon:<TruckIcon />, label:"Deliveries" },
+      { icon:<TruckIcon />, label:"Deliveries", path:"/admin/deliveries" },
       { icon:<CheckIcon />, label:"Delivery Proofs" },
       { icon:<ClipboardIcon />, label:"Stock-Out Approvals", path:"/admin/stock-out-approvals" },
     ] },

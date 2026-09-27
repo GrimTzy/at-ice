@@ -11,14 +11,13 @@ class DeliveryController extends Controller
     public function index()
     {
         return response()->json(
-            Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs'])->get()
+            Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs'])->latest()->get()
         );
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'delivery_no'              => 'required|unique:deliveries',
             'driver_id'                => 'required|exists:users,id',
             'customer_id'              => 'nullable|exists:customers,id',
             'delivery_type'            => 'required|in:outbound,inbound',
@@ -31,6 +30,13 @@ class DeliveryController extends Controller
             'items.*.unit_price'       => 'required|numeric|min:0',
         ]);
 
+        // Auto-generate a sequential delivery_no (DEL-0001, DEL-0002, ...)
+        // instead of requiring the frontend to supply one or using a random
+        // uniqid() — per team decision, delivery numbers should reflect
+        // "which delivery number this is" in order.
+        $count = Delivery::count() + 1;
+        $data['delivery_no'] = 'DEL-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+
         $data['prepared_by'] = Auth::id();
         $items = $data['items'];
         unset($data['items']);
@@ -41,7 +47,7 @@ class DeliveryController extends Controller
             $delivery->items()->create($item);
         }
 
-        return response()->json($delivery->load('items.product'), 201);
+        return response()->json($delivery->load(['driver', 'customer', 'items.product']), 201);
     }
 
     public function show($id)
@@ -70,11 +76,6 @@ class DeliveryController extends Controller
             'status' => 'required|in:in_transit,delivered',
         ]);
 
-        // Fixed (v29.7 follow-up): previously only eager-loaded "customer",
-        // so the response sent back to the frontend after a status update
-        // had no items/proofs data, silently wiping the items list from the
-        // driver's expanded card view. Now loads the same relations as
-        // driverDeliveries() so the returned delivery object is complete.
         $delivery = Delivery::with(['customer', 'items.product', 'proofs'])->findOrFail($id);
 
         if ($delivery->driver_id !== $request->user()->id) {
@@ -83,7 +84,6 @@ class DeliveryController extends Controller
 
         $delivery->update(['status' => $request->status]);
 
-        // Fire DeliveryStatusUpdated event
         broadcast(new DeliveryStatusUpdated([
             'delivery_id'  => $delivery->id,
             'delivery_no'  => $delivery->delivery_no,

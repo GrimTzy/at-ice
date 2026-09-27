@@ -14,10 +14,11 @@ import CustomerPriceManagement from './pages/admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
 import CustomersPage from './pages/Admin/CustomersPage'
+import DeliveriesPage from './pages/Admin/DeliveriesPage'
 
 // ── Driver Module
 import DriverLogin from './pages/drivers/DriverLogin'
-import { DeliveriesPage } from './pages/drivers/DeliveriesPage'
+import { DeliveriesPage as DriverDeliveriesPage } from './pages/drivers/DeliveriesPage'
 import { GpsTrackingPage } from './pages/drivers/GpsTrackingPage'
 
 // ── HR Module 
@@ -48,6 +49,12 @@ import MaintenanceStockOutRequestPage from './pages/employees/MaintenanceStockOu
 // CheckerInventoryManagementPage.jsx as a second tab ("Low Stock Alert"),
 // since both pages read from closely related stock data. No route needed
 // for it anymore; /checker/inventory now covers both views.
+//
+// NOTE: Admin's new DeliveriesPage.jsx (SCM > Deliveries, /admin/deliveries)
+// is aliased as the default import here. The Driver module's own, unrelated
+// DeliveriesPage.jsx (/driver/deliveries) is aliased as DriverDeliveriesPage
+// to avoid a naming collision — two different pages that happen to share
+// a component name across different folders.
 
 function App() {
   return (
@@ -108,6 +115,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* Deliveries — full CRUD for outbound Deliveries: Admin assigns
+            driver + customer + line items. */}
+        <Route
+          path="/admin/deliveries"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <DeliveriesPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* ── HR Module ── */}
         <Route path="/hr/login" element={<HRLogin />} />
@@ -142,7 +159,7 @@ function App() {
           path="/driver/deliveries"
           element={
             <ProtectedRoute allowedRoles={["driver"]}>
-              <DeliveriesPage />
+              <DriverDeliveriesPage />
             </ProtectedRoute>
           }
         />

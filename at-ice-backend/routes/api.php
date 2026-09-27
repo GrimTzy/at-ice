@@ -55,6 +55,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('deliveries',            [DeliveryController::class, 'store']);
         Route::get('deliveries/{id}',        [DeliveryController::class, 'show']);
         Route::put('deliveries/{id}/cancel', [DeliveryController::class, 'cancel']);
+        
+        Route::get('products-summary', [ProductController::class, 'index']);
 
         // Delivery Proofs (Admin views)
         Route::get('delivery-proofs',        [DeliveryProofController::class, 'index']);

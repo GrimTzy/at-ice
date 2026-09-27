@@ -43,11 +43,18 @@ class PaymentController extends Controller
         return response()->json($payment, 201);
     }
 
-    // Customer - view own payments
+    // Customer - view own payments. Same customer_id vs user_id fix as
+    // OrderController@myOrders() — see note there.
     public function myPayments(Request $request)
     {
+        $customer = \App\Models\Customer::where('user_id', $request->user()->id)->first();
+
+        if (!$customer) {
+            return response()->json([]);
+        }
+
         $payments = Payment::with(['order'])
-            ->where('customer_id', $request->user()->id)
+            ->where('customer_id', $customer->id)
             ->latest()
             ->get();
 

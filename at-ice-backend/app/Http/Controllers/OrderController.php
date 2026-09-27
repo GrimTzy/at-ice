@@ -93,11 +93,21 @@ class OrderController extends Controller
         return response()->json(['message' => 'Order cancelled.']);
     }
 
-    // Customer — view own orders
+    // Customer — view own orders. customer_id on Order refers to the
+    // customers table, NOT the logged-in user's id — those are two
+    // different ids since a Customer Portal login is a User linked to a
+    // Customer via customers.user_id (added this session for the Admin
+    // "Create Login" feature).
     public function myOrders(Request $request)
     {
+        $customer = \App\Models\Customer::where('user_id', $request->user()->id)->first();
+
+        if (!$customer) {
+            return response()->json([]);
+        }
+
         $orders = Order::with(['items.product', 'payments'])
-            ->where('customer_id', $request->user()->id)
+            ->where('customer_id', $customer->id)
             ->latest()
             ->get();
 
