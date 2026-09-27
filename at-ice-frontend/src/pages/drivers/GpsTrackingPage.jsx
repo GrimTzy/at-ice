@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
 
-// Icons
+// Icons (unchanged)
 const LogOutIcon = () => (
   <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -49,21 +49,21 @@ const BackIcon = () => (
   </svg>
 );
 
-// ─── Mock delivery stops (replace with /api/driver/deliveries in production) ──
-const mockStores = [
-  { id: "ORD-2026-418", customer: "SM Hypermarket – Caloocan",  destination: "Grace Park, Caloocan City",      items: "TI-10KG", qty: 24, status: "In Transit", lat: 14.6570, lng: 120.9830 },
-  { id: "ORD-2026-415", customer: "Pickup Coffee Inc.",          destination: "Quezon Ave, Quezon City",        items: "TI-5KG",  qty: 40, status: "Pending",    lat: 14.6420, lng: 121.0150 },
-  { id: "ORD-2026-412", customer: "Alfamart – Branch 045",       destination: "EDSA Balintawak, Quezon City",   items: "TI-FLAKES", qty: 10, status: "Delivered", lat: 14.6680, lng: 121.0020 },
-  { id: "ORD-2026-409", customer: "WalterMart – North EDSA",     destination: "North EDSA, Quezon City",        items: "TI-20KG", qty: 15, status: "Pending",    lat: 14.6760, lng: 121.0350 },
-  { id: "ORD-2026-405", customer: "Savemore – Monumento",        destination: "Rizal Ave Ext., Caloocan City",  items: "TI-3KG",  qty: 60, status: "Delivered",  lat: 14.6540, lng: 120.9840 },
-];
-
+// Backend status -> display label + colors. Panel shows ALL stops (Option 1),
+// including "delivered" ones.
 const STATUS_CONFIG = {
-  "Pending":    { bg: "bg-amber-50",  text: "text-amber-600",  dot: "bg-amber-400"  },
-  "In Transit": { bg: "bg-blue-50",   text: "text-blue-600",   dot: "bg-blue-500"   },
-  "Delivered":  { bg: "bg-green-50",  text: "text-green-600",  dot: "bg-green-500"  },
-  "Cancelled":  { bg: "bg-slate-100", text: "text-slate-400",  dot: "bg-slate-300"  },
+  pending:    { label: "Pending",    bg: "bg-amber-50",  text: "text-amber-600", dot: "bg-amber-400", markerFill: "#ef4444", markerStroke: "#dc2626", markerLabel: "!" },
+  in_transit: { label: "In Transit", bg: "bg-blue-50",   text: "text-blue-600",  dot: "bg-blue-500",  markerFill: "#3b82f6", markerStroke: "#2563eb", markerLabel: "!" },
+  delivered:  { label: "Delivered",  bg: "bg-green-50",  text: "text-green-600", dot: "bg-green-500", markerFill: "#22c55e", markerStroke: "#16a34a", markerLabel: "✓" },
+  cancelled:  { label: "Cancelled",  bg: "bg-slate-100", text: "text-slate-400", dot: "bg-slate-300", markerFill: "#94a3b8", markerStroke: "#64748b", markerLabel: "×" },
 };
+
+function itemsSummary(delivery) {
+  if (!Array.isArray(delivery.items) || delivery.items.length === 0) return "No items listed";
+  return delivery.items
+    .map((it) => `${it.product?.name ?? "Item"} × ${it.quantity_ordered}`)
+    .join(", ");
+}
 
 export function GpsTrackingPage() {
   const navigate = useNavigate();
@@ -73,29 +73,79 @@ export function GpsTrackingPage() {
   const driverDotRef   = useRef(null);
   const watchIdRef     = useRef(null);
   const infoWindowRef  = useRef(null);
+  const echoChannelRef = useRef(null);
 
   const [driverPos, setDriverPos]         = useState(null);
   const [gpsStatus, setGpsStatus]         = useState("waiting");
   const [panelOpen, setPanelOpen]         = useState(true);
   const [selectedStore, setSelectedStore] = useState(null);
-  const [stores]                          = useState(mockStores);
+  const [stores, setStores]               = useState([]);
+  const [loading, setLoading]             = useState(true);
 
-  const pending   = stores.filter((s) => s.status === "Pending" || s.status === "In Transit").length;
-  const delivered = stores.filter((s) => s.status === "Delivered").length;
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const token = localStorage.getItem("token");
 
-  // ── Load Google Maps ──────────────────────────────────────────────────────
+  const pending   = stores.filter((s) => s.status === "pending" || s.status === "in_transit").length;
+  const delivered = stores.filter((s) => s.status === "delivered").length;
+
+  // ── Fetch real deliveries (same endpoint DeliveriesPage.jsx uses) ─────────
   useEffect(() => {
-    if (window.google) { initMap(); return; }
-    window.initMap = initMap;
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&callback=initMap`;
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
+    fetch("/api/driver/deliveries", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data.deliveries ?? [];
+        setStores(list);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [token]);
+
+  // Re-plot markers whenever the delivery list changes (initial load or a
+  // Pusher update below).
+  useEffect(() => {
+    if (mapInstanceRef.current) plotStoreMarkers(mapInstanceRef.current);
+  }, [stores]);
+
+  // ── Live status updates via Pusher/Echo (same channel/event as
+  // DeliveriesPage.jsx: public "deliveries" channel, "delivery.status.updated") ──
+  useEffect(() => {
+    if (!window.Echo) return;
+    const channel = window.Echo.channel("deliveries");
+    echoChannelRef.current = channel;
+
+    channel.listen(".delivery.status.updated", (e) => {
+      if (e.driver_id !== user?.id) return;
+      setStores((prev) =>
+        prev.map((s) => (s.id === e.delivery_id ? { ...s, status: e.status } : s))
+      );
+    });
+
     return () => {
-      if (document.head.contains(script)) document.head.removeChild(script);
+      window.Echo.leaveChannel("deliveries");
     };
-  }, []);
+  }, [user?.id]);
+
+  // Load Google Maps 
+  useEffect(() => {
+  if (window.google) { initMap(); return; }
+  const existing = document.getElementById("google-maps-script");
+  if (existing) {
+    existing.addEventListener("load", initMap, { once: true });
+    return;
+  }
+  window.initMap = initMap;
+  const script = document.createElement("script");
+  script.id = "google-maps-script";
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&callback=initMap`;
+  script.async = true;
+  script.defer = true;
+  document.head.appendChild(script);
+}, []);
 
   function initMap() {
     if (!mapRef.current) return;
@@ -126,24 +176,23 @@ export function GpsTrackingPage() {
     infoWindowRef.current = new window.google.maps.InfoWindow();
 
     stores.forEach((store) => {
-      const isDelivered = store.status === "Delivered";
-      const color       = isDelivered ? "#22c55e" : store.status === "In Transit" ? "#3b82f6" : "#ef4444";
-      const border      = isDelivered ? "#16a34a" : store.status === "In Transit" ? "#2563eb" : "#dc2626";
+      if (store.customer?.latitude == null || store.customer?.longitude == null) return;
+      const cfg = STATUS_CONFIG[store.status] ?? STATUS_CONFIG.pending;
 
       const marker = new window.google.maps.Marker({
-        position: { lat: store.lat, lng: store.lng },
+        position: { lat: Number(store.customer.latitude), lng: Number(store.customer.longitude) },
         map,
-        title: store.customer,
+        title: store.customer?.name,
         icon: {
           path: window.google.maps.SymbolPath.CIRCLE,
           scale: 10,
-          fillColor: color,
+          fillColor: cfg.markerFill,
           fillOpacity: 1,
-          strokeColor: border,
+          strokeColor: cfg.markerStroke,
           strokeWeight: 2,
         },
         label: {
-          text: isDelivered ? "✓" : "!",
+          text: cfg.markerLabel,
           color: "#ffffff",
           fontSize: "10px",
           fontWeight: "bold",
@@ -153,13 +202,13 @@ export function GpsTrackingPage() {
       marker.addListener("click", () => {
         infoWindowRef.current.setContent(`
           <div style="font-family:'Inter','Segoe UI',sans-serif;font-size:12px;padding:4px 2px;min-width:160px;">
-            <div style="font-weight:600;color:#1e293b;margin-bottom:4px;">${store.customer}</div>
-            <div style="color:#64748b;margin-bottom:2px;">${store.destination}</div>
-            <div style="color:#64748b;">${store.items} · ${store.qty} bags</div>
+            <div style="font-weight:600;color:#1e293b;margin-bottom:4px;">${store.customer?.name ?? "Customer"}</div>
+            <div style="color:#64748b;margin-bottom:2px;">${store.customer?.address ?? ""}</div>
+            <div style="color:#64748b;">${itemsSummary(store)}</div>
             <div style="margin-top:6px;display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;
-              background:${isDelivered ? "#dcfce7" : "#fef3c7"};
-              color:${isDelivered ? "#16a34a" : "#d97706"};">
-              ${store.status}
+              background:${cfg.bg === "bg-green-50" ? "#dcfce7" : "#fef3c7"};
+              color:${cfg.markerStroke};">
+              ${cfg.label}
             </div>
           </div>`);
         infoWindowRef.current.open(map, marker);
@@ -215,6 +264,10 @@ export function GpsTrackingPage() {
     };
   }, []);
 
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50">
 
@@ -232,12 +285,11 @@ export function GpsTrackingPage() {
               <img src={logo} alt="Bella Erin logo" className="w-full h-full object-contain p-1" />
             </div>
             <div>
-              <div className="text-[13px] font-semibold text-slate-800 leading-none">Juan Dela Cruz</div>
-              <div className="text-[10px] text-slate-400 tracking-wide">Driver · Route A</div>
+              <div className="text-[13px] font-semibold text-slate-800 leading-none">{user?.name || "Driver"}</div>
+              <div className="text-[10px] text-slate-400 tracking-wide">Driver</div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* GPS status badge */}
             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border ${
               gpsStatus === "active"  ? "bg-green-50 border-green-200 text-green-600" :
               gpsStatus === "error"   ? "bg-red-50 border-red-200 text-red-500" :
@@ -260,10 +312,9 @@ export function GpsTrackingPage() {
 
         <div className="mt-3">
           <div className="text-[18px] font-semibold text-slate-800 leading-tight">GPS Tracking</div>
-          <div className="text-[12px] text-slate-400 mt-0.5">Monday, June 8, 2026</div>
+          <div className="text-[12px] text-slate-400 mt-0.5">{todayLabel}</div>
         </div>
 
-        {/* Summary pills */}
         <div className="flex gap-2 mt-3">
           {[
             { label: "Total Stops", value: stores.length, color: "text-slate-800" },
@@ -282,7 +333,6 @@ export function GpsTrackingPage() {
       <div className="relative flex-1" style={{ minHeight: "320px" }}>
         <div ref={mapRef} className="absolute inset-0 w-full h-full" />
 
-        {/* Center on driver FAB */}
         <button
           onClick={centerOnDriver}
           className="absolute top-3 right-3 z-10 w-10 h-10 bg-white border border-black/[0.10] rounded-xl shadow-md flex items-center justify-center text-cyan-500 active:bg-slate-50 transition-colors cursor-pointer"
@@ -290,7 +340,6 @@ export function GpsTrackingPage() {
           <NavIcon />
         </button>
 
-        {/* Legend */}
         <div className="absolute top-3 left-3 z-10 bg-white/95 border border-black/[0.08] rounded-xl px-3 py-2 flex flex-col gap-1.5 shadow-sm">
           <div className="flex items-center gap-2 text-[10px] text-slate-600">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 flex-shrink-0" />Your Location
@@ -306,25 +355,24 @@ export function GpsTrackingPage() {
           </div>
         </div>
 
-        {/* Selected store info card */}
         {selectedStore && (
           <div className="absolute bottom-0 left-0 right-0 z-20 bg-white border-t border-black/[0.08] rounded-t-2xl shadow-lg px-5 py-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_CONFIG[selectedStore.status].dot}`} />
-                  <span className="text-[13px] font-semibold text-slate-800 truncate">{selectedStore.customer}</span>
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_CONFIG[selectedStore.status]?.dot}`} />
+                  <span className="text-[13px] font-semibold text-slate-800 truncate">{selectedStore.customer?.name}</span>
                 </div>
                 <div className="flex items-center gap-1 text-[11px] text-slate-400 mb-0.5">
-                  <MapPinIcon />{selectedStore.destination}
+                  <MapPinIcon />{selectedStore.customer?.address}
                 </div>
                 <div className="flex items-center gap-1 text-[11px] text-slate-400">
-                  <PackageIcon />{selectedStore.items} · {selectedStore.qty} bags
+                  <PackageIcon />{itemsSummary(selectedStore)}
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${STATUS_CONFIG[selectedStore.status].bg} ${STATUS_CONFIG[selectedStore.status].text}`}>
-                  {selectedStore.status}
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${STATUS_CONFIG[selectedStore.status]?.bg} ${STATUS_CONFIG[selectedStore.status]?.text}`}>
+                  {STATUS_CONFIG[selectedStore.status]?.label}
                 </span>
                 <button
                   onClick={() => setSelectedStore(null)}
@@ -338,7 +386,7 @@ export function GpsTrackingPage() {
         )}
       </div>
 
-      {/* ── Delivery Stops Panel ── */}
+      {/* ── Delivery Stops Panel — shows ALL stops, Delivered included (Option 1) ── */}
       <div className={`relative z-20 bg-white border-t border-black/[0.08] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] flex-shrink-0 transition-all duration-300 overflow-hidden ${panelOpen ? "max-h-[280px]" : "max-h-[52px]"}`}>
 
         <button
@@ -354,27 +402,33 @@ export function GpsTrackingPage() {
         </button>
 
         <div className="overflow-y-auto px-4 pb-6 flex flex-col gap-2" style={{ maxHeight: "220px" }}>
+          {loading && (
+            <div className="text-[12px] text-slate-400 text-center py-4">Loading deliveries...</div>
+          )}
+          {!loading && stores.length === 0 && (
+            <div className="text-[12px] text-slate-400 text-center py-4">No deliveries scheduled today.</div>
+          )}
           {stores.map((store) => {
-            const cfg = STATUS_CONFIG[store.status];
+            const cfg = STATUS_CONFIG[store.status] ?? STATUS_CONFIG.pending;
             return (
               <button
                 key={store.id}
                 className="w-full text-left bg-slate-50 border border-black/[0.07] rounded-xl px-4 py-3 flex items-center gap-3 active:bg-slate-100 transition-colors cursor-pointer"
                 onClick={() => {
                   setSelectedStore(store);
-                  if (mapInstanceRef.current) {
-                    mapInstanceRef.current.panTo({ lat: store.lat, lng: store.lng });
+                  if (mapInstanceRef.current && store.customer?.latitude != null) {
+                    mapInstanceRef.current.panTo({ lat: Number(store.customer.latitude), lng: Number(store.customer.longitude) });
                     mapInstanceRef.current.setZoom(15);
                   }
                 }}
               >
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-semibold text-slate-800 truncate">{store.customer}</div>
-                  <div className="text-[10px] text-slate-400 truncate mt-0.5">{store.destination}</div>
+                  <div className="text-[12px] font-semibold text-slate-800 truncate">{store.customer?.name}</div>
+                  <div className="text-[10px] text-slate-400 truncate mt-0.5">{store.customer?.address}</div>
                 </div>
                 <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${cfg.bg} ${cfg.text}`}>
-                  {store.status}
+                  {cfg.label}
                 </span>
               </button>
             );

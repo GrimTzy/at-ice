@@ -70,7 +70,12 @@ class DeliveryController extends Controller
             'status' => 'required|in:in_transit,delivered',
         ]);
 
-        $delivery = Delivery::with('customer')->findOrFail($id);
+        // Fixed (v29.7 follow-up): previously only eager-loaded "customer",
+        // so the response sent back to the frontend after a status update
+        // had no items/proofs data, silently wiping the items list from the
+        // driver's expanded card view. Now loads the same relations as
+        // driverDeliveries() so the returned delivery object is complete.
+        $delivery = Delivery::with(['customer', 'items.product', 'proofs'])->findOrFail($id);
 
         if ($delivery->driver_id !== $request->user()->id) {
             return response()->json(['message' => 'Unauthorized.'], 403);

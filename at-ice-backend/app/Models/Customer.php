@@ -10,7 +10,7 @@ class Customer extends Model
 
     protected $fillable = [
         'customer_code', 'name', 'branch_code', 'address', 'city',
-        'province', 'contact_person', 'contact_number', 'email',
+        'province', 'latitude', 'longitude', 'contact_person', 'contact_number', 'email',
         'mop', 'is_active', 'notes'
     ];
 

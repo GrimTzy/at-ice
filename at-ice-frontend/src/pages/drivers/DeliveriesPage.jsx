@@ -1,8 +1,34 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
+import Echo from "laravel-echo";
+import Pusher from "pusher-js";
 
-// Icons 
+// Pusher/Echo setup, created once at module load
+window.Pusher = Pusher;
+const echo = new Echo({
+  broadcaster: "pusher",
+  key: import.meta.env.VITE_PUSHER_APP_KEY,
+  cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
+  forceTLS: true,
+});
+
+// Haversine formula, gives straight line distance in km between two lat/lng points
+function haversineDistanceKm(lat1, lon1, lat2, lon2) {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Icons
 const MapPinIcon = () => (
   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
@@ -53,43 +79,132 @@ const MapIcon = () => (
   </svg>
 );
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const deliveries = [
-  { id: "ORD-2026-418", customer: "SM Hypermarket – Caloocan",  phone: "0917-123-4567", destination: "Grace Park, Caloocan City",        items: "TI-10KG Tube Ice",   qty: 24, status: "In Transit", time: "8:00 AM",  distance: "3.2 km" },
-  { id: "ORD-2026-415", customer: "Pickup Coffee Inc.",          phone: "0918-234-5678", destination: "Quezon Ave, Quezon City",          items: "TI-5KG Tube Ice",    qty: 40, status: "Pending",    time: "9:30 AM",  distance: "5.8 km" },
-  { id: "ORD-2026-412", customer: "Alfamart – Branch 045",       phone: "0919-345-6789", destination: "EDSA, Balintawak, Quezon City",    items: "TI-FLAKES Ice Flakes", qty: 10, status: "Delivered", time: "7:00 AM",  distance: "2.1 km" },
-  { id: "ORD-2026-409", customer: "WalterMart – North EDSA",     phone: "0920-456-7890", destination: "North EDSA, Quezon City",          items: "TI-20KG Tube Ice",   qty: 15, status: "Pending",    time: "10:00 AM", distance: "6.4 km" },
-  { id: "ORD-2026-405", customer: "Savemore – Monumento",        phone: "0921-567-8901", destination: "Rizal Ave Ext., Caloocan City",    items: "TI-3KG Tube Ice",    qty: 60, status: "Delivered",  time: "6:30 AM",  distance: "1.4 km" },
-  { id: "ORD-2026-401", customer: "7-Eleven – Samson Rd.",       phone: "0922-678-9012", destination: "Samson Rd., Caloocan City",        items: "TI-5KG Tube Ice",    qty: 20, status: "Cancelled",  time: "7:30 AM",  distance: "0.9 km" },
-];
-
 const STATUS_CONFIG = {
-  "Pending":    { bg: "bg-amber-50",  text: "text-amber-600",  dot: "bg-amber-400",  label: "Pending"    },
-  "In Transit": { bg: "bg-blue-50",   text: "text-blue-600",   dot: "bg-blue-500",   label: "In Transit" },
-  "Delivered":  { bg: "bg-green-50",  text: "text-green-600",  dot: "bg-green-500",  label: "Delivered"  },
-  "Cancelled":  { bg: "bg-slate-100", text: "text-slate-400",  dot: "bg-slate-300",  label: "Cancelled"  },
+  pending:    { bg: "bg-amber-50",  text: "text-amber-600",  dot: "bg-amber-400",  label: "Pending"    },
+  in_transit: { bg: "bg-blue-50",   text: "text-blue-600",   dot: "bg-blue-500",   label: "In Transit" },
+  delivered:  { bg: "bg-green-50",  text: "text-green-600",  dot: "bg-green-500",  label: "Delivered"  },
 };
 
-const FILTERS = ["All", "Pending", "In Transit", "Delivered"];
-
-const SUMMARY = [
-  { label: "Total",      value: 6, color: "text-slate-800" },
-  { label: "Pending",    value: 2, color: "text-amber-500" },
-  { label: "In Transit", value: 1, color: "text-blue-500"  },
-  { label: "Delivered",  value: 2, color: "text-green-500" },
+const FILTERS = [
+  { key: "all",        label: "All" },
+  { key: "pending",    label: "Pending" },
+  { key: "in_transit", label: "In Transit" },
+  { key: "delivered",  label: "Delivered" },
 ];
 
 export function DeliveriesPage() {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState("All");
+  const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
+  const [deliveries, setDeliveries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [driverPos, setDriverPos] = useState(null);
+  const [actionLoading, setActionLoading] = useState(null);
+  const watchIdRef = useRef(null);
 
-  const visible = filter === "All" ? deliveries : deliveries.filter((d) => d.status === filter);
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const driverName = user?.name || "Driver";
+
+  const fetchDeliveries = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/driver/deliveries", {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setDeliveries(data);
+    } catch (err) {
+      console.error("Failed to load deliveries:", err);
+      setDeliveries([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDeliveries();
+  }, [fetchDeliveries]);
+
+  // Live GPS position, used only to compute an approximate distance to each stop
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => setDriverPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setDriverPos(null),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    };
+  }, []);
+
+  // Real time updates via Pusher, on the public "deliveries" channel, event "delivery.status.updated"
+  // Only apply updates that belong to this driver's own deliveries
+  useEffect(() => {
+    const channel = echo.channel("deliveries");
+    channel.listen(".delivery.status.updated", (e) => {
+      if (String(e.driver_id) !== String(user?.id)) return;
+      setDeliveries((prev) =>
+        prev.map((d) => (d.id === e.delivery_id ? { ...d, status: e.status } : d))
+      );
+    });
+    return () => {
+      echo.leaveChannel("deliveries");
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function updateStatus(deliveryId, status) {
+    setActionLoading(deliveryId);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/driver/deliveries/${deliveryId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        console.error("Failed to update delivery status:", res.status, errData);
+        return;
+      }
+      const data = await res.json();
+      setDeliveries((prev) =>
+        prev.map((d) => (d.id === deliveryId ? data.delivery : d))
+      );
+    } catch (err) {
+      console.error("Network error updating delivery status:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const visible = filter === "all" ? deliveries : deliveries.filter((d) => d.status === filter);
+
+  const counts = {
+    total:      deliveries.length,
+    pending:    deliveries.filter((d) => d.status === "pending").length,
+    in_transit: deliveries.filter((d) => d.status === "in_transit").length,
+    delivered:  deliveries.filter((d) => d.status === "delivered").length,
+  };
+
+  const SUMMARY = [
+    { label: "Total",      value: counts.total,      color: "text-slate-800" },
+    { label: "Pending",    value: counts.pending,    color: "text-amber-500" },
+    { label: "In Transit", value: counts.in_transit, color: "text-blue-500"  },
+    { label: "Delivered",  value: counts.delivered,  color: "text-green-500" },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
 
-      {/* ── Top Bar ── */}
+      {/* Top bar */}
       <header className="bg-white border-b border-black/[0.08] px-5 pt-10 pb-4 flex-shrink-0 sticky top-0 z-20">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
@@ -97,12 +212,11 @@ export function DeliveriesPage() {
               <img src={logo} alt="Bella Erin logo" className="w-full h-full object-contain p-1" />
             </div>
             <div>
-              <div className="text-[13px] font-semibold text-slate-800 leading-none">Juan Dela Cruz</div>
-              <div className="text-[10px] text-slate-400 tracking-wide">Driver · Route A</div>
+              <div className="text-[13px] font-semibold text-slate-800 leading-none">{driverName}</div>
+              <div className="text-[10px] text-slate-400 tracking-wide">Driver</div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* GPS Tracking button */}
             <button
               onClick={() => navigate("/driver/gps")}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-lg text-cyan-600 text-[11px] font-medium active:bg-cyan-500/20 transition-colors cursor-pointer"
@@ -111,7 +225,10 @@ export function DeliveriesPage() {
               GPS
             </button>
             <button
-              onClick={() => navigate("/driver/login")}
+              onClick={() => {
+                ["token", "role", "sub_role", "user"].forEach((k) => localStorage.removeItem(k));
+                navigate("/driver/login");
+              }}
               className="flex items-center gap-1.5 text-slate-400 active:text-red-500 transition-colors cursor-pointer p-1"
             >
               <LogOutIcon />
@@ -121,10 +238,8 @@ export function DeliveriesPage() {
 
         <div className="mt-3">
           <div className="text-[18px] font-semibold text-slate-800 leading-tight">My Deliveries</div>
-          <div className="text-[12px] text-slate-400 mt-0.5">Monday, June 8, 2026</div>
         </div>
 
-        {/* Summary pills */}
         <div className="flex gap-2 mt-3">
           {SUMMARY.map((s) => (
             <div key={s.label} className="flex-1 bg-slate-50 border border-black/[0.08] rounded-xl px-2 py-2 text-center">
@@ -135,33 +250,46 @@ export function DeliveriesPage() {
         </div>
       </header>
 
-      {/* ── Filter Tabs ── */}
+      {/* Filter tabs */}
       <div className="bg-white border-b border-black/[0.08] px-5 flex gap-1.5 overflow-x-auto flex-shrink-0">
         {FILTERS.map((f) => (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
+            key={f.key}
+            onClick={() => setFilter(f.key)}
             className={`flex-shrink-0 px-3.5 py-3 text-[12px] font-medium border-b-2 transition-colors cursor-pointer ${
-              filter === f ? "text-cyan-500 border-cyan-500" : "text-slate-400 border-transparent"
+              filter === f.key ? "text-cyan-500 border-cyan-500" : "text-slate-400 border-transparent"
             }`}
           >
-            {f}
+            {f.label}
           </button>
         ))}
       </div>
 
-      {/* ── Delivery List ── */}
+      {/* Delivery list */}
       <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
-        {visible.length === 0 && (
+        {loading && (
+          <div className="text-center text-[13px] text-slate-400 mt-12">Loading deliveries…</div>
+        )}
+        {!loading && visible.length === 0 && (
           <div className="text-center text-[13px] text-slate-400 mt-12">No deliveries found.</div>
         )}
-        {visible.map((d) => {
-          const cfg = STATUS_CONFIG[d.status];
+        {!loading && visible.map((d) => {
+          const cfg = STATUS_CONFIG[d.status] || STATUS_CONFIG.pending;
           const open = expanded === d.id;
+          const customer = d.customer;
+          const destination = customer
+            ? [customer.address, customer.city, customer.province].filter(Boolean).join(", ")
+            : "—";
+          const itemsSummary = d.items?.length
+            ? d.items.map((i) => `${i.product?.name ?? "Item"} × ${i.quantity_ordered}`).join(", ")
+            : "—";
+          const distanceKm = customer
+            ? haversineDistanceKm(driverPos?.lat, driverPos?.lng, customer.latitude, customer.longitude)
+            : null;
+
           return (
             <div key={d.id} className="bg-white border border-black/[0.08] rounded-2xl overflow-hidden shadow-sm">
 
-              {/* Card header */}
               <button
                 className="w-full text-left px-4 py-4 flex items-start gap-3 cursor-pointer active:bg-slate-50 transition-colors"
                 onClick={() => setExpanded(open ? null : d.id)}
@@ -171,21 +299,28 @@ export function DeliveriesPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[13px] font-semibold text-slate-800 truncate">{d.customer}</span>
+                    <span className="text-[13px] font-semibold text-slate-800 truncate">{customer?.name || "Unknown Customer"}</span>
                     <span className={`flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.text}`}>
                       {cfg.label}
                     </span>
                   </div>
                   <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-400">
                     <MapPinIcon />
-                    <span className="truncate">{d.destination}</span>
+                    <span className="truncate">{destination}</span>
                   </div>
-                  <div className="flex items-center gap-3 mt-1.5">
-                    <span className="text-[10px] text-slate-400 flex items-center gap-1"><ClockIcon />{d.time}</span>
+                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <ClockIcon />
+                      {new Date(d.scheduled_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                    {distanceKm != null && (
+                      <>
+                        <span className="text-[10px] text-slate-300">·</span>
+                        <span className="text-[10px] text-slate-400">{distanceKm.toFixed(1)} km</span>
+                      </>
+                    )}
                     <span className="text-[10px] text-slate-300">·</span>
-                    <span className="text-[10px] text-slate-400">{d.distance}</span>
-                    <span className="text-[10px] text-slate-300">·</span>
-                    <span className="text-[10px] font-mono text-slate-400">{d.id}</span>
+                    <span className="text-[10px] font-mono text-slate-400">{d.delivery_no}</span>
                   </div>
                 </div>
                 <span className={`text-slate-300 flex-shrink-0 mt-1 transition-transform duration-200 ${open ? "rotate-90" : ""}`}>
@@ -193,53 +328,44 @@ export function DeliveriesPage() {
                 </span>
               </button>
 
-              {/* Expanded detail */}
               {open && (
                 <div className="border-t border-black/[0.07] px-4 py-4 flex flex-col gap-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[10px] text-slate-400 uppercase tracking-widest">Customer</span>
                       <div className="flex items-center gap-1.5 text-[12px] text-slate-700 font-medium">
-                        <UserIcon />{d.customer}
+                        <UserIcon />{customer?.name || "—"}
                       </div>
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[10px] text-slate-400 uppercase tracking-widest">Contact</span>
                       <div className="flex items-center gap-1.5 text-[12px] text-cyan-500 font-medium">
-                        <PhoneIcon />{d.phone}
+                        <PhoneIcon />{customer?.contact_number || "—"}
                       </div>
                     </div>
                     <div className="flex flex-col gap-0.5 col-span-2">
                       <span className="text-[10px] text-slate-400 uppercase tracking-widest">Destination</span>
                       <div className="flex items-center gap-1.5 text-[12px] text-slate-700 font-medium">
-                        <MapPinIcon />{d.destination}
+                        <MapPinIcon />{destination}
                       </div>
                     </div>
-                    <div className="flex flex-col gap-0.5">
+                    <div className="flex flex-col gap-0.5 col-span-2">
                       <span className="text-[10px] text-slate-400 uppercase tracking-widest">Items</span>
                       <div className="flex items-center gap-1.5 text-[12px] text-slate-700 font-medium">
-                        <PackageIcon />{d.items}
+                        <PackageIcon />{itemsSummary}
                       </div>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-slate-400 uppercase tracking-widest">Quantity</span>
-                      <div className="text-[12px] text-slate-700 font-semibold font-mono">{d.qty} bags</div>
                     </div>
                   </div>
 
-                  {/* Action buttons */}
-                  {d.status !== "Delivered" && d.status !== "Cancelled" && (
+                  {d.status === "pending" && (
                     <div className="flex gap-2 mt-1">
-                      {d.status === "Pending" && (
-                        <button className="flex-1 py-3 bg-blue-500 active:bg-blue-600 text-white text-[12px] font-semibold rounded-xl transition-colors cursor-pointer">
-                          Start Delivery
-                        </button>
-                      )}
-                      {d.status === "In Transit" && (
-                        <button className="flex-1 py-3 bg-green-500 active:bg-green-600 text-white text-[12px] font-semibold rounded-xl transition-colors cursor-pointer">
-                          Mark as Delivered
-                        </button>
-                      )}
+                      <button
+                        onClick={() => updateStatus(d.id, "in_transit")}
+                        disabled={actionLoading === d.id}
+                        className="flex-1 py-3 bg-blue-500 active:bg-blue-600 text-white text-[12px] font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60"
+                      >
+                        {actionLoading === d.id ? "Updating…" : "Start Delivery"}
+                      </button>
                       <button
                         onClick={() => navigate("/driver/gps")}
                         className="flex-1 py-3 bg-slate-100 active:bg-slate-200 text-slate-600 text-[12px] font-semibold rounded-xl transition-colors cursor-pointer"
@@ -248,8 +374,24 @@ export function DeliveriesPage() {
                       </button>
                     </div>
                   )}
-
-                  {d.status === "Delivered" && (
+                  {d.status === "in_transit" && (
+                    <div className="flex gap-2 mt-1">
+                      <button
+                        onClick={() => updateStatus(d.id, "delivered")}
+                        disabled={actionLoading === d.id}
+                        className="flex-1 py-3 bg-green-500 active:bg-green-600 text-white text-[12px] font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60"
+                      >
+                        {actionLoading === d.id ? "Updating…" : "Mark as Delivered"}
+                      </button>
+                      <button
+                        onClick={() => navigate("/driver/gps")}
+                        className="flex-1 py-3 bg-slate-100 active:bg-slate-200 text-slate-600 text-[12px] font-semibold rounded-xl transition-colors cursor-pointer"
+                      >
+                        View on Map
+                      </button>
+                    </div>
+                  )}
+                  {d.status === "delivered" && (
                     <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-3 py-2.5">
                       <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
                       <span className="text-[12px] text-green-600 font-medium">Delivery completed successfully.</span>
