@@ -1,22 +1,3 @@
-// src/pages/Admin/EmployeesOverviewPage.jsx
-//
-// Admin > Employees (view only). Distinct from HR's EmployeesPage.jsx,
-// which has full create/edit/deactivate plus Payroll and Performance.
-// This page is read only by design: Admin can see who's registered, but
-// account creation, editing, and payroll now belong to HR.
-//
-// v29.7: also shows Driver accounts alongside Checker/Salesman/
-// Maintenance — Driver keeps its own separate login (role:driver,
-// /driver/login unchanged), but is still part of the registered workforce
-// HR manages, so Admin's view should include them too.
-//
-// Fetches GET /api/employees-summary — a read only route added specifically
-// for Admin (see routes/api.php), separate from HR's full
-// Route::apiResource('employees', ...). Reuses EmployeeController@index()
-// under the hood, same filtered dataset, just a different route so
-// Admin's access stays view only at the backend level too, not just
-// hidden in the UI.
-
 import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "../../components/AdminLayout";
 
@@ -31,9 +12,6 @@ const SUB_ROLE_STYLE = {
   driver:      "bg-violet-500/10 text-violet-600 border-violet-500/20",
 };
 
-// Driver's account uses role:"driver" with no sub_role (its login/routes
-// stay separate and untouched), so its "role badge" has to be derived
-// rather than read straight off user.sub_role like the other three.
 function displayRole(user) {
   if (!user) return null;
   if (user.role === "driver") return "driver";

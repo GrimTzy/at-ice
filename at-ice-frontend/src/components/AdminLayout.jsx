@@ -1,18 +1,3 @@
-// src/components/AdminLayout.jsx
-//
-// Shared sidebar + topbar shell for all Admin pages.
-//
-// UPDATE (v29.6, then corrected): Employees was briefly removed from this
-// sidebar entirely under the assumption that HR would fully own it. That
-// was wrong — Admin keeps a VIEW-ONLY Employees page (Name/Position/Role/
-// Shift only, no create/edit/deactivate, no Payroll), backed by a
-// read-only backend route (GET /api/employees-summary). Full CRUD +
-// Payroll + Performance live under HR at /hr/employees.
-//
-// UPDATE (this session): Customers now has a real path — full CRUD +
-// "Create Login" (Customer Portal account provisioning) at
-// /admin/customers, replacing the unclickable placeholder.
-
 import { useNavigate, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import bgImage from "../assets/iceproduct.png";
@@ -23,8 +8,8 @@ const DollarIcon   = () => <svg width="14" height="14" fill="none" stroke="curre
 const TruckIcon    = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>;
 const CheckIcon    = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
 const UserIcon     = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>;
-const CartIcon     = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>;
 const ClipboardIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12l2 2 4-4"/></svg>;
+const ReceiptIcon  = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 2h16v20l-3-2-3 2-3-2-3 2-3-2-1 2V2z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="12" y2="15"/></svg>;
 const ChevDown     = () => <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>;
 const ChevRight    = () => <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>;
 const CalIcon      = () => <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
@@ -40,8 +25,7 @@ const navSections = [
     ] },
   { label:"CRM",      items:[
       { icon:<UserIcon />, label:"Customers", path:"/admin/customers" },
-      { icon:<CartIcon />, label:"Orders" },
-      { icon:<DollarIcon />, label:"Payments" },
+      { icon:<ReceiptIcon />, label:"Receipts", path:"/admin/receipts" },
       { icon:<DollarIcon />, label:"Customer Prices", path:"/admin/customer-prices" },
     ] },
 ];

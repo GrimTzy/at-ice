@@ -1,15 +1,3 @@
-// src/pages/Admin/DeliveriesPage.jsx
-//
-// Admin > Deliveries. Full CRUD for outbound Deliveries (Admin assigns a
-// driver + customer + line items; Salesman later confirms with photo
-// proof, Driver marks in_transit/delivered). Inbound (supplier) deliveries
-// are intentionally not built here yet — outbound is the primary,
-// documented flow (Admin creates delivery orders → Salesman confirms →
-// Driver delivers), inbound is a future item if ever needed.
-//
-// delivery_no is auto-generated server-side (DEL-0001, DEL-0002, ...) —
-// not collected in this form.
-
 import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "../../components/AdminLayout";
 

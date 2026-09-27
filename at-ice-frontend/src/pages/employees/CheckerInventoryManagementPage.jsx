@@ -2,26 +2,6 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
 
-/**
- * MERGED PAGE: Inventory Management + Low Stock Alert (per team decision —
- * both views read from the same underlying stock data, so they're now two
- * tabs on one page instead of two separate dashboard modules).
- *
- * CORRECTED against the actual InventoryAlertController.php + InventoryAlert
- * model shape:
- * - GET /api/products              -> [{ id, name, category, unit, current_stock, minimum_stock }]
- * - GET /api/inventory-alerts?status=all
- *                                   -> [{ id, product: { id, name, current_stock, minimum_stock },
- *                                        is_resolved: boolean, message, created_at, resolved_at }]
- * - PUT /api/inventory-alerts/{id}/resolve
- *
- * FIX (this version): alerts use `is_resolved` (boolean), NOT `status`
- * ("active"/"resolved" strings). current_stock/minimum_stock live under
- * `a.product`, not at the top level of the alert. Also now fetches with
- * ?status=all so Resolved/All tabs actually return data (the backend
- * defaulted to active-only before this).
- */
-
 const ChevronLeftIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
     <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />

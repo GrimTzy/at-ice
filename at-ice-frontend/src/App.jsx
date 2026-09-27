@@ -1,13 +1,13 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute'
 
-// ── General Pages
+// -- General Pages
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import AttendanceStation from './pages/AttendanceStation'
 import LandingPageCustomer from './pages/LandingPage-customer'
 
-// ── Admin Module
+// -- Admin Module
 import AdminLogin from './pages/admin/AdminLogin'
 import Dashboard from './pages/admin/Dashboard'
 import CustomerPriceManagement from './pages/admin/CustomerPriceManagement'
@@ -15,19 +15,20 @@ import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
 import CustomersPage from './pages/Admin/CustomersPage'
 import DeliveriesPage from './pages/Admin/DeliveriesPage'
+import ReceiptsPage from './pages/Admin/ReceiptsPage'
 
-// ── Driver Module
+// -- Driver Module
 import DriverLogin from './pages/drivers/DriverLogin'
 import { DeliveriesPage as DriverDeliveriesPage } from './pages/drivers/DeliveriesPage'
 import { GpsTrackingPage } from './pages/drivers/GpsTrackingPage'
 
-// ── HR Module 
+// -- HR Module 
 import HRLogin from './pages/hr/HRLogin'
 import HRDashboard from './pages/hr/HRDashboard'
 import FaceEnrollment from './pages/hr/FaceEnrollment'
 import EmployeesPage from './pages/hr/EmployeesPage'
 
-// ── Employee Module 
+// -- Employee Module 
 import CheckerLogin from './pages/employees/CheckerLogin'
 import CheckerDashboard from './pages/employees/CheckerDashboard'
 import CheckerPickupLogPage from './pages/employees/CheckerPickupLogPage'
@@ -42,32 +43,19 @@ import MaintenanceLogin from './pages/employees/MaintenanceLogin'
 import MaintenanceDashboard from './pages/employees/MaintenanceDashboard'
 import MaintenanceStockOutRequestPage from './pages/employees/MaintenanceStockOutRequestPage'
 
-// NOTE: CheckerStockOutReleasePage import REMOVED — release action moved to
-// Admin's StockOutApprovalPage.jsx per team decision.
-//
-// NOTE: CheckerLowStockAlertPage import REMOVED — merged into
-// CheckerInventoryManagementPage.jsx as a second tab ("Low Stock Alert"),
-// since both pages read from closely related stock data. No route needed
-// for it anymore; /checker/inventory now covers both views.
-//
-// NOTE: Admin's new DeliveriesPage.jsx (SCM > Deliveries, /admin/deliveries)
-// is aliased as the default import here. The Driver module's own, unrelated
-// DeliveriesPage.jsx (/driver/deliveries) is aliased as DriverDeliveriesPage
-// to avoid a naming collision — two different pages that happen to share
-// a component name across different folders.
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* ── General (public, no auth needed) ── */}
+        {/* -- General (public, no auth needed) -- */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/attendance-station" element={<AttendanceStation />} />
         <Route path="/customer" element={<LandingPageCustomer />} />
 
-        {/* ── Admin Module ── */}
+        {/* -- Admin Module -- */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route
           path="/dashboard"
@@ -125,8 +113,18 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* Receipts — auto-generated on Salesman delivery confirmation.
+            Admin tracks payment status here and marks receipts paid. */}
+        <Route
+          path="/admin/receipts"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <ReceiptsPage />
+            </ProtectedRoute>
+          }
+        />
 
-        {/* ── HR Module ── */}
+        {/* -- HR Module -- */}
         <Route path="/hr/login" element={<HRLogin />} />
         <Route
           path="/hr/dashboard"
@@ -153,7 +151,7 @@ function App() {
           }
         />
 
-        {/* ── Driver Module ── */}
+        {/* -- Driver Module -- */}
         <Route path="/driver/login" element={<DriverLogin />} />
         <Route
           path="/driver/deliveries"
@@ -172,7 +170,7 @@ function App() {
           }
         />
 
-        {/* ── Employee Module (Phase 13) ── */}
+        {/* -- Employee Module (Phase 13) -- */}
         <Route path="/checker/login" element={<CheckerLogin />} />
         <Route
           path="/checker/dashboard"

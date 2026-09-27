@@ -2,19 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
 
-/**
- * Field shape confirmed against the actual SupplierController.php:
- * - supplier_code  (required, unique)
- * - name           (required)
- * - contact_person (optional)
- * - contact_number (optional) — NOT "phone"
- * - email          (optional)
- * - address        (optional)
- * - city           (optional)
- * - province       (optional)
- * - notes          (optional)
- */
-
 const ChevronLeftIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
     <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />

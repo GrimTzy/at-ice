@@ -1,13 +1,3 @@
-// src/pages/Admin/CustomersPage.jsx
-//
-// Admin > Customers. Full CRUD for Customer CRM records (name, address,
-// contact info, mode of payment), plus a separate "Create Login" action
-// per row that provisions a Customer Portal account (role: customer) for
-// an existing Customer record — kept as a distinct action from
-// create/edit because a Customer can legitimately exist as a CRM record
-// only, during inquiry/negotiation, before a contract is signed and a
-// portal login is actually needed.
-
 import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "../../components/AdminLayout";
 
@@ -50,7 +40,7 @@ export default function CustomersPage() {
 
   const [deactivateTarget, setDeactivateTarget] = useState(null);
 
-  // Holds the just-created credentials so Admin can copy them — shown
+  // Holds the just-created credentials so Admin can copy them - shown
   // once, never re-fetchable afterward (password is hashed server-side).
   const [newAccount, setNewAccount] = useState(null);
   const [creatingAccountFor, setCreatingAccountFor] = useState(null);

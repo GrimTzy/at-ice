@@ -5,7 +5,7 @@ import {
   Mail, Phone, MapPin, ShoppingCart, Menu, X
 } from 'lucide-react';
 
-// ─── Button ───────────────────────────────────────────────────────────────────
+//  Button 
 function Button({ variant = 'primary', size = 'md', className = '', children, ...props }) {
   const base = 'inline-flex items-center justify-center gap-2 rounded-lg transition-all duration-200 font-medium focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:opacity-50 disabled:cursor-not-allowed';
   const variants = {
@@ -22,7 +22,7 @@ function Button({ variant = 'primary', size = 'md', className = '', children, ..
   );
 }
 
-// ─── Header ───────────────────────────────────────────────────────────────────
+// ─── Header 
 function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
