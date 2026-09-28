@@ -9,12 +9,13 @@ import LandingPageCustomer from './pages/LandingPage-customer'
 
 // -- Admin Module
 import AdminLogin from './pages/admin/AdminLogin'
-import Dashboard from './pages/admin/Dashboard'
+import Dashboard from './pages/Admin/Dashboard'
 import CustomerPriceManagement from './pages/admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
 import CustomersPage from './pages/Admin/CustomersPage'
 import DeliveriesPage from './pages/Admin/DeliveriesPage'
+import DeliveryProofsPage from './pages/Admin/DeliveryProofsPage'
 import ReceiptsPage from './pages/Admin/ReceiptsPage'
 
 // -- Driver Module
@@ -110,6 +111,16 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <DeliveriesPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Delivery Proofs — view-only. Photo + quantity confirmed by
+            Salesmen, with the auto-generated receipt breakdown. */}
+        <Route
+          path="/admin/delivery-proofs"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <DeliveryProofsPage />
             </ProtectedRoute>
           }
         />

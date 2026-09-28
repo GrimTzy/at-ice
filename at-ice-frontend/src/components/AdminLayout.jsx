@@ -20,7 +20,7 @@ const navSections = [
   { label:"HRIS",     items:[{ icon:<UsersIcon />, label:"Employees", path:"/admin/employees" }] },
   { label:"SCM",      items:[
       { icon:<TruckIcon />, label:"Deliveries", path:"/admin/deliveries" },
-      { icon:<CheckIcon />, label:"Delivery Proofs" },
+      { icon:<CheckIcon />, label:"Delivery Proofs", path:"/admin/delivery-proofs" },
       { icon:<ClipboardIcon />, label:"Stock-Out Approvals", path:"/admin/stock-out-approvals" },
     ] },
   { label:"CRM",      items:[
