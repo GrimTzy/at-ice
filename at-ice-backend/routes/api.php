@@ -40,6 +40,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me',      [AuthController::class, 'me']);
 
+    // Change own password (all roles). Throttled: 5 attempts per minute.
+    Route::put('/change-password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
+    Route::post('/logout-others',  [AuthController::class, 'logoutOthers'])->middleware('throttle:5,1');
+
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
 

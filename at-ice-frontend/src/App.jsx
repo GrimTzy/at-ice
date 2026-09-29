@@ -9,7 +9,7 @@ import LandingPageCustomer from './pages/LandingPage-customer'
 
 // -- Admin Module
 import AdminLogin from './pages/admin/AdminLogin'
-import Dashboard from './pages/Admin/Dashboard'
+import Dashboard from './pages/admin/Dashboard'
 import CustomerPriceManagement from './pages/admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
@@ -17,6 +17,7 @@ import CustomersPage from './pages/Admin/CustomersPage'
 import DeliveriesPage from './pages/Admin/DeliveriesPage'
 import DeliveryProofsPage from './pages/Admin/DeliveryProofsPage'
 import ReceiptsPage from './pages/Admin/ReceiptsPage'
+import SettingsPage from './pages/Admin/SettingsPage'
 
 // -- Driver Module
 import DriverLogin from './pages/drivers/DriverLogin'
@@ -131,6 +132,16 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <ReceiptsPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Settings — account only: profile, change password,
+            sign out other devices. */}
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <SettingsPage />
             </ProtectedRoute>
           }
         />

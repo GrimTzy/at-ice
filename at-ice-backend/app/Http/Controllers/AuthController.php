@@ -79,4 +79,47 @@ class AuthController extends Controller
     {
         return response()->json($request->user());
     }
+
+    // CHANGE PASSWORD (any logged-in role: admin, hr, employee, driver, customer)
+    // Requires the current password, and signs out every OTHER device/session
+    // so a leaked initial password stops working right after it is changed.
+    public function changePassword(Request $request)
+    {
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'password'         => 'required|string|min:8|max:100|confirmed|different:current_password',
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            return response()->json([
+                'message' => 'Your current password is incorrect.',
+                'errors'  => ['current_password' => ['Your current password is incorrect.']],
+            ], 422);
+        }
+
+        $user->update(['password' => Hash::make($validated['password'])]);
+
+        $currentTokenId = $request->user()->currentAccessToken()->id;
+        $user->tokens()->where('id', '!=', $currentTokenId)->delete();
+
+        return response()->json(['message' => 'Password changed successfully.']);
+    }
+
+    // SIGN OUT OTHER DEVICES (all roles)
+    // Deletes every token of this user except the one used for this request,
+    // so the current device stays signed in.
+    public function logoutOthers(Request $request)
+    {
+        $currentTokenId = $request->user()->currentAccessToken()->id;
+        $count = $request->user()->tokens()->where('id', '!=', $currentTokenId)->delete();
+
+        return response()->json([
+            'message'     => $count > 0
+                ? "Signed out of {$count} other device(s)."
+                : 'No other devices were signed in.',
+            'signed_out'  => $count,
+        ]);
+    }
 }
