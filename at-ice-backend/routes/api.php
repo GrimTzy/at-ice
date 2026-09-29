@@ -24,6 +24,7 @@ use App\Http\Controllers\CustomerPriceController;
 use App\Http\Controllers\PickupLogController;
 use App\Http\Controllers\IceLoadingController;
 use App\Http\Controllers\StockOutRequestController;
+use App\Http\Controllers\CustomerPortalController;
 
 //Public
 Route::post('/login', [AuthController::class, 'login']);
@@ -219,8 +220,20 @@ Route::middleware('auth:sanctum')->group(function () {
     // CUSTOMER ROUTES
     Route::middleware('role:customer')->group(function () {
 
+        // my-orders/my-payments read from Order/Payment, which are dead
+        // code as of v29.9 (the real flow is Delivery -> DeliveryProof ->
+        // Receipt). Left in place, unused by the portal below, no
+        // functional risk in leaving them.
         Route::get('my-orders',   [OrderController::class, 'myOrders']);
         Route::get('my-payments', [PaymentController::class, 'myPayments']);
+
+        // Customer Portal — real endpoints, scoped to the logged-in
+        // customer via customers.user_id (see CustomerPortalController).
+        Route::get('my-delivery-history', [CustomerPortalController::class, 'myDeliveries']);
+        Route::get('my-receipts',        [CustomerPortalController::class, 'myReceipts']);
+        Route::get('my-delivery-proofs', [CustomerPortalController::class, 'myDeliveryProofs']);
+        Route::get('my-prices',          [CustomerPortalController::class, 'myPrices']);
+
         Route::get('/customer/dashboard', function () {
             return response()->json(['message' => 'Welcome Customer!']);
         });

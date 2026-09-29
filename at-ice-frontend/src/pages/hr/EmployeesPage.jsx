@@ -12,6 +12,12 @@
 // here alongside Checker/Salesman/Maintenance, since they're genuinely
 // part of the workforce HR needs to track.
 //
+// v29 (this session): Driver rows now also collect a Vehicle Plate
+// Number, stored on employees.vehicle_plate (nullable, Driver-only —
+// EmployeeController forces this to null server-side for every other
+// role regardless of what's sent). Shown only when Employee Role is
+// Driver on create, or when the employee being edited is a Driver.
+//
 // Payroll tab: computes Gross Pay, SSS, PhilHealth, Pag-IBIG, and
 // withholding tax on the frontend using published 2026 Philippine rates
 // (SSS: 15% of Monthly Salary Credit, 5% employee share, MSC floor 5,000
@@ -59,6 +65,7 @@ const emptyForm = {
   phone: "", address: "", position: "", department: "",
   date_hired: "", shift: "day",
   employment_type: "regular", sub_role: "",
+  vehicle_plate: "", // Driver-only — ignored server-side for every other role
   _userRole: "", // display-only, set when editing — lets the Edit modal
                  // show "Driver" even though Driver has no sub_role
 };
@@ -174,6 +181,7 @@ export default function EmployeesPage() {
       shift: emp.shift || "day",
       employment_type: emp.employment_type || "regular",
       sub_role: emp.user?.sub_role || "",  // display-only in edit mode
+      vehicle_plate: emp.vehicle_plate || "",
       _userRole: emp.user?.role || "",     // needed to detect Driver, who has no sub_role
     });
     setFormErrors({});
@@ -184,6 +192,10 @@ export default function EmployeesPage() {
 
   const handleChange = (field) => (e) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const isDriverForm = editingId
+    ? form._userRole === "driver"
+    : form.sub_role === "driver";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -203,12 +215,14 @@ export default function EmployeesPage() {
           daily_rate: 0, date_hired: form.date_hired,
           shift: form.shift, employment_type: form.employment_type,
           sub_role: form.sub_role || null,
+          vehicle_plate: form.sub_role === "driver" ? (form.vehicle_plate || null) : null,
         }
       : {
           first_name: form.first_name, last_name: form.last_name,
           phone: form.phone, address: form.address,
           position: form.position, department: form.department,
           shift: form.shift, employment_type: form.employment_type,
+          vehicle_plate: form._userRole === "driver" ? (form.vehicle_plate || null) : null,
         };
 
     try {
@@ -315,6 +329,9 @@ export default function EmployeesPage() {
                         </span>
                       ) : (
                         <span className="text-slate-300">—</span>
+                      )}
+                      {emp.user?.role === "driver" && emp.vehicle_plate && (
+                        <div className="text-[10px] text-slate-400 mt-1 font-mono">PN: {emp.vehicle_plate}</div>
                       )}
                     </td>
                     <td className="px-5 py-3 text-slate-600 capitalize">{emp.shift}</td>
@@ -438,6 +455,20 @@ export default function EmployeesPage() {
                     return r ? r.charAt(0).toUpperCase() + r.slice(1) : "—";
                   })()} · Not editable here.
                 </div>
+              )}
+
+              {isDriverForm && (
+                <Field label="Vehicle Plate Number" error={formErrors.vehicle_plate}>
+                  <input
+                    value={form.vehicle_plate}
+                    onChange={handleChange("vehicle_plate")}
+                    placeholder="e.g. V7824"
+                    className={inputCls}
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    Optional. Shown to customers alongside the driver's name (e.g. "Rhalf Valencia (PN: V7824)").
+                  </span>
+                </Field>
               )}
 
               <div className="grid grid-cols-2 gap-3">

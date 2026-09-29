@@ -22,6 +22,7 @@ class Employee extends Model
         'date_hired',
         'employment_type',
         'shift',
+        'vehicle_plate',
         'is_active',
     ];
 

@@ -49,6 +49,10 @@ class EmployeeController extends Controller
             // own top-level `role` instead so /driver/login and
             // role:driver routes keep working unchanged.
             'sub_role' => 'nullable|in:checker,salesman,maintenance,driver',
+            // vehicle_plate: only meaningful for Driver, but validated
+            // generically here — the frontend only shows/sends this field
+            // when Employee Role is set to Driver.
+            'vehicle_plate' => 'nullable|string|max:20',
         ]);
 
         $isDriver = $request->sub_role === 'driver';
@@ -80,6 +84,9 @@ class EmployeeController extends Controller
             'date_hired' => $request->date_hired,
             'employment_type' => $request->employment_type,
             'shift' => $request->shift,
+            // Only ever meaningful for Driver rows; left null for everyone
+            // else regardless of what the request sends.
+            'vehicle_plate' => $isDriver ? $request->vehicle_plate : null,
         ]);
 
         return response()->json([
@@ -100,6 +107,10 @@ class EmployeeController extends Controller
     {
         $employee = Employee::findOrFail($id);
 
+        $request->validate([
+            'vehicle_plate' => 'nullable|string|max:20',
+        ]);
+
         $employee->update($request->only([
             'first_name',
             'last_name',
@@ -110,6 +121,7 @@ class EmployeeController extends Controller
             'daily_rate',
             'shift',
             'employment_type',
+            'vehicle_plate',
         ]));
 
         return response()->json([
