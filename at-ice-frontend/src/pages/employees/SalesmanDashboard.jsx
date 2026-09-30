@@ -88,6 +88,13 @@ export default function SalesmanDashboard() {
     fetchDeliveries();
   }, []);
 
+  // Sign out: clear the session first (same as the Checker and Driver pages).
+  // Previously this only navigated to the login page and kept the token.
+  const handleLogout = () => {
+    ["token", "role", "sub_role", "user"].forEach((k) => localStorage.removeItem(k));
+    navigate("/salesman/login");
+  };
+
   const statusLabel = (s) => STATUS_CONFIG[s]?.label || s;
   const visible =
     filter === "All"
@@ -119,7 +126,8 @@ export default function SalesmanDashboard() {
             </div>
           </div>
           <button
-            onClick={() => navigate("/salesman/login")}
+            onClick={handleLogout}
+            title="Sign out"
             className="flex items-center gap-1.5 text-slate-400 active:text-red-500 transition-colors cursor-pointer p-1"
           >
             <LogOutIcon />
@@ -181,7 +189,9 @@ export default function SalesmanDashboard() {
             const open = expanded === d.id;
             const storeName = d.store_name || d.customer?.name || "Store";
             const address = d.address || d.customer?.address || "—";
-            const orderCode = `DEL-${String(d.id).padStart(4, "0")}`;
+            // Real delivery number (DEL-0007). Previously this was built
+            // from the database id, which showed DEL-0008 for id 8.
+            const orderCode = d.delivery_no || `#${d.id}`;
 
             return (
               <div key={d.id} className="bg-white border border-black/[0.08] rounded-2xl overflow-hidden shadow-sm">
@@ -251,7 +261,7 @@ export default function SalesmanDashboard() {
                         </div>
                       )}
                     </div>
-
+                      
                     {d.status !== "delivered" && d.status !== "cancelled" && (
                       <button
                         onClick={() => navigate(`/salesman/deliveries/${d.id}/confirm`)}

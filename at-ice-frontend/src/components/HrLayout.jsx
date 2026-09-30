@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import bgImage from "../assets/iceproduct.png";
+import { useNightMode, NightStyle, NightToggle, nightOverlay } from "./NightMode";
 
 const GridIcon     = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
 const UsersIcon    = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
@@ -12,7 +13,6 @@ const CalIcon      = () => <svg width="12" height="12" fill="none" stroke="curre
 const ChevRight    = () => <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>;
 const LogOutIcon   = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
-// Items without a `path` are not built yet (same convention as AdminLayout)
 const navSections = [
   { label: "Overview", items: [{ icon: <GridIcon />, label: "HR Dashboard", path: "/hr/dashboard" }] },
   {
@@ -32,6 +32,7 @@ export default function HrLayout({ pageTitle, breadcrumb, headerActions, childre
   const navigate = useNavigate();
   const location = useLocation();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const [dark, setDark] = useNightMode();
 
   const today = new Date().toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" });
 
@@ -40,8 +41,11 @@ export default function HrLayout({ pageTitle, breadcrumb, headerActions, childre
     navigate("/hr/login");
   };
 
+  const overlay = nightOverlay(dark);
+
   return (
-    <div className="flex font-sans text-[13px] leading-relaxed bg-[#0a0d12] text-slate-800 min-h-screen">
+    <div className={`${dark ? "cp-dark " : ""}flex font-sans text-[13px] leading-relaxed bg-[#0a0d12] text-slate-800 min-h-screen`}>
+      <NightStyle />
 
       {/* SIDEBAR */}
       <aside className="w-[220px] min-h-screen bg-white border-r border-black/[0.09] flex flex-col flex-shrink-0 sticky top-0 h-screen overflow-y-auto">
@@ -106,6 +110,7 @@ export default function HrLayout({ pageTitle, breadcrumb, headerActions, childre
           </div>
           <div className="flex-1" />
           {headerActions}
+          <NightToggle dark={dark} onToggle={() => setDark((d) => !d)} />
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/[0.09] rounded-md text-xs text-slate-500">
             <CalIcon /> {today}
           </div>
@@ -114,7 +119,7 @@ export default function HrLayout({ pageTitle, breadcrumb, headerActions, childre
         <main
           className="flex-1 overflow-y-auto p-6 pb-8 flex flex-col gap-4"
           style={{
-            backgroundImage: `linear-gradient(rgba(248,250,252,0.88), rgba(248,250,252,0.88)), url(${bgImage})`,
+            backgroundImage: `linear-gradient(${overlay}, ${overlay}), url(${bgImage})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
             backgroundAttachment: "fixed",

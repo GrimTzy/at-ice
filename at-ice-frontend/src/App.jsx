@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute'
+import { NightScope } from './components/NightMode'
 
 // -- General Pages
 import LandingPage from './pages/LandingPage'
@@ -277,13 +278,13 @@ function App() {
           }
         />
 
-        {/* -- Driver Module -- */}
+        {/* -- Driver Module (night mode through NightScope) -- */}
         <Route path="/driver/login" element={<DriverLogin />} />
         <Route
           path="/driver/deliveries"
           element={
             <ProtectedRoute allowedRoles={["driver"]}>
-              <DriverDeliveriesPage />
+              <NightScope><DriverDeliveriesPage /></NightScope>
             </ProtectedRoute>
           }
         />
@@ -291,18 +292,18 @@ function App() {
           path="/driver/gps"
           element={
             <ProtectedRoute allowedRoles={["driver"]}>
-              <GpsTrackingPage />
+              <NightScope><GpsTrackingPage /></NightScope>
             </ProtectedRoute>
           }
         />
 
-        {/* -- Employee Module (Phase 13) -- */}
+        {/* -- Employee Module (Phase 13, night mode through NightScope) -- */}
         <Route path="/checker/login" element={<CheckerLogin />} />
         <Route
           path="/checker/dashboard"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <CheckerDashboard />
+              <NightScope><CheckerDashboard /></NightScope>
             </ProtectedRoute>
           }
         />
@@ -310,7 +311,7 @@ function App() {
           path="/checker/pickup-log"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <CheckerPickupLogPage />
+              <NightScope><CheckerPickupLogPage /></NightScope>
             </ProtectedRoute>
           }
         />
@@ -318,7 +319,7 @@ function App() {
           path="/checker/ice-loading"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <CheckerIceLoadingPage />
+              <NightScope><CheckerIceLoadingPage /></NightScope>
             </ProtectedRoute>
           }
         />
@@ -326,7 +327,7 @@ function App() {
           path="/checker/inventory"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <CheckerInventoryManagementPage />
+              <NightScope><CheckerInventoryManagementPage /></NightScope>
             </ProtectedRoute>
           }
         />
@@ -334,7 +335,7 @@ function App() {
           path="/checker/stock-movements"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <CheckerStockMovementsPage />
+              <NightScope><CheckerStockMovementsPage /></NightScope>
             </ProtectedRoute>
           }
         />
@@ -342,7 +343,7 @@ function App() {
           path="/checker/suppliers"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <CheckerSupplierManagementPage />
+              <NightScope><CheckerSupplierManagementPage /></NightScope>
             </ProtectedRoute>
           }
         />
@@ -352,7 +353,7 @@ function App() {
           path="/salesman/deliveries"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["salesman"]}>
-              <SalesmanDashboard />
+              <NightScope><SalesmanDashboard /></NightScope>
             </ProtectedRoute>
           }
         />
@@ -360,7 +361,7 @@ function App() {
           path="/salesman/deliveries/:id/confirm"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["salesman"]}>
-              <SalesmanDeliveryConfirmation />
+              <NightScope><SalesmanDeliveryConfirmation /></NightScope>
             </ProtectedRoute>
           }
         />
@@ -369,7 +370,7 @@ function App() {
           path="/maintenance/dashboard"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
-              <MaintenanceDashboard />
+              <NightScope><MaintenanceDashboard /></NightScope>
             </ProtectedRoute>
           }
         />
@@ -377,7 +378,7 @@ function App() {
           path="/maintenance/stock-out-request"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
-              <MaintenanceStockOutRequestPage />
+              <NightScope><MaintenanceStockOutRequestPage /></NightScope>
             </ProtectedRoute>
           }
         />

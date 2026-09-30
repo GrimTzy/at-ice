@@ -8,10 +8,43 @@ const LOGIN_PATH_BY_ROLE = {
   customer: "/customer/login",
 };
 
+const LOGIN_PATH_BY_SUB_ROLE = {
+  checker: "/checker/login",
+  salesman: "/salesman/login",
+  maintenance: "/maintenance/login",
+};
+
+const HOME_PATH_BY_ROLE = {
+  admin: "/dashboard",
+  hr: "/hr/dashboard",
+  driver: "/driver/deliveries",
+  customer: "/customer/dashboard",
+};
+
+const HOME_PATH_BY_SUB_ROLE = {
+  checker: "/checker/dashboard",
+  salesman: "/salesman/deliveries",
+  maintenance: "/maintenance/dashboard",
+};
+
+function loginPathFor(role, subRole) {
+  if (role === "employee" && subRole && LOGIN_PATH_BY_SUB_ROLE[subRole]) {
+    return LOGIN_PATH_BY_SUB_ROLE[subRole];
+  }
+  return LOGIN_PATH_BY_ROLE[role] || "/login";
+}
+
+function homePathFor(role, subRole) {
+  if (role === "employee") {
+    return HOME_PATH_BY_SUB_ROLE[subRole] || loginPathFor(role, subRole);
+  }
+  return HOME_PATH_BY_ROLE[role] || "/login";
+}
+
 export default function ProtectedRoute({
   children,
-  allowedRoles,    
-  allowedSubRoles,  
+  allowedRoles,
+  allowedSubRoles,
 }) {
   const location = useLocation();
 
@@ -19,25 +52,24 @@ export default function ProtectedRoute({
   const role = localStorage.getItem("role");
   const subRole = localStorage.getItem("sub_role");
 
-  // Not logged in at all
   if (!token) {
-    const fallbackLoginPath =
-      (allowedRoles && allowedRoles[0] && LOGIN_PATH_BY_ROLE[allowedRoles[0]]) ||
-      "/login";
-    return <Navigate to={fallbackLoginPath} replace state={{ from: location }} />;
+    const routeRole = allowedRoles?.[0];
+    const routeSubRole = allowedSubRoles?.[0];
+    return (
+      <Navigate
+        to={loginPathFor(routeRole, routeSubRole)}
+        replace
+        state={{ from: location }}
+      />
+    );
   }
 
-  // Logged in, but wrong role for this route
   if (allowedRoles && !allowedRoles.includes(role)) {
-    const correctLoginPath = LOGIN_PATH_BY_ROLE[role] || "/login";
-    return <Navigate to={correctLoginPath} replace />;
+    return <Navigate to={homePathFor(role, subRole)} replace />;
   }
 
-  // Logged in with correct role, but wrong sub_role (e.g. Checker trying to
-  // open Salesman's dashboard)
   if (allowedSubRoles && !allowedSubRoles.includes(subRole)) {
-    const correctLoginPath = LOGIN_PATH_BY_ROLE[role] || "/login";
-    return <Navigate to={correctLoginPath} replace />;
+    return <Navigate to={homePathFor(role, subRole)} replace />;
   }
 
   return children;

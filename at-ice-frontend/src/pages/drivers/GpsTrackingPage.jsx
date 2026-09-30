@@ -85,8 +85,19 @@ export function GpsTrackingPage() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const token = localStorage.getItem("token");
 
-  const pending   = stores.filter((s) => s.status === "pending" || s.status === "in_transit").length;
+  // Counted separately so the header matches the Deliveries page
+  // (previously "Pending" also included In Transit stops).
+  const pending   = stores.filter((s) => s.status === "pending").length;
+  const inTransit = stores.filter((s) => s.status === "in_transit").length;
   const delivered = stores.filter((s) => s.status === "delivered").length;
+
+  // Sign out: clear the session first (same as the Deliveries page).
+  // Previously this only navigated to the login page and kept the token.
+  const handleLogout = () => {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    ["token", "role", "sub_role", "user"].forEach((k) => localStorage.removeItem(k));
+    navigate("/driver/login");
+  };
 
   // ── Fetch real deliveries (same endpoint DeliveriesPage.jsx uses) ─────────
   useEffect(() => {
@@ -119,7 +130,8 @@ export function GpsTrackingPage() {
     echoChannelRef.current = channel;
 
     channel.listen(".delivery.status.updated", (e) => {
-      if (e.driver_id !== user?.id) return;
+      // String comparison: the id can arrive as a number or a string
+      if (String(e.driver_id) !== String(user?.id)) return;
       setStores((prev) =>
         prev.map((s) => (s.id === e.delivery_id ? { ...s, status: e.status } : s))
       );
@@ -302,7 +314,8 @@ export function GpsTrackingPage() {
               {gpsStatus === "active" ? "GPS Active" : gpsStatus === "error" ? "GPS Error" : "Acquiring..."}
             </div>
             <button
-              onClick={() => navigate("/driver/login")}
+              onClick={handleLogout}
+              title="Sign out"
               className="text-slate-400 active:text-red-500 transition-colors cursor-pointer p-1"
             >
               <LogOutIcon />
@@ -319,6 +332,7 @@ export function GpsTrackingPage() {
           {[
             { label: "Total Stops", value: stores.length, color: "text-slate-800" },
             { label: "Pending",     value: pending,       color: "text-amber-500" },
+            { label: "In Transit",  value: inTransit,     color: "text-blue-500"  },
             { label: "Delivered",   value: delivered,     color: "text-green-500" },
           ].map((s) => (
             <div key={s.label} className="flex-1 bg-slate-50 border border-black/[0.08] rounded-xl px-2 py-2 text-center">
@@ -361,10 +375,10 @@ export function GpsTrackingPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_CONFIG[selectedStore.status]?.dot}`} />
-                  <span className="text-[13px] font-semibold text-slate-800 truncate">{selectedStore.customer?.name}</span>
+                  <span className="text-[13px] font-semibold text-slate-800 truncate">{selectedStore.customer?.name || "Unknown Customer"}</span>
                 </div>
                 <div className="flex items-center gap-1 text-[11px] text-slate-400 mb-0.5">
-                  <MapPinIcon />{selectedStore.customer?.address}
+                  <MapPinIcon />{selectedStore.customer?.address || "No address on record"}
                 </div>
                 <div className="flex items-center gap-1 text-[11px] text-slate-400">
                   <PackageIcon />{itemsSummary(selectedStore)}
@@ -424,8 +438,9 @@ export function GpsTrackingPage() {
               >
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-semibold text-slate-800 truncate">{store.customer?.name}</div>
-                  <div className="text-[10px] text-slate-400 truncate mt-0.5">{store.customer?.address}</div>
+                  {/* Fallback name: the old seed delivery has no customer */}
+                  <div className="text-[12px] font-semibold text-slate-800 truncate">{store.customer?.name || "Unknown Customer"}</div>
+                  <div className="text-[10px] text-slate-400 truncate mt-0.5">{store.customer?.address || store.delivery_no}</div>
                 </div>
                 <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${cfg.bg} ${cfg.text}`}>
                   {cfg.label}
