@@ -1,8 +1,10 @@
 # Deploying AT Ice (Coolify)
 
 Production runs as one Coolify **Docker Compose** resource built from
-`docker-compose.yml` on the `main` branch. A push to `main` redeploys
-automatically.
+`docker-compose.yml` on the `main` branch (Coolify project "AT Ice", server
+`localhost`). A push to `main` redeploys automatically through Coolify's
+GitHub App; if that build fails, the running version stays up. GitHub Actions
+(`.github/workflows/ci.yml`) builds both images on every push and PR as a check.
 
 ```
 Internet ─▶ Coolify proxy (TLS) ─▶ frontend (nginx :80)

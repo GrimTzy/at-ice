@@ -1,0 +1,37 @@
+# CI: build both production images on every push to main and on every PR,
+# so a broken Dockerfile or frontend build shows up on GitHub.
+# Deployment itself is done by Coolify's GitHub App, which auto-deploys
+# main on push; if that build fails, the running version stays up.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: at-ice-backend
+          push: false
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: at-ice-frontend
+          push: false
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max

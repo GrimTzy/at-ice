@@ -15,7 +15,10 @@ return new class extends Migration
         $table->id();
         $table->string('delivery_no')->unique();
         $table->foreignId('driver_id')->constrained('users');
-        $table->foreignId('customer_id')->nullable()->constrained('customers')->nullOnDelete();
+        // The customers table does not exist yet at this point (created 2026_04_06),
+        // so MySQL rejects a FK to it. It originally pointed at users;
+        // 2026_06_07_..._fix_customer_id_foreign_key_on_deliveries_table re-points it to customers.
+        $table->foreignId('customer_id')->nullable()->constrained('users')->nullOnDelete();
         $table->enum('delivery_type', ['outbound', 'inbound'])->default('outbound');
         $table->foreignId('supplier_id')->nullable()->constrained('suppliers');
         $table->enum('status', ['pending', 'in_transit', 'delivered', 'cancelled'])->default('pending');
