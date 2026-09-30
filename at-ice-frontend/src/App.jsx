@@ -3,15 +3,14 @@ import ProtectedRoute from './components/ProtectedRoute'
 import { NightScope } from './components/NightMode'
 
 // -- General Pages
-import LandingPage from './pages/LandingPage'
-import LoginPage from './pages/LoginPage'
+import PortalPage from './pages/PortalPage'
 import AttendanceStation from './pages/AttendanceStation'
-import LandingPageCustomer from './pages/LandingPage-customer'
 
-// -- Admin Module
-import AdminLogin from './pages/admin/AdminLogin'
-import Dashboard from './pages/admin/Dashboard'
-import CustomerPriceManagement from './pages/admin/CustomerPriceManagement'
+// -- Admin Module (folder is "Admin" with a capital A: Linux servers are
+// case-sensitive, so every import must match it exactly)
+import AdminLogin from './pages/Admin/AdminLogin'
+import Dashboard from './pages/Admin/Dashboard'
+import CustomerPriceManagement from './pages/Admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
 import CustomersPage from './pages/Admin/CustomersPage'
@@ -66,10 +65,11 @@ function App() {
       <Routes>
 
         {/* -- General (public, no auth needed) -- */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
+        {/* Portal: one card per module. "/login" is also ProtectedRoute's
+            last-resort fallback, so it shows the portal too. */}
+        <Route path="/" element={<PortalPage />} />
+        <Route path="/login" element={<PortalPage />} />
         <Route path="/attendance-station" element={<AttendanceStation />} />
-        <Route path="/customer" element={<LandingPageCustomer />} />
 
         {/* -- Customer Module -- */}
         <Route path="/customer/login" element={<CustomerLogin />} />
@@ -383,7 +383,8 @@ function App() {
           }
         />
 
-         <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Any unknown URL goes to the portal instead of a blank screen */}
+        <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>
     </BrowserRouter>
