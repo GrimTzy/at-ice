@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local env (production values live in Coolify)
+.env
+.env.*
+!.env.example

@@ -1,0 +1,97 @@
+# AT Ice — production stack for Coolify (Docker Compose build pack).
+# Only `frontend` is public: https://www.atice.cloud (canonical) and
+# https://atice.cloud (nginx 301s it to www). It serves the SPA and
+# forwards /api to `backend` over the internal network; backend, worker
+# and mysql are never exposed. Values come from Coolify's environment
+# variables — see .env.production.example for the full list.
+
+services:
+  frontend:
+    build:
+      context: ./at-ice-frontend
+      args:
+        VITE_PUSHER_APP_KEY: ${PUSHER_APP_KEY}
+        VITE_PUSHER_APP_CLUSTER: ${PUSHER_APP_CLUSTER:-ap1}
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
+        VITE_BACKEND_URL: ${APP_URL:-https://www.atice.cloud}
+    volumes:
+      - public-storage:/srv/storage:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build: ./at-ice-backend
+    environment: &laravel-env
+      APP_NAME: "AT Ice"
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY}
+      APP_URL: ${APP_URL:-https://www.atice.cloud}
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: ${DB_DATABASE:-atice}
+      DB_USERNAME: ${DB_USERNAME:-atice}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SESSION_DRIVER: database
+      SESSION_SECURE_COOKIE: "true"
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      FILESYSTEM_DISK: local
+      BROADCAST_CONNECTION: ${BROADCAST_CONNECTION:-pusher}
+      PUSHER_APP_ID: ${PUSHER_APP_ID}
+      PUSHER_APP_KEY: ${PUSHER_APP_KEY}
+      PUSHER_APP_SECRET: ${PUSHER_APP_SECRET}
+      PUSHER_APP_CLUSTER: ${PUSHER_APP_CLUSTER:-ap1}
+      CORS_ALLOWED_ORIGINS: ${APP_URL:-https://www.atice.cloud}
+      SANCTUM_EXPIRATION: "1440"
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      MAIL_MAILER: log
+      RUN_MIGRATIONS: "true"
+    volumes:
+      - public-storage:/var/www/html/storage/app/public
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+
+  worker:
+    build: ./at-ice-backend
+    command: ["php", "artisan", "queue:work", "--tries=3", "--backoff=5", "--sleep=3", "--max-time=3600"]
+    environment:
+      <<: *laravel-env
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-atice}
+      MYSQL_USER: ${DB_USERNAME:-atice}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  public-storage:
+  mysql-data:
