@@ -329,8 +329,8 @@ export default function Dashboard() {
             <div className="grid grid-cols-5 border-t border-black/[0.09]">
               {[
                 ["Total Sales",      fmt(sales.this_month_total),  false],
-                ["Total Orders",     String(sales.total_orders||0), false],
-                ["Avg Order Value",  fmt(sales.avg_order_value),   false],
+                ["Total Receipts",    String(sales.total_orders||0), false],
+                ["Avg Receipt Value", fmt(sales.avg_order_value),   false],
                 ["Paid",             fmt(sales.paid_this_month),   false],
                 ["Unpaid",           fmt(sales.unpaid_this_month), true ],
               ].map(([label,val,danger],i) => (

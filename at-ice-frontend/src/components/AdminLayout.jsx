@@ -21,9 +21,11 @@ const SettingsIcon = () => <svg width="14" height="14" fill="none" stroke="curre
 const navSections = [
   { label:"Overview", items:[{ icon:<GridIcon />, label:"Dashboard", path:"/dashboard" }] },
   { label:"HRIS",     items:[{ icon:<UsersIcon />, label:"Employees", path:"/admin/employees" }] },
-  { label:"SCM",      items:[
+  { label:"Delivery", items:[
       { icon:<TruckIcon />, label:"Deliveries", path:"/admin/deliveries" },
       { icon:<CheckIcon />, label:"Delivery Proofs", path:"/admin/delivery-proofs" },
+    ] },
+  { label:"Inventory", items:[
       { icon:<ClipboardIcon />, label:"Stock-Out Approvals", path:"/admin/stock-out-approvals" },
     ] },
   { label:"CRM",      items:[
