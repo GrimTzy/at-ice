@@ -75,7 +75,10 @@ class CustomerPortalController extends Controller
                 'confirmed_at'   => $proof?->confirmed_at,
                 'items'          => $delivery->items->map(function ($item) {
                     return [
-                        'product_name'       => $item->product?->name,
+                        // Ice deliveries use product_type (bags, small_sack,
+                        // big_sack); older rows still use a products row.
+                        'product_type'       => $item->product_type,
+                        'product_name'       => $item->product_label,
                         'quantity_ordered'   => $item->quantity_ordered,
                         'quantity_delivered' => $item->quantity_delivered,
                         'unit_price'         => $item->unit_price,
