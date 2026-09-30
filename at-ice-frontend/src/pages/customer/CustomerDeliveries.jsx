@@ -34,6 +34,19 @@ const STATUS_BADGE = {
   cancelled: "bg-slate-200 text-slate-500 border-slate-300",
 };
 
+// Ice product types (same keys as Customer Prices and receipts)
+const PRODUCT_LABELS = {
+  bags: "Bags (5kg)",
+  small_sack: "Small Sack (30kg)",
+  big_sack: "Big Sack (50kg)",
+};
+const itemName = (it) =>
+  it.product_label ||
+  PRODUCT_LABELS[it.product_type] ||
+  it.product_name ||
+  it.product?.name ||
+  "Product";
+
 const FILTERS = [
   { key: "all", label: "All" },
   { key: "pending", label: "Pending" },
@@ -228,7 +241,7 @@ export default function CustomerDeliveries() {
                     <tbody className="divide-y divide-black/[0.06]">
                       {selected.items.map((it, idx) => (
                         <tr key={idx}>
-                          <td className="px-3 py-2 text-slate-800">{it.product_name || "Product"}</td>
+                          <td className="px-3 py-2 text-slate-800">{itemName(it)}</td>
                           <td className="px-3 py-2 text-right text-slate-600">{it.quantity_ordered}</td>
                         </tr>
                       ))}
