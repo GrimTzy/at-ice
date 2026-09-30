@@ -61,7 +61,7 @@ const STATUS_CONFIG = {
 function itemsSummary(delivery) {
   if (!Array.isArray(delivery.items) || delivery.items.length === 0) return "No items listed";
   return delivery.items
-    .map((it) => `${it.product?.name ?? "Item"} × ${it.quantity_ordered}`)
+    .map((it) => `${it.product_label ?? it.product?.name ?? "Item"} × ${it.quantity_ordered}`)
     .join(", ");
 }
 

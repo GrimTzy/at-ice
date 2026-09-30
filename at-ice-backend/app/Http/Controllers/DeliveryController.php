@@ -2,9 +2,11 @@
 namespace App\Http\Controllers;
 
 use App\Events\DeliveryStatusUpdated;
+use App\Models\CustomerPrice;
 use App\Models\Delivery;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class DeliveryController extends Controller
 {
@@ -17,23 +19,59 @@ class DeliveryController extends Controller
 
     public function store(Request $request)
     {
+
         $data = $request->validate([
             'driver_id'                => 'required|exists:users,id',
-            'customer_id'              => 'nullable|exists:customers,id',
+            'customer_id'              => 'required_if:delivery_type,outbound|nullable|exists:customers,id',
             'delivery_type'            => 'required|in:outbound,inbound',
             'supplier_id'              => 'nullable|exists:suppliers,id',
             'scheduled_date'           => 'required|date',
             'notes'                    => 'nullable|string',
             'items'                    => 'required|array|min:1',
-            'items.*.product_id'       => 'required|exists:products,id',
+            'items.*.product_type'     => 'required|in:bags,small_sack,big_sack',
             'items.*.quantity_ordered' => 'required|integer|min:1',
-            'items.*.unit_price'       => 'required|numeric|min:0',
+        ], [
+            'customer_id.required_if' => 'Please select a customer.',
         ]);
 
-        // Sequential delivery number: DEL-0001, DEL-0002, ...
-        // Uses the highest existing number (including soft deleted rows)
-        // instead of a row count, so deleting a delivery never causes a
-        // duplicate number.
+        // Each product type only once per delivery
+        $types = array_column($data['items'], 'product_type');
+        if (count($types) !== count(array_unique($types))) {
+            return response()->json([
+                'message' => 'Each product can only be added once per delivery.',
+            ], 422);
+        }
+
+        // Unit price comes from Customer Prices, so the delivery and the
+        // receipt the Salesman generates always use the same price.
+        $items   = [];
+        $missing = [];
+        foreach ($data['items'] as $item) {
+            $price = $data['customer_id']
+                ? CustomerPrice::priceFor($data['customer_id'], $item['product_type'])
+                : null;
+
+            if ($price === null) {
+                $missing[] = $item['product_type'];
+                continue;
+            }
+
+            $items[] = [
+                'product_type'     => $item['product_type'],
+                'quantity_ordered' => $item['quantity_ordered'],
+                'unit_price'       => $price,
+            ];
+        }
+
+        if (!empty($missing)) {
+            return response()->json([
+                'message' => 'No price has been set for this customer for: '
+                    . implode(', ', $missing)
+                    . '. Please set it in Customer Prices first.',
+                'missing_price_products' => $missing,
+            ], 422);
+        }
+
         $last = Delivery::withTrashed()
             ->where('delivery_no', 'REGEXP', '^DEL-[0-9]{4}$')
             ->orderByDesc('delivery_no')
@@ -43,14 +81,17 @@ class DeliveryController extends Controller
         $data['delivery_no'] = 'DEL-' . str_pad($next, 4, '0', STR_PAD_LEFT);
 
         $data['prepared_by'] = Auth::id();
-        $items = $data['items'];
         unset($data['items']);
 
-        $delivery = Delivery::create($data);
+        $delivery = DB::transaction(function () use ($data, $items) {
+            $delivery = Delivery::create($data);
 
-        foreach ($items as $item) {
-            $delivery->items()->create($item);
-        }
+            foreach ($items as $item) {
+                $delivery->items()->create($item);
+            }
+
+            return $delivery;
+        });
 
         return response()->json($delivery->load(['driver', 'customer', 'items.product']), 201);
     }

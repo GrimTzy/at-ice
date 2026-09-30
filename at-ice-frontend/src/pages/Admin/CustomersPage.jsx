@@ -18,8 +18,15 @@ const MOP_LABELS = { cash: "Cash", gcash: "GCash", check: "Check", bank_transfer
 const EMPTY_FORM = {
   name: "", customer_code: "", branch_code: "", address: "", city: "",
   province: "", contact_person: "", contact_number: "", email: "",
-  mop: "cash", notes: "",
+  mop: "cash", notes: "", latitude: "", longitude: "",
 };
+
+// Latitude/longitude place the store's marker on the Driver GPS map.
+// Stores without coordinates are not shown on the map.
+function toCoord(value) {
+  const n = parseFloat(String(value ?? "").trim());
+  return Number.isFinite(n) ? n : null;
+}
 
 function token() { return localStorage.getItem("token") || ""; }
 function authHeaders() {
@@ -84,6 +91,8 @@ export default function CustomersPage() {
       email: customer.email || "",
       mop: customer.mop || "cash",
       notes: customer.notes || "",
+      latitude: customer.latitude ?? "",
+      longitude: customer.longitude ?? "",
     });
     setFormError("");
     setShowForm(true);
@@ -91,12 +100,25 @@ export default function CustomersPage() {
 
   async function submitForm(e) {
     e.preventDefault();
-    setSaving(true);
     setFormError("");
+
+    const latitude  = toCoord(form.latitude);
+    const longitude = toCoord(form.longitude);
+    if ((latitude === null) !== (longitude === null)) {
+      setFormError("Enter both latitude and longitude, or leave both blank.");
+      return;
+    }
+    if (latitude !== null && (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180)) {
+      setFormError("Latitude must be between -90 and 90, and longitude between -180 and 180.");
+      return;
+    }
+
+    setSaving(true);
     try {
+      const payload = { ...form, latitude, longitude };
       const url = editingId ? `${API_BASE}/customers/${editingId}` : `${API_BASE}/customers`;
       const method = editingId ? "PUT" : "POST";
-      const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(form) });
+      const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(payload) });
       if (!res.ok) {
         const errData = await res.json().catch(() => null);
         throw new Error(errData?.message || "Failed to save customer.");
@@ -219,6 +241,9 @@ export default function CustomersPage() {
                   </td>
                   <td className="px-[18px] py-2.5 text-slate-600">
                     {[c.city, c.province].filter(Boolean).join(", ") || <span className="text-slate-300">—</span>}
+                    {(c.latitude == null || c.longitude == null) && (
+                      <div className="text-[11px] text-amber-600">No map pin</div>
+                    )}
                   </td>
                   <td className="px-[18px] py-2.5 text-slate-600">
                     {c.contact_person ? (
@@ -300,6 +325,11 @@ export default function CustomersPage() {
                 </div>
                 <Field label="City" value={form.city} onChange={(v) => setForm({ ...form, city: v })} />
                 <Field label="Province" value={form.province} onChange={(v) => setForm({ ...form, province: v })} />
+                <Field label="Latitude" value={form.latitude} onChange={(v) => setForm({ ...form, latitude: v })} placeholder="e.g. 14.8139" />
+                <Field label="Longitude" value={form.longitude} onChange={(v) => setForm({ ...form, longitude: v })} placeholder="e.g. 121.0453" />
+                <p className="col-span-2 -mt-1 text-[11px] text-slate-400">
+                  Needed for the store marker on the Driver GPS map. In Google Maps, right-click the store and click the coordinates to copy them.
+                </p>
                 <div>
                   <label className="text-[11px] text-slate-500 mb-1 block">Mode of Payment *</label>
                   <select
@@ -374,7 +404,7 @@ export default function CustomersPage() {
   );
 }
 
-function Field({ label, value, onChange, required, disabled }) {
+function Field({ label, value, onChange, required, disabled, placeholder }) {
   return (
     <div>
       <label className="text-[11px] text-slate-500 mb-1 block">{label}</label>
@@ -384,6 +414,7 @@ function Field({ label, value, onChange, required, disabled }) {
         onChange={(e) => onChange(e.target.value)}
         required={required}
         disabled={disabled}
+        placeholder={placeholder}
         className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
       />
     </div>

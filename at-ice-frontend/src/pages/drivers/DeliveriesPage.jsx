@@ -282,7 +282,7 @@ export function DeliveriesPage() {
             ? [customer.address, customer.city, customer.province].filter(Boolean).join(", ")
             : "—";
           const itemsSummary = d.items?.length
-            ? d.items.map((i) => `${i.product?.name ?? "Item"} × ${i.quantity_ordered}`).join(", ")
+            ? d.items.map((i) => `${i.product_label ?? i.product?.name ?? "Item"} × ${i.quantity_ordered}`).join(", ")
             : "—";
           const distanceKm = customer
             ? haversineDistanceKm(driverPos?.lat, driverPos?.lng, customer.latitude, customer.longitude)

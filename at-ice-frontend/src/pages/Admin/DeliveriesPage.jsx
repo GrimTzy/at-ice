@@ -18,9 +18,20 @@ const STATUS_STYLE = {
   cancelled:  { bg: "bg-slate-100", text: "text-slate-500"  },
 };
 
+// Ice products delivered to customers. These are NOT inventory items
+// (ice is perishable and goes straight to the truck), so they are a fixed
+// list, the same three types used by Customer Prices and Salesman confirmation.
+const PRODUCT_TYPES = [
+  { value: "bags",       label: "Bags (5kg)" },
+  { value: "small_sack", label: "Small Sack (30kg)" },
+  { value: "big_sack",   label: "Big Sack (50kg)" },
+];
+const productLabel = (type) => PRODUCT_TYPES.find((p) => p.value === type)?.label || type;
+
+const EMPTY_ITEM = { product_type: "", quantity_ordered: "" };
 const EMPTY_FORM = {
   driver_id: "", customer_id: "", scheduled_date: "", notes: "",
-  items: [{ product_id: "", quantity_ordered: "", unit_price: "" }],
+  items: [{ ...EMPTY_ITEM }],
 };
 
 function token() { return localStorage.getItem("token") || ""; }
@@ -32,7 +43,6 @@ export default function DeliveriesPage() {
   const [deliveries, setDeliveries] = useState([]);
   const [drivers, setDrivers]       = useState([]);
   const [customers, setCustomers]   = useState([]);
-  const [products, setProducts]     = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
@@ -50,16 +60,15 @@ export default function DeliveriesPage() {
     setLoading(true);
     setError("");
     try {
-      const [dRes, empRes, cRes, pRes] = await Promise.all([
+      const [dRes, empRes, cRes] = await Promise.all([
         fetch(`${API_BASE}/deliveries`, { headers: authHeaders() }),
         fetch(`${API_BASE}/employees-summary`, { headers: authHeaders() }),
         fetch(`${API_BASE}/customers`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/products-summary`, { headers: authHeaders() }),
       ]);
       if (!dRes.ok) throw new Error(`Deliveries request failed (${dRes.status})`);
 
-      const [dData, empData, cData, pData] = await Promise.all([
-        dRes.json(), empRes.json(), cRes.json(), pRes.json(),
+      const [dData, empData, cData] = await Promise.all([
+        dRes.json(), empRes.json(), cRes.json(),
       ]);
 
       setDeliveries(Array.isArray(dData) ? dData : []);
@@ -67,7 +76,6 @@ export default function DeliveriesPage() {
       // EmployeeController@index()'s widened query.
       setDrivers((Array.isArray(empData) ? empData : []).filter((e) => e.user?.role === "driver"));
       setCustomers(Array.isArray(cData) ? cData : []);
-      setProducts(Array.isArray(pData) ? pData : []);
     } catch (err) {
       setError("Couldn't load deliveries. Check that the backend is running.");
       console.error("fetchAll error:", err);
@@ -88,21 +96,12 @@ export default function DeliveriesPage() {
     setForm((f) => {
       const items = [...f.items];
       items[index] = { ...items[index], [field]: value };
-      // Auto-fill unit_price from the product's own unit_price when a
-      // product is first selected, so Admin doesn't have to look it up —
-      // still editable afterward in case the delivery needs a different rate.
-      if (field === "product_id") {
-        const product = products.find((p) => String(p.id) === String(value));
-        if (product?.unit_price != null && !items[index].unit_price) {
-          items[index].unit_price = product.unit_price;
-        }
-      }
       return { ...f, items };
     });
   }
 
   function addItemRow() {
-    setForm((f) => ({ ...f, items: [...f.items, { product_id: "", quantity_ordered: "", unit_price: "" }] }));
+    setForm((f) => ({ ...f, items: [...f.items, { ...EMPTY_ITEM }] }));
   }
 
   function removeItemRow(index) {
@@ -111,19 +110,28 @@ export default function DeliveriesPage() {
 
   async function submitForm(e) {
     e.preventDefault();
-    setSaving(true);
     setFormError("");
+
+    // Each product type can only appear once per delivery
+    const types = form.items.map((it) => it.product_type);
+    if (new Set(types).size !== types.length) {
+      setFormError("Each product can only be added once. Combine the quantities in one row.");
+      return;
+    }
+
+    setSaving(true);
     try {
+      // Unit prices are not sent: the backend takes them from Customer Prices
+      // for the selected customer, the same prices the Salesman receipt uses.
       const payload = {
         driver_id: form.driver_id,
-        customer_id: form.customer_id || null,
+        customer_id: form.customer_id,
         delivery_type: "outbound",
         scheduled_date: form.scheduled_date,
         notes: form.notes || null,
         items: form.items.map((it) => ({
-          product_id: it.product_id,
+          product_type: it.product_type,
           quantity_ordered: Number(it.quantity_ordered),
-          unit_price: Number(it.unit_price),
         })),
       };
       const res = await fetch(`${API_BASE}/deliveries`, {
@@ -166,7 +174,7 @@ export default function DeliveriesPage() {
   });
 
   return (
-    <AdminLayout pageTitle="Deliveries" breadcrumb="SCM / Deliveries">
+    <AdminLayout pageTitle="Deliveries" breadcrumb="Delivery / Deliveries">
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
           <div>
@@ -290,10 +298,11 @@ export default function DeliveriesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Customer</label>
+                  <label className="text-[11px] text-slate-500 mb-1 block">Customer *</label>
                   <select
                     value={form.customer_id}
                     onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
+                    required
                     className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                   >
                     <option value="">Select customer…</option>
@@ -332,29 +341,22 @@ export default function DeliveriesPage() {
                 </div>
                 <div className="flex flex-col gap-2">
                   {form.items.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-[1fr_90px_100px_auto] gap-2 items-center">
+                    <div key={idx} className="grid grid-cols-[1fr_110px_auto] gap-2 items-center">
                       <select
-                        value={item.product_id}
-                        onChange={(e) => updateItem(idx, "product_id", e.target.value)}
+                        value={item.product_type}
+                        onChange={(e) => updateItem(idx, "product_type", e.target.value)}
                         required
                         className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                       >
                         <option value="">Select product…</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                        {PRODUCT_TYPES.map((p) => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
                         ))}
                       </select>
                       <input
                         type="number" min="1" placeholder="Qty"
                         value={item.quantity_ordered}
                         onChange={(e) => updateItem(idx, "quantity_ordered", e.target.value)}
-                        required
-                        className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                      />
-                      <input
-                        type="number" min="0" step="0.01" placeholder="Unit ₱"
-                        value={item.unit_price}
-                        onChange={(e) => updateItem(idx, "unit_price", e.target.value)}
                         required
                         className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                       />
@@ -369,6 +371,9 @@ export default function DeliveriesPage() {
                     </div>
                   ))}
                 </div>
+                <p className="text-[11px] text-slate-400 mt-2">
+                  Unit prices are taken from Customer Prices for the selected customer.
+                </p>
               </div>
 
               <div className="flex justify-end gap-2 mt-2">
@@ -405,7 +410,7 @@ export default function DeliveriesPage() {
                 <div className="flex flex-col gap-1.5">
                   {(viewing.items || []).map((it) => (
                     <div key={it.id} className="flex items-center justify-between bg-slate-50 border border-black/[0.09] rounded-md px-3 py-2">
-                      <span className="text-slate-700">{it.product?.name}</span>
+                      <span className="text-slate-700">{it.product_type ? productLabel(it.product_type) : it.product?.name}</span>
                       <span className="text-slate-500 font-mono">{it.quantity_ordered} × ₱{Number(it.unit_price).toFixed(2)}</span>
                     </div>
                   ))}
