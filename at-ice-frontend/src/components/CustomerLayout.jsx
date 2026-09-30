@@ -1,15 +1,4 @@
-// src/components/CustomerLayout.jsx
-//
-// Sidebar + topbar shell for the Customer Portal, matching AdminLayout.jsx
-// and HrLayout.jsx's visual language (same colors, spacing, card style)
-// so the whole ERP feels like one system. Adds a mobile drawer (hamburger
-// menu), which Admin/HR don't have, since customers may check this on a
-// phone and the sidebar needs to work at small widths.
-//
-// Every /customer/* page wraps its content in <CustomerLayout>...</CustomerLayout>,
-// same pattern as every Admin and HR page.
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import bgImage from "../assets/iceproduct.png";
@@ -26,6 +15,35 @@ const CalIcon      = () => <svg width="12" height="12" fill="none" stroke="curre
 const LogOutIcon   = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 const MenuIcon     = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
 const XIcon        = () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const MoonIcon     = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
+const SunIcon      = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>;
+
+const DARK_CSS = String.raw`
+.cp-dark { color-scheme: dark; }
+.cp-dark .bg-white { background-color: #111827 !important; }
+.cp-dark .bg-slate-50 { background-color: #1a2332 !important; }
+.cp-dark .bg-slate-100 { background-color: #1f2a3b !important; }
+.cp-dark .hover\:bg-slate-50:hover { background-color: #1a2332 !important; }
+.cp-dark .text-slate-800 { color: #f1f5f9 !important; }
+.cp-dark .text-slate-700 { color: #e2e8f0 !important; }
+.cp-dark .text-slate-600 { color: #cbd5e1 !important; }
+.cp-dark .text-slate-500 { color: #a3b1c6 !important; }
+.cp-dark .text-slate-400 { color: #8494ab !important; }
+.cp-dark .hover\:text-slate-800:hover,
+.cp-dark .hover\:text-slate-700:hover { color: #f1f5f9 !important; }
+.cp-dark .border-black\/\[0\.09\] { border-color: rgba(255,255,255,0.10) !important; }
+.cp-dark .border-black\/\[0\.06\] { border-color: rgba(255,255,255,0.07) !important; }
+.cp-dark .divide-black\/\[0\.06\] > * { border-color: rgba(255,255,255,0.07) !important; }
+.cp-dark .text-cyan-600 { color: #22d3ee !important; }
+.cp-dark .text-cyan-500 { color: #22d3ee !important; }
+.cp-dark .text-emerald-600 { color: #34d399 !important; }
+.cp-dark .text-amber-600 { color: #fbbf24 !important; }
+.cp-dark .text-red-600 { color: #f87171 !important; }
+.cp-dark input,
+.cp-dark select,
+.cp-dark textarea { background-color: #0f172a; color: #e2e8f0; }
+.cp-dark input::placeholder { color: #64748b; }
+`;
 
 const navSections = [
   { label:"Overview",   items:[{ icon:<GridIcon />, label:"Dashboard", path:"/customer/dashboard" }] },
@@ -84,6 +102,14 @@ export default function CustomerLayout({ pageTitle, breadcrumb, headerActions, c
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Night mode preference is remembered on this device.
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem("cp-theme") === "dark"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("cp-theme", dark ? "dark" : "light"); } catch { /* ignore */ }
+  }, [dark]);
+
   const today = new Date().toLocaleDateString("en-PH", { month:"long", day:"numeric", year:"numeric" });
 
   const initials = (user?.name || "BE")
@@ -99,7 +125,7 @@ export default function CustomerLayout({ pageTitle, breadcrumb, headerActions, c
         },
       });
     } catch {
-      // ignore — clear the local session regardless
+      // ignore, clear the local session regardless
     }
     ["token", "role", "sub_role", "user"].forEach((k) => localStorage.removeItem(k));
     navigate("/customer/login");
@@ -110,8 +136,11 @@ export default function CustomerLayout({ pageTitle, breadcrumb, headerActions, c
     setMobileOpen(false);
   };
 
+  const overlay = dark ? "rgba(10,13,18,0.90)" : "rgba(248,250,252,0.88)";
+
   return (
-    <div className="flex font-sans text-[13px] leading-relaxed bg-[#0a0d12] text-slate-800 min-h-screen">
+    <div className={`${dark ? "cp-dark " : ""}flex font-sans text-[13px] leading-relaxed bg-[#0a0d12] text-slate-800 min-h-screen`}>
+      <style>{DARK_CSS}</style>
 
       {/* Mobile drawer */}
       {mobileOpen && (
@@ -124,6 +153,19 @@ export default function CustomerLayout({ pageTitle, breadcrumb, headerActions, c
               </button>
             </div>
             <SidebarNav location={location} navigate={navigate} onNavigate={handleNavigate} />
+            <div className="px-[18px] py-3.5 border-t border-black/[0.09] flex items-center gap-2.5">
+              <div className="w-[30px] h-[30px] rounded-full bg-cyan-500/10 border border-cyan-400/25 flex items-center justify-center text-[11px] font-semibold text-cyan-500 flex-shrink-0">{initials}</div>
+              <div className="min-w-0">
+                <div className="text-xs font-medium text-slate-800 truncate">{user?.name || "Customer"}</div>
+              </div>
+              <button
+                onClick={handleLogout}
+                title="Sign out"
+                className="ml-auto text-slate-400 hover:text-red-500 transition-colors cursor-pointer p-1"
+              >
+                <LogOutIcon />
+              </button>
+            </div>
           </aside>
         </div>
       )}
@@ -165,6 +207,15 @@ export default function CustomerLayout({ pageTitle, breadcrumb, headerActions, c
           </div>
           <div className="flex-1" />
           {headerActions}
+          <button
+            onClick={() => setDark((d) => !d)}
+            title={dark ? "Switch to light mode" : "Switch to night mode"}
+            aria-label={dark ? "Switch to light mode" : "Switch to night mode"}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-black/[0.09] rounded-md text-xs text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            {dark ? <SunIcon /> : <MoonIcon />}
+            <span className="hidden sm:inline">{dark ? "Light" : "Night"}</span>
+          </button>
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/[0.09] rounded-md text-xs text-slate-500">
             <CalIcon /> {today}
           </div>
@@ -180,7 +231,7 @@ export default function CustomerLayout({ pageTitle, breadcrumb, headerActions, c
         <main
           className="flex-1 overflow-y-auto p-4 sm:p-6 pb-8 flex flex-col gap-4"
           style={{
-            backgroundImage: `linear-gradient(rgba(248,250,252,0.88), rgba(248,250,252,0.88)), url(${bgImage})`,
+            backgroundImage: `linear-gradient(${overlay}, ${overlay}), url(${bgImage})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
             backgroundAttachment: "fixed",

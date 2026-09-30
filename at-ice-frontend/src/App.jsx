@@ -22,6 +22,11 @@ import SettingsPage from './pages/Admin/SettingsPage'
 // -- Customer Module
 import CustomerLogin from './pages/customer/CustomerLogin'
 import CustomerDashboard from './pages/customer/CustomerDashboard'
+import CustomerDeliveries from './pages/customer/CustomerDeliveries'
+import CustomerDeliveryProofs from './pages/customer/CustomerDeliveryProofs'
+import CustomerReceipts from './pages/customer/CustomerReceipts'
+import CustomerPrices from './pages/customer/CustomerPrices'
+import CustomerSupport from './pages/customer/CustomerSupport'
 
 // -- Driver Module
 import DriverLogin from './pages/drivers/DriverLogin'
@@ -60,12 +65,54 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/attendance-station" element={<AttendanceStation />} />
         <Route path="/customer" element={<LandingPageCustomer />} />
+
+        {/* -- Customer Module -- */}
         <Route path="/customer/login" element={<CustomerLogin />} />
         <Route
           path="/customer/dashboard"
           element={
             <ProtectedRoute allowedRoles={["customer"]}>
               <CustomerDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/deliveries"
+          element={
+            <ProtectedRoute allowedRoles={["customer"]}>
+              <CustomerDeliveries />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/delivery-proofs"
+          element={
+            <ProtectedRoute allowedRoles={["customer"]}>
+              <CustomerDeliveryProofs />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/receipts"
+          element={
+            <ProtectedRoute allowedRoles={["customer"]}>
+              <CustomerReceipts />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/prices"
+          element={
+            <ProtectedRoute allowedRoles={["customer"]}>
+              <CustomerPrices />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customer/support"
+          element={
+            <ProtectedRoute allowedRoles={["customer"]}>
+              <CustomerSupport />
             </ProtectedRoute>
           }
         />
@@ -96,7 +143,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* View-only Employees overview for Admin — Name/Position/Role/Shift
+        {/* View-only Employees overview for Admin: Name/Position/Role/Shift
             only, backed by GET /api/employees-summary. Full CRUD + Payroll
             + Performance live under HR at /hr/employees below. */}
         <Route
@@ -107,7 +154,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Customers — full CRUD for Customer CRM records, plus a
+        {/* Customers: full CRUD for Customer CRM records, plus a
             "Create Login" action per row that provisions a Customer
             Portal account (role: customer) for an existing record. */}
         <Route
@@ -118,7 +165,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Deliveries — full CRUD for outbound Deliveries: Admin assigns
+        {/* Deliveries: full CRUD for outbound Deliveries. Admin assigns
             driver + customer + line items. */}
         <Route
           path="/admin/deliveries"
@@ -128,7 +175,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Delivery Proofs — view-only. Photo + quantity confirmed by
+        {/* Delivery Proofs: view-only. Photo + quantity confirmed by
             Salesmen, with the auto-generated receipt breakdown. */}
         <Route
           path="/admin/delivery-proofs"
@@ -138,7 +185,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Receipts — auto-generated on Salesman delivery confirmation.
+        {/* Receipts: auto-generated on Salesman delivery confirmation.
             Admin tracks payment status here and marks receipts paid. */}
         <Route
           path="/admin/receipts"
@@ -148,7 +195,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Settings — account only: profile, change password,
+        {/* Settings: account only. Profile, change password,
             sign out other devices. */}
         <Route
           path="/admin/settings"
@@ -255,7 +302,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* /checker/low-stock and /checker/stock-out-release routes REMOVED — see notes above */}
+        {/* /checker/low-stock and /checker/stock-out-release routes REMOVED, see notes above */}
         <Route path="/salesman/login" element={<SalesmanLogin />} />
         <Route
           path="/salesman/deliveries"
