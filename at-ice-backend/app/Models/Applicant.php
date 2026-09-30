@@ -20,6 +20,6 @@ class Applicant extends Model
     ];
 
     protected $casts = [
-        'interview_date' => 'datetime',
+        'interview_date' => 'datetime:Y-m-d H:i:s',
     ];
 }

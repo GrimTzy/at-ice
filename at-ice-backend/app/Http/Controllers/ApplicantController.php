@@ -3,24 +3,45 @@
 namespace App\Http\Controllers;
 
 use App\Models\Applicant;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class ApplicantController extends Controller
 {
+    private const LOCAL_TZ = 'Asia/Manila';
+
+    private function nowLocal(): string
+    {
+        return now(self::LOCAL_TZ)->format('Y-m-d H:i:s');
+    }
+
+    private function normalizeDate($value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+        return Carbon::parse($value)->format('Y-m-d H:i:s');
+    }
+
     // GET all applicants (HR)
     public function index(Request $request)
     {
         $query = Applicant::query();
 
-        if ($request->has('status')) {
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        if ($request->has('position_applied')) {
+        if ($request->filled('position_applied')) {
             $query->where('position_applied', $request->position_applied);
         }
 
-        $applicants = $query->orderBy('interview_date', 'asc')->get();
+        $applicants = $query
+            ->orderByRaw('interview_date IS NULL')   // scheduled first
+            ->orderBy('interview_date', 'asc')
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json($applicants);
     }
@@ -33,18 +54,35 @@ class ApplicantController extends Controller
     }
 
     // CREATE applicant + schedule interview (HR)
+    // New applicants always start as "pending".
     public function store(Request $request)
     {
         $request->validate([
             'name'             => 'required|string|max:255',
-            'email'            => 'nullable|email',
+            'email'            => 'nullable|email|max:255',
             'phone'            => 'nullable|string|max:20',
             'position_applied' => 'required|string|max:255',
-            'interview_date'   => 'nullable|date|after:now',
-            'notes'            => 'nullable|string',
+            'interview_date'   => 'nullable|date',
+            'notes'            => 'nullable|string|max:1000',
         ]);
 
-        $applicant = Applicant::create($request->all());
+        $interviewDate = $this->normalizeDate($request->interview_date);
+
+        if ($interviewDate && $interviewDate <= $this->nowLocal()) {
+            throw ValidationException::withMessages([
+                'interview_date' => ['The interview date and time must be in the future.'],
+            ]);
+        }
+
+        $applicant = Applicant::create([
+            'name'             => $request->name,
+            'email'            => $request->email,
+            'phone'            => $request->phone,
+            'position_applied' => $request->position_applied,
+            'interview_date'   => $interviewDate,
+            'status'           => 'pending',
+            'notes'            => $request->notes,
+        ]);
 
         return response()->json([
             'message'   => 'Applicant added successfully!',
@@ -58,20 +96,26 @@ class ApplicantController extends Controller
         $applicant = Applicant::findOrFail($id);
 
         $request->validate([
-            'name'             => 'sometimes|string|max:255',
-            'email'            => 'nullable|email',
+            'name'             => 'sometimes|required|string|max:255',
+            'email'            => 'nullable|email|max:255',
             'phone'            => 'nullable|string|max:20',
-            'position_applied' => 'sometimes|string|max:255',
+            'position_applied' => 'sometimes|required|string|max:255',
             'interview_date'   => 'nullable|date',
             'status'           => 'sometimes|in:pending,interviewed,hired,rejected',
-            'notes'            => 'nullable|string',
+            'notes'            => 'nullable|string|max:1000',
         ]);
 
-        $applicant->update($request->all());
+        $data = $request->only(['name', 'email', 'phone', 'position_applied', 'status', 'notes']);
+
+        if ($request->exists('interview_date')) {
+            $data['interview_date'] = $this->normalizeDate($request->interview_date);
+        }
+
+        $applicant->update($data);
 
         return response()->json([
             'message'   => 'Applicant updated successfully!',
-            'applicant' => $applicant,
+            'applicant' => $applicant->fresh(),
         ]);
     }
 
@@ -87,7 +131,7 @@ class ApplicantController extends Controller
 
         return response()->json([
             'message'   => "Applicant marked as {$request->status}.",
-            'applicant' => $applicant,
+            'applicant' => $applicant->fresh(),
         ]);
     }
 
@@ -105,7 +149,7 @@ class ApplicantController extends Controller
     {
         $applicants = Applicant::where('status', 'pending')
             ->whereNotNull('interview_date')
-            ->where('interview_date', '>=', now())
+            ->where('interview_date', '>=', $this->nowLocal())
             ->orderBy('interview_date', 'asc')
             ->get();
 

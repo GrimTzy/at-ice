@@ -28,9 +28,11 @@ class Payroll extends Model
         'notes',
     ];
 
+    // date:Y-m-d so pay periods are sent as plain "2026-10-01"
+    // (no timezone shift when the frontend reads them)
     protected $casts = [
-        'period_start' => 'date',
-        'period_end' => 'date',
+        'period_start' => 'date:Y-m-d',
+        'period_end' => 'date:Y-m-d',
         'paid_at' => 'datetime',
         'daily_rate' => 'decimal:2',
         'gross_pay' => 'decimal:2',

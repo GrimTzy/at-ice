@@ -22,9 +22,11 @@ class LeaveRequest extends Model
         'admin_notes',
     ];
 
+    // date:Y-m-d so start/end dates are sent as plain "2026-10-01"
+    // (no timezone shift when the frontend reads them)
     protected $casts = [
-        'start_date' => 'date',
-        'end_date' => 'date',
+        'start_date'  => 'date:Y-m-d',
+        'end_date'    => 'date:Y-m-d',
         'approved_at' => 'datetime',
     ];
 
@@ -34,7 +36,7 @@ class LeaveRequest extends Model
         return $this->belongsTo(Employee::class);
     }
 
-    // Relationship - LeaveRequest approved by User
+    // Relationship - LeaveRequest decided (approved or rejected) by User
     public function approvedBy()
     {
         return $this->belongsTo(User::class, 'approved_by');

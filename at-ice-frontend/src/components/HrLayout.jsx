@@ -1,12 +1,3 @@
-// src/components/HrLayout.jsx
-//
-// Shared sidebar + topbar shell for all HR pages (mirrors AdminLayout.jsx).
-//
-// Usage:
-//   <HrLayout pageTitle="Face Enrollment" breadcrumb="Attendance / Face Enrollment">
-//     ...page content...
-//   </HrLayout>
-
 import { useNavigate, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import bgImage from "../assets/iceproduct.png";
@@ -28,11 +19,11 @@ const navSections = [
     label: "HRIS",
     items: [
       { icon: <UsersIcon />, label: "Employees", path: "/hr/employees" },
-      { icon: <ClockIcon />, label: "Attendance" },
+      { icon: <ClockIcon />, label: "Attendance", path: "/hr/attendance" },
       { icon: <UserPlusIcon />, label: "Face Enrollment", path: "/hr/face-enrollment" },
-      { icon: <FileIcon />, label: "Leave Requests" },
-      { icon: <DollarIcon />, label: "Payroll" },
-      { icon: <CalIcon />, label: "Interviews" },
+      { icon: <FileIcon />, label: "Leave Requests", path: "/hr/leave-requests" },
+      { icon: <DollarIcon />, label: "Payroll", path: "/hr/payroll" },
+      { icon: <CalIcon />, label: "Interviews", path: "/hr/interviews" },
     ],
   },
 ];

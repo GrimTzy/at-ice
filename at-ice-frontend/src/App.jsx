@@ -38,6 +38,10 @@ import HRLogin from './pages/hr/HRLogin'
 import HRDashboard from './pages/hr/HRDashboard'
 import FaceEnrollment from './pages/hr/FaceEnrollment'
 import EmployeesPage from './pages/hr/EmployeesPage'
+import AttendancePage from './pages/hr/AttendancePage'
+import LeaveRequestsPage from './pages/hr/LeaveRequestsPage'
+import InterviewsPage from './pages/hr/InterviewsPage'
+import PayrollPage from './pages/hr/PayrollPage'
 
 // -- Employee Module 
 import CheckerLogin from './pages/employees/CheckerLogin'
@@ -229,6 +233,46 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["hr"]}>
               <EmployeesPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Attendance: view only, records come from the Attendance
+            Station kiosk. Date filter, search, live Pusher refresh. */}
+        <Route
+          path="/hr/attendance"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <AttendancePage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Leave Requests: HR encodes the employee's verbal or written
+            request, then approves or rejects it. */}
+        <Route
+          path="/hr/leave-requests"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <LeaveRequestsPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Interviews: applicants and interview schedule.
+            Pending -> Interviewed -> Hired / Rejected. */}
+        <Route
+          path="/hr/interviews"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <InterviewsPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Payroll: all payroll records (computed in the Employees page,
+            Sweldong Pinoy reference). Pending -> Approved -> Paid. */}
+        <Route
+          path="/hr/payroll"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <PayrollPage />
             </ProtectedRoute>
           }
         />
