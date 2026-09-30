@@ -26,17 +26,25 @@ use App\Http\Controllers\IceLoadingController;
 use App\Http\Controllers\StockOutRequestController;
 use App\Http\Controllers\CustomerPortalController;
 
+// RATE LIMITS
+// throttle:max,minutes,name. Each limit has its own name so the counters
+// are separate (the same request is not counted twice by two limits).
+//   login: 10 attempts per minute per IP (stops password guessing)
+//   kiosk: 30 per minute per IP (public Attendance Station routes)
+//   api:   120 per minute per logged-in user (all protected routes)
+// A blocked request gets HTTP 429 "Too Many Attempts."
+
 //Public
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1,login');
 
-// Face Descriptors — public, used by AttendanceStation (kiosk has no login/token)
-Route::get('face-descriptors', [FaceDataController::class, 'descriptors']);
+// Face Descriptors: public, used by AttendanceStation (kiosk has no login/token)
+Route::get('face-descriptors', [FaceDataController::class, 'descriptors'])->middleware('throttle:30,1,kiosk');
 
-// Attendance recording — public, used by AttendanceStation (kiosk has no login/token)
-Route::post('attendances', [AttendanceController::class, 'store']);
+// Attendance recording: public, used by AttendanceStation (kiosk has no login/token)
+Route::post('attendances', [AttendanceController::class, 'store'])->middleware('throttle:30,1,kiosk');
 
 //Protected
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'throttle:120,1,api'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me',      [AuthController::class, 'me']);
@@ -48,9 +56,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
 
-        // Employees — READ ONLY overview for Admin (Name/Position/Role/Shift
+        // Employees: READ ONLY overview for Admin (Name/Position/Role/Shift
         // only, per team decision). Reuses EmployeeController@index() so
-        // both Admin's and HR's employee lists stay in sync automatically —
+        // both Admin's and HR's employee lists stay in sync automatically,
         // same filtered dataset, different route/gate. Full CRUD, Payroll,
         // and Performance are HR-only, see role:hr group below.
         Route::get('employees-summary', [EmployeeController::class, 'index']);
@@ -96,10 +104,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('customer-prices/{customer}', [CustomerPriceController::class, 'show']);
         Route::put('customer-prices/{customer}', [CustomerPriceController::class, 'update']);
 
-        // Pickup Logs (Admin full access — Alexandra/J-Maxine plant pickups, no price/receipt)
+        // Pickup Logs (Admin full access: Alexandra/J-Maxine plant pickups, no price/receipt)
         Route::apiResource('pickup-logs', PickupLogController::class)->only(['update', 'destroy']);
 
-        // Stock-Out Requests (Admin approves/rejects/releases — consolidated onto /admin/stock-out-approvals since v29.2)
+        // Stock-Out Requests (Admin approves/rejects/releases, consolidated onto /admin/stock-out-approvals since v29.2)
         Route::put('stock-out-requests/{stockOutRequest}/approve', [StockOutRequestController::class, 'approve']);
         Route::put('stock-out-requests/{stockOutRequest}/reject',  [StockOutRequestController::class, 'reject']);
         Route::put('stock-out-requests/{stockOutRequest}/release', [StockOutRequestController::class, 'release']);
@@ -123,15 +131,15 @@ Route::middleware('auth:sanctum')->group(function () {
     // HR ROUTES
     Route::middleware('role:hr')->group(function () {
 
-        // Employee Management — full CRUD (create, edit, deactivate)
+        // Employee Management: full CRUD (create, edit, deactivate)
         Route::apiResource('employees', EmployeeController::class);
 
-        // Payroll — full CRUD, computation happens on the frontend
+        // Payroll: full CRUD, computation happens on the frontend
         // (Sweldong Pinoy-style: SSS/PhilHealth/Pag-IBIG/withholding tax),
         // this endpoint just stores whatever computed values are sent.
         Route::apiResource('payrolls', PayrollController::class);
 
-        // Employee Performance — new (v29.7), HR-only reviews per employee
+        // Employee Performance: new (v29.7), HR-only reviews per employee
         Route::apiResource('employee-performance', EmployeePerformanceController::class);
 
         Route::get('attendances',                        [AttendanceController::class, 'index']);
@@ -175,12 +183,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::apiResource('suppliers', SupplierController::class);
 
-        // Pickup Logs (Checker can log + view, cannot edit/delete — corrections go through Admin)
+        // Pickup Logs (Checker can log + view, cannot edit/delete: corrections go through Admin)
         Route::get('pickup-logs',              [PickupLogController::class, 'index']);
         Route::post('pickup-logs',             [PickupLogController::class, 'store']);
         Route::get('pickup-logs/{pickupLog}',  [PickupLogController::class, 'show']);
 
-        // Ice Loading Count (simple count log per delivery — NOT a stock deduction)
+        // Ice Loading Count (simple count log per delivery, NOT a stock deduction)
         Route::get('ice-loadings',                  [IceLoadingController::class, 'index']);
         Route::post('ice-loadings',                 [IceLoadingController::class, 'store']);
         Route::get('ice-loadings/{iceLoading}',     [IceLoadingController::class, 'show']);
@@ -200,7 +208,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('stock-out-requests', [StockOutRequestController::class, 'store']);
     });
 
-    // EMPLOYEE: STOCK-OUT VIEW (shared — Checker and Maintenance can both view)
+    // EMPLOYEE: STOCK-OUT VIEW (shared: Checker and Maintenance can both view)
     Route::middleware('role:employee,checker,maintenance')->group(function () {
 
         Route::get('stock-out-requests',                   [StockOutRequestController::class, 'index']);
@@ -227,7 +235,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('my-orders',   [OrderController::class, 'myOrders']);
         Route::get('my-payments', [PaymentController::class, 'myPayments']);
 
-        // Customer Portal — real endpoints, scoped to the logged-in
+        // Customer Portal: real endpoints, scoped to the logged-in
         // customer via customers.user_id (see CustomerPortalController).
         Route::get('my-profile',          [CustomerPortalController::class, 'myProfile']);
         Route::get('my-delivery-history', [CustomerPortalController::class, 'myDeliveries']);

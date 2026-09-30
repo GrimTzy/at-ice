@@ -12,6 +12,7 @@ return [
     | Requests from the following domains / hosts will receive stateful API
     | authentication cookies. Typically, these should include your local
     | and production domains which access your API via a frontend SPA.
+    | (AT-ICE uses Bearer tokens, so this list is not used for login.)
     |
     */
 
@@ -41,13 +42,14 @@ return [
     | Expiration Minutes
     |--------------------------------------------------------------------------
     |
-    | This value controls the number of minutes until an issued token will be
-    | considered expired. This will override any values set in the token's
-    | "expires_at" attribute, but first-party sessions are not affected.
+    | Login tokens expire after this many minutes (default 1440 = 24 hours),
+    | so a leaked or forgotten token does not work forever. The plant runs
+    | 12 hour shifts, so 24 hours never cuts a shift short. Override with
+    | SANCTUM_EXPIRATION in .env. After it expires, the user signs in again.
     |
     */
 
-    'expiration' => null,
+    'expiration' => (int) env('SANCTUM_EXPIRATION', 1440),
 
     /*
     |--------------------------------------------------------------------------

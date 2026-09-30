@@ -104,7 +104,7 @@ export default function SalesmanLogin() {
       {/* Card */}
       <div className="relative z-10 bg-white rounded-t-3xl border-t border-black/[0.07] shadow-[0_-8px_40px_rgba(0,0,0,0.10)] px-6 pt-7 pb-10">
         <p className="text-[13px] text-slate-400 text-center mb-6 leading-relaxed">
-          Sign in with the credentials provided by your System Administrator.
+          Sign in with the credentials provided by your HR department.
         </p>
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
 

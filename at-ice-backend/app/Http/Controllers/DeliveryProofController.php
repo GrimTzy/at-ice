@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DeliveryStatusUpdated;
 use App\Models\CustomerPrice;
 use App\Models\Delivery;
 use App\Models\DeliveryProof;
 use App\Models\Receipt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class DeliveryProofController extends Controller
@@ -61,6 +63,14 @@ class DeliveryProofController extends Controller
 
         $delivery = Delivery::with('customer')->findOrFail($request->delivery_id);
 
+        // Only deliveries that are still open can be confirmed. A cancelled
+        // (or otherwise closed) delivery must never produce a receipt.
+        if (!in_array($delivery->status, ['pending', 'in_transit'], true)) {
+            return response()->json([
+                'message' => "This delivery cannot be confirmed because it is {$delivery->status}.",
+            ], 422);
+        }
+
         // Look up prices BEFORE starting the transaction / storing the photo,
         // fail fast if any product has no price set for this customer.
         $lineItems     = [];
@@ -90,6 +100,8 @@ class DeliveryProofController extends Controller
                 'missing_price_products' => $missingPrices,
             ], 422);
         }
+
+        $photoPath = null;
 
         DB::beginTransaction();
 
@@ -127,24 +139,50 @@ class DeliveryProofController extends Controller
                 'status'       => 'delivered',
                 'delivered_at' => now(),
             ]);
-            event(new \App\Events\DeliveryStatusUpdated($delivery->id, 'delivered'));
 
             DB::commit();
 
-            return response()->json([
-                'message' => 'Delivery confirmed successfully!',
-                'proof'   => $proof,
-                'receipt' => $receipt->load('items'),
-            ], 201);
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
+
+            // Remove the uploaded photo so a failed confirmation leaves no file behind
+            if ($photoPath) {
+                Storage::disk('public')->delete($photoPath);
+            }
+
+            // Details go to the server log only, never to the browser
+            Log::error('Delivery confirmation failed', [
+                'delivery_id' => $request->delivery_id,
+                'user_id'     => auth()->id(),
+                'error'       => $e->getMessage(),
+            ]);
 
             return response()->json([
                 'message' => 'Something went wrong. Please try again.',
-                'error'   => $e->getMessage(),
             ], 500);
         }
+
+        try {
+            broadcast(new DeliveryStatusUpdated([
+                'delivery_id' => $delivery->id,
+                'delivery_no' => $delivery->delivery_no,
+                'driver_id'   => $delivery->driver_id,
+                'customer'    => $delivery->customer?->name ?? 'Unknown',
+                'status'      => 'delivered',
+                'message'     => "Delivery {$delivery->delivery_no} is now delivered.",
+            ]))->toOthers();
+        } catch (\Throwable $e) {
+            Log::warning('Delivery confirmed but live update failed', [
+                'delivery_id' => $delivery->id,
+                'error'       => $e->getMessage(),
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Delivery confirmed successfully!',
+            'proof'   => $proof,
+            'receipt' => $receipt->load('items'),
+        ], 201);
     }
 
     // Salesman: deliveries still waiting for confirmation

@@ -65,6 +65,13 @@ function itemsSummary(delivery) {
     .join(", ");
 }
 
+// Escape text before it goes into the map popup's HTML, so a customer
+// name or address containing HTML/script cannot run in the browser (XSS).
+const escapeHtml = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+
 export function GpsTrackingPage() {
   const navigate = useNavigate();
   const mapRef         = useRef(null);
@@ -212,11 +219,12 @@ export function GpsTrackingPage() {
       });
 
       marker.addListener("click", () => {
+        // All customer text is escaped before it goes into the popup HTML
         infoWindowRef.current.setContent(`
           <div style="font-family:'Inter','Segoe UI',sans-serif;font-size:12px;padding:4px 2px;min-width:160px;">
-            <div style="font-weight:600;color:#1e293b;margin-bottom:4px;">${store.customer?.name ?? "Customer"}</div>
-            <div style="color:#64748b;margin-bottom:2px;">${store.customer?.address ?? ""}</div>
-            <div style="color:#64748b;">${itemsSummary(store)}</div>
+            <div style="font-weight:600;color:#1e293b;margin-bottom:4px;">${escapeHtml(store.customer?.name ?? "Customer")}</div>
+            <div style="color:#64748b;margin-bottom:2px;">${escapeHtml(store.customer?.address ?? "")}</div>
+            <div style="color:#64748b;">${escapeHtml(itemsSummary(store))}</div>
             <div style="margin-top:6px;display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;
               background:${cfg.bg === "bg-green-50" ? "#dcfce7" : "#fef3c7"};
               color:${cfg.markerStroke};">
