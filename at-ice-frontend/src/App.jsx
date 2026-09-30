@@ -19,6 +19,10 @@ import DeliveryProofsPage from './pages/Admin/DeliveryProofsPage'
 import ReceiptsPage from './pages/Admin/ReceiptsPage'
 import SettingsPage from './pages/Admin/SettingsPage'
 
+// -- Customer Module
+import CustomerLogin from './pages/customer/CustomerLogin'
+import CustomerDashboard from './pages/customer/CustomerDashboard'
+
 // -- Driver Module
 import DriverLogin from './pages/drivers/DriverLogin'
 import { DeliveriesPage as DriverDeliveriesPage } from './pages/drivers/DeliveriesPage'
@@ -56,6 +60,15 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/attendance-station" element={<AttendanceStation />} />
         <Route path="/customer" element={<LandingPageCustomer />} />
+        <Route path="/customer/login" element={<CustomerLogin />} />
+        <Route
+          path="/customer/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["customer"]}>
+              <CustomerDashboard />
+            </ProtectedRoute>
+          }
+        />
 
         {/* -- Admin Module -- */}
         <Route path="/admin/login" element={<AdminLogin />} />

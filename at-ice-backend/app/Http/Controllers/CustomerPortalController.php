@@ -9,13 +9,6 @@ use App\Models\DeliveryProof;
 use App\Models\Receipt;
 use Illuminate\Http\Request;
 
-// Customer-facing endpoints for the AT-ICE Customer Portal. Every method
-// here follows the same shape: look up the Customer record linked to the
-// logged-in user via customers.user_id, then scope everything to that one
-// customer. This mirrors the fix already applied to
-// OrderController@myOrders / PaymentController@myPayments (customer_id on
-// these tables refers to a row in the customers table, never the logged-in
-// user's own id).
 class CustomerPortalController extends Controller
 {
     private array $productTypes = ['bags', 'small_sack', 'big_sack'];
@@ -23,6 +16,28 @@ class CustomerPortalController extends Controller
     private function resolveCustomer(Request $request): ?Customer
     {
         return Customer::where('user_id', $request->user()->id)->first();
+    }
+
+    // GET /api/my-profile
+    public function myProfile(Request $request)
+    {
+        $customer = $this->resolveCustomer($request);
+        if (!$customer) {
+            return response()->json(['message' => 'No customer account linked to this login.'], 404);
+        }
+
+        return response()->json([
+            'name'           => $customer->name,
+            'customer_code'  => $customer->customer_code,
+            'branch_code'    => $customer->branch_code,
+            'address'        => $customer->address,
+            'city'           => $customer->city,
+            'province'       => $customer->province,
+            'contact_person' => $customer->contact_person,
+            'contact_number' => $customer->contact_number,
+            'email'          => $customer->email,
+            'mop'            => $customer->mop,
+        ]);
     }
 
     // GET /api/my-delivery-history

@@ -229,6 +229,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Customer Portal — real endpoints, scoped to the logged-in
         // customer via customers.user_id (see CustomerPortalController).
+        Route::get('my-profile',          [CustomerPortalController::class, 'myProfile']);
         Route::get('my-delivery-history', [CustomerPortalController::class, 'myDeliveries']);
         Route::get('my-receipts',        [CustomerPortalController::class, 'myReceipts']);
         Route::get('my-delivery-proofs', [CustomerPortalController::class, 'myDeliveryProofs']);

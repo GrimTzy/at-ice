@@ -1,28 +1,17 @@
-// src/components/ProtectedRoute.jsx
-//
-// Wrap any route element with this to require a valid token (and optionally
-// a specific role / sub_role) before rendering. Redirects to the correct
-// login page if the check fails, instead of silently rendering the page shell.
-//
-// Reads the same localStorage keys already being set by AdminLogin.jsx,
-// SalesmanLogin.jsx, DriverLogin.jsx, etc: "token", "role", "sub_role".
-
 import { Navigate, useLocation } from "react-router-dom";
 
-// Maps each system role to where an unauthenticated/unauthorized user
-// should be sent. Add "hr" once HRLogin.jsx exists (Phase 12.5).
 const LOGIN_PATH_BY_ROLE = {
   admin: "/admin/login",
   hr: "/hr/login",
-  employee: "/salesman/login", // update once Checker/Maintenance logins exist
+  employee: "/salesman/login",
   driver: "/driver/login",
-  customer: "/login",
+  customer: "/customer/login",
 };
 
 export default function ProtectedRoute({
   children,
-  allowedRoles,     // e.g. ["admin"]  — omit to allow any logged-in role
-  allowedSubRoles,  // e.g. ["salesman"] — only relevant when role === "employee"
+  allowedRoles,    
+  allowedSubRoles,  
 }) {
   const location = useLocation();
 
