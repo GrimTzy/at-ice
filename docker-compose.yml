@@ -84,6 +84,8 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     volumes:
       - mysql-data:/var/lib/mysql
+      # Nightly mysqldump output (scheduled task, see DEPLOY.md)
+      - mysql-backups:/backups
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 10s
@@ -95,3 +97,4 @@ services:
 volumes:
   public-storage:
   mysql-data:
+  mysql-backups:

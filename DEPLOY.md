@@ -43,6 +43,22 @@ It prints a one-time password. Running it again for the same email resets the pa
 
 ## Backups
 
-The `mysql-data` volume holds all business data. Schedule a dump, e.g.
-`mysqldump` via a Coolify scheduled task on the `mysql` service, and copy it
-off the server.
+A Coolify **scheduled task** (`mysql-backup`, container `mysql`) runs nightly at
+02:00 Philippine time (`0 18 * * *` UTC). It writes a consistent, gzipped
+`mysqldump` to the `mysql-backups` volume (`/backups` in the mysql container)
+and deletes dumps older than 14 days:
+
+```sh
+mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers atice | gzip > /backups/atice-$(date +%F-%H%M).sql.gz && find /backups -name 'atice-*.sql.gz' -mtime +14 -delete && ls -lh /backups
+```
+
+These dumps live on the same server. To survive losing the server, add an S3
+destination in Coolify and a storage backup of the `mysql-backups` and
+`public-storage` (delivery photos) volumes.
+
+**Restore** (mysql container terminal; overwrites current data):
+
+```sh
+ls -lh /backups
+gunzip < /backups/atice-YYYY-MM-DD-HHMM.sql.gz | mysql -uroot -p"$MYSQL_ROOT_PASSWORD" atice
+```
