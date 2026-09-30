@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Chart } from "chart.js/auto";
 import echo from "../../echo";
 import AdminLayout from "../../components/AdminLayout";
@@ -13,6 +14,10 @@ const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="curren
 // HELPERS
 const fmt  = (n) => "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const token = () => localStorage.getItem("token") || "";
+
+// Chart axis: ₱0, ₱200, ₱1.2K, ₱15K (previously every value under ₱2,000 showed as ₱1K)
+const compactPeso = (v) =>
+  "₱" + Number(v || 0).toLocaleString("en-PH", { notation: "compact", maximumFractionDigits: 1 });
 
 // MINI LINE CHART
 function MiniChart({ id, data, color }) {
@@ -34,13 +39,16 @@ function MiniChart({ id, data, color }) {
 }
 
 // DONUT CHART
+// No border: slices are separated by a small gap that shows the card color,
+// so it looks right in both light and night mode (a white border showed as
+// a white ring in night mode).
 function DonutChart({ id, data, colors }) {
   useEffect(() => {
     const ctx = document.getElementById(id);
     if (!ctx) return;
     const chart = new Chart(ctx, {
       type: "doughnut",
-      data: { datasets: [{ data, backgroundColor: colors, borderColor:"#ffffff", borderWidth:3, hoverOffset:4 }] },
+      data: { datasets: [{ data, backgroundColor: colors, borderWidth:0, spacing:2, hoverOffset:4 }] },
       options: { cutout:"65%", responsive:true, maintainAspectRatio:true, plugins:{ legend:{display:false}, tooltip:{ backgroundColor:"#fff", borderColor:"rgba(0,0,0,0.12)", borderWidth:1, bodyColor:"#1a2332", padding:8 } } },
     });
     return () => chart.destroy();
@@ -73,7 +81,7 @@ function SalesBarChart({ mode, chartData }) {
         },
         scales: {
           x:{ grid:{display:false}, ticks:{color:"#94a3b8",font:{size:11}} },
-          y:{ grid:{color:"rgba(0,0,0,0.06)"}, ticks:{color:"#94a3b8", callback:(v)=>"₱"+(v/1000).toFixed(0)+"K"} },
+          y:{ beginAtZero:true, grid:{color:"rgba(0,0,0,0.06)"}, ticks:{color:"#94a3b8", callback:(v)=>compactPeso(v)} },
         },
       },
     });
@@ -84,6 +92,7 @@ function SalesBarChart({ mode, chartData }) {
 
 // MAIN COMPONENT
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [chartMode, setChartMode] = useState("bar");
   const [biData,    setBiData]    = useState(null);
   const [loading,   setLoading]   = useState(true);
@@ -100,7 +109,6 @@ export default function Dashboard() {
       });
       const data = await res.json();
       setBiData(data);
-      console.log("BI Data set:", data);
     } catch (e) {
       console.error("BI fetch error:", e);
     } finally {
@@ -136,7 +144,7 @@ export default function Dashboard() {
     if (biData) fetchAI();
   }, [biData]);
 
-  // Pusher real-time notifications
+  // Pusher real-time notifications (live only, not stored)
   useEffect(() => {
     echo.channel('attendance').listen('.attendance.recorded', (e) => {
       setNotifications(prev => [{ bg:"bg-amber-100", color:"text-amber-600", icon:<ClockIconLocal />, title:"Attendance Alert", body:e.data?.message||"Attendance recorded.", time:"Just now", unread:true }, ...prev.slice(0,9)]);
@@ -151,7 +159,7 @@ export default function Dashboard() {
       fetchBI();
     });
     echo.channel('deliveries').listen('.delivery.status.updated', (e) => {
-      setNotifications(prev => [{ bg:"bg-green-100", color:"text-green-600", icon:<TruckIcon />, title:"Delivery Update", body:e.data?.message||"Delivery status updated.", time:"Just now", unread:true }, ...prev.slice(0,9)]);
+      setNotifications(prev => [{ bg:"bg-green-100", color:"text-green-600", icon:<TruckIcon />, title:"Delivery Update", body:e.data?.message||e.message||"Delivery status updated.", time:"Just now", unread:true }, ...prev.slice(0,9)]);
       fetchBI();
     });
     return () => {
@@ -173,13 +181,29 @@ export default function Dashboard() {
   const delMomUp    = (deliveries.mom_change_pct ?? 0) >= 0;
   const invTotal    = (inventory.low_stock || 0) + (inventory.out_of_stock || 0);
 
-  // Inventory donut data — single-hue blue palette (dark → light)
+  const overdueCustomers = overdue.overdue_customers ?? 0;
+  const hasOverdue       = (overdue.overdue_count || 0) > 0;
+
+  // Stock bullet in the AI Summary: checks out of stock AND low stock
+  // (previously it said "All items in stock" even with low-stock items)
+  const outOfStock = inventory.out_of_stock || 0;
+  const lowStock   = inventory.low_stock || 0;
+  const stockBullet =
+    outOfStock > 0
+      ? { dot: "bg-red-500", text: <><span className="text-red-500 font-semibold">{outOfStock} item{outOfStock === 1 ? "" : "s"} out of stock</span> — reorder needed</> }
+      : lowStock > 0
+        ? { dot: "bg-amber-500", text: <><span className="text-amber-600 font-semibold">{lowStock} low-stock item{lowStock === 1 ? "" : "s"}</span> — reorder soon</> }
+        : { dot: "bg-green-500", text: <span className="text-green-600 font-semibold">All items in stock</span> };
+
+  // Inventory donut data, single-hue blue palette (dark to light)
   const invDonutData = [inventory.in_stock||0, inventory.low_stock||0, inventory.out_of_stock||0];
   const invDonutTotal = invDonutData.reduce((a,b)=>a+b,0) || 1;
 
-  // Delivery donut data — single-hue blue palette (dark → light)
+  // Delivery donut data, single-hue blue palette (dark to light)
   const delDonutData = [deliveries.delivered||0, deliveries.in_transit||0, deliveries.pending||0, deliveries.cancelled||0];
   const delTotal     = deliveries.total || 1;
+
+  const linkClass = "text-[11px] text-cyan-500 cursor-pointer hover:text-cyan-400 transition-colors bg-transparent border-0 p-0";
 
   return (
     <AdminLayout
@@ -197,8 +221,12 @@ export default function Dashboard() {
       {/* STAT CARDS */}
       <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] gap-3">
 
-        {/* PRIMARY METRIC — Total Sales */}
-        <div className="bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-2 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150">
+        {/* PRIMARY METRIC: Total Sales (opens Receipts) */}
+        <div
+          onClick={() => navigate("/admin/receipts")}
+          title="Open Receipts"
+          className="bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-2 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150"
+        >
           <span className="text-[11px] font-medium tracking-[0.02em] text-slate-400">Total Sales (This Month)</span>
           <div className="text-[34px] font-semibold font-mono tracking-tight leading-none text-slate-800">
             {fmt(sales.this_month_total)}
@@ -213,7 +241,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* SECONDARY METRICS — plain, no icon badges */}
+        {/* SECONDARY METRICS: a card is clickable only when it has a page to open */}
         {[
           {
             label: "Total Deliveries",
@@ -221,6 +249,7 @@ export default function Dashboard() {
             up: delMomUp,
             delta: loading ? "—" : `${Math.abs(deliveries.mom_change_pct ?? 0)}% vs last month`,
             context: `${deliveries.delivery_rate_pct || 0}% delivered`,
+            to: "/admin/deliveries",
           },
           {
             label: "Inventory Alerts",
@@ -240,14 +269,17 @@ export default function Dashboard() {
             label: "Overdue Receivables",
             value: loading ? "—" : fmt(overdue.total_overdue_amount),
             up: null,
-            delta: `${overdue.overdue_count || 0} Customers`,
-            context: "Action needed",
+            delta: `${overdueCustomers} customer${overdueCustomers === 1 ? "" : "s"}`,
+            context: hasOverdue ? "Action needed" : "All current",
             isAlert: true,
+            to: "/admin/receipts",
           },
         ].map((card) => (
           <div
             key={card.label}
-            className={`bg-white border rounded-xl p-4 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150 ${card.isAlert ? "border-red-300 bg-red-50/60 hover:border-red-400" : "border-black/[0.09] hover:border-black/20"}`}
+            onClick={card.to ? () => navigate(card.to) : undefined}
+            title={card.to ? "Open details" : undefined}
+            className={`bg-white border rounded-xl p-4 flex flex-col gap-1.5 transition-all duration-150 ${card.to ? "cursor-pointer hover:shadow-md hover:-translate-y-px" : ""} ${card.isAlert ? "border-red-300 bg-red-50/60 hover:border-red-400" : "border-black/[0.09] hover:border-black/20"}`}
           >
             <span className={`text-[11px] font-medium tracking-[0.02em] ${card.isAlert ? "text-red-400" : "text-slate-400"}`}>
               {card.label}
@@ -313,11 +345,11 @@ export default function Dashboard() {
           {/* Inventory + Delivery */}
           <div className="grid grid-cols-2 gap-3">
 
-            {/* Inventory Summary — single-hue blue */}
+            {/* Inventory Summary (no "View all": inventory pages belong to the Checker) */}
             <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
               <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
                 <div className="text-[13px] font-semibold text-slate-800">Inventory Summary</div>
-                <a className="text-[11px] text-cyan-500 cursor-pointer hover:text-cyan-400 transition-colors">View all →</a>
+                <span className="text-[10px] text-slate-400">Managed by Checker</span>
               </div>
               <div className="flex items-start gap-6 p-[18px]">
                 <div className="w-[90px] h-[90px] flex-shrink-0">
@@ -357,11 +389,11 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Delivery Status — single-hue blue */}
+            {/* Delivery Status */}
             <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
               <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
                 <div className="text-[13px] font-semibold text-slate-800">Delivery Status</div>
-                <a className="text-[11px] text-cyan-500 cursor-pointer hover:text-cyan-400 transition-colors">View all →</a>
+                <button onClick={() => navigate("/admin/deliveries")} className={linkClass}>View all →</button>
               </div>
               <div className="flex items-start gap-6 p-[18px]">
                 <div className="w-[90px] h-[90px] flex-shrink-0">
@@ -415,7 +447,7 @@ export default function Dashboard() {
                 {[
                   { dot:"bg-green-500", text:<>Delivery rate: <span className="text-slate-800 font-semibold">{deliveries.delivery_rate_pct||0}%</span> completed</> },
                   { dot:(deliveries.pending||0)>0?"bg-amber-500":"bg-green-500", text:<><span className="text-slate-800 font-semibold">{deliveries.pending||0} pending deliveries</span> today</> },
-                  { dot:(inventory.out_of_stock||0)>0?"bg-red-500":"bg-green-500", text:(inventory.out_of_stock||0)>0 ? <><span className="text-red-500 font-semibold">{inventory.out_of_stock} items out of stock</span> — reorder needed</> : <><span className="text-green-600 font-semibold">All items in stock</span></> },
+                  stockBullet,
                 ].map((item,i) => (
                   <div key={i} className="flex items-center gap-2 text-[11px]">
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.dot}`} />
@@ -426,17 +458,17 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Notifications */}
+          {/* Notifications: live only (Pusher), no separate page */}
           <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
             <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
               <div className="text-[13px] font-semibold text-slate-800">Recent Notifications</div>
-              <a className="text-[11px] text-cyan-500 cursor-pointer hover:text-cyan-400 transition-colors">View all</a>
+              <span className="text-[10px] text-slate-400">Live</span>
             </div>
             {notifications.length === 0 && (
               <div className="px-[18px] py-4 text-[11px] text-slate-400">No notifications yet — real-time updates will appear here.</div>
             )}
             {notifications.map((n,i,arr) => (
-              <div key={i} className={`flex items-start gap-2.5 px-[18px] py-3 cursor-pointer hover:bg-slate-50 transition-colors relative ${i < arr.length-1 ? "border-b border-black/[0.09]" : ""}`}>
+              <div key={i} className={`flex items-start gap-2.5 px-[18px] py-3 relative ${i < arr.length-1 ? "border-b border-black/[0.09]" : ""}`}>
                 <div className={`w-[30px] h-[30px] rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 ${n.bg} ${n.color}`}>{n.icon}</div>
                 <div>
                   <div className="text-xs font-medium text-slate-800">{n.title}</div>
@@ -450,10 +482,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* OVERDUE RECEIVABLES */}
+      {/* ATTENDANCE + OVERDUE RECEIVABLES */}
       <div className="grid grid-cols-[1fr_340px] gap-3">
 
-        {/* Attendance Summary — plain, no per-status colors */}
+        {/* Attendance Summary */}
         <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
           <div className="px-[18px] py-3.5 border-b border-black/[0.09]">
             <div className="text-[13px] font-semibold text-slate-800">Attendance Today</div>
@@ -479,20 +511,25 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Overdue Receivables */}
+        {/* Overdue Receivables (opens Receipts) */}
         <div className="bg-white border border-red-200 rounded-xl overflow-hidden">
           <div className="px-[18px] py-3.5 border-b border-red-100 bg-red-50/40 flex items-center justify-between">
             <div>
               <div className="text-[13px] font-semibold text-slate-800">Overdue Receivables</div>
-              <div className="text-[10px] text-red-400 mt-0.5">Action required</div>
+              <div className="text-[10px] text-red-400 mt-0.5">{hasOverdue ? "Action required" : "All current"}</div>
             </div>
-            <a className="text-[11px] text-cyan-500 cursor-pointer hover:text-cyan-400 transition-colors">View all</a>
+            <button onClick={() => navigate("/admin/receipts")} className={linkClass}>View all</button>
           </div>
           {(overdue.receipts||[]).length === 0 && (
             <div className="px-[18px] py-4 text-[11px] text-slate-400">No overdue receivables</div>
           )}
           {(overdue.receipts||[]).map((r) => (
-            <div key={r.id} className="grid grid-cols-[1fr_auto_auto] gap-4 items-center px-[18px] py-2.5 border-b border-black/[0.09] last:border-b-0 hover:bg-slate-50 transition-colors cursor-pointer">
+            <div
+              key={r.id}
+              onClick={() => navigate("/admin/receipts")}
+              title={r.receipt_no}
+              className="grid grid-cols-[1fr_auto_auto] gap-4 items-center px-[18px] py-2.5 border-b border-black/[0.09] last:border-b-0 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
               <div className="text-xs text-slate-800 font-medium">{r.customer_name}</div>
               <div className="text-xs text-slate-800 font-mono font-semibold">{fmt(r.total_amount)}</div>
               <div className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${r.days_overdue > 15 ? "bg-red-100 text-red-500" : "bg-amber-100 text-amber-600"}`}>{r.days_overdue} days</div>

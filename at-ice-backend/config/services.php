@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    // Groq AI (Admin Dashboard AI Summary). Read through config so the key
+    // still works in production after "php artisan config:cache".
+    'groq' => [
+        'key' => env('GROQ_API_KEY'),
+    ],
+
 ];

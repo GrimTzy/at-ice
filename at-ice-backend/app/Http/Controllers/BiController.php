@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use App\Models\Receipt;
 use App\Models\Delivery;
 use App\Models\Product;
@@ -15,6 +16,13 @@ use Carbon\Carbon;
 
 class BiController extends Controller
 {
+    // The app runs in UTC; "today" for attendance must be Philippine time.
+    private const LOCAL_TZ = 'Asia/Manila';
+
+    // Receipts unpaid for longer than this many days count as overdue
+    // (same rule as ReceiptController@overdue).
+    private const OVERDUE_DAYS = 15;
+
     // GET /api/bi/sales-overview
     // Returns: monthly sales totals for current year (all 12 months),
     // plus prev month and same month last year for comparison
@@ -27,7 +35,7 @@ class BiController extends Controller
         $prevMonth  = $now->copy()->subMonth()->month;
         $prevMonthYear = $now->copy()->subMonth()->year;
 
-        // Monthly totals — current year (for bar/line chart)
+        // Monthly totals, current year (for bar/line chart)
         $thisYearMonthly = Receipt::selectRaw('MONTH(created_at) as month, SUM(total_amount) as total')
             ->whereYear('created_at', $thisYear)
             ->groupBy('month')
@@ -35,7 +43,7 @@ class BiController extends Controller
             ->get()
             ->keyBy('month');
 
-        // Monthly totals — last year (for comparison chart)
+        // Monthly totals, last year (for comparison chart)
         $lastYearMonthly = Receipt::selectRaw('MONTH(created_at) as month, SUM(total_amount) as total')
             ->whereYear('created_at', $lastYear)
             ->groupBy('month')
@@ -87,7 +95,7 @@ class BiController extends Controller
 
         $unpaidThisMonth = Receipt::whereYear('created_at', $thisYear)
             ->whereMonth('created_at', $thisMonth)
-            ->where('payment_status', 'unpaid')
+            ->whereIn('payment_status', ['unpaid', 'overdue'])
             ->sum('total_amount');
 
         // Total orders this month (receipt count)
@@ -182,7 +190,7 @@ class BiController extends Controller
         $outOfStock = $products->filter(fn($p) => $p->current_stock === 0)->count();
         $total      = $products->count();
 
-        // Critical items (out of stock or low stock) — top 5
+        // Critical items (out of stock or low stock), top 5
         $criticalItems = $products
             ->filter(fn($p) => $p->current_stock <= $p->minimum_stock)
             ->sortBy('current_stock')
@@ -208,13 +216,15 @@ class BiController extends Controller
     }
 
     // GET /api/bi/attendance-today
-    // Returns: today's attendance summary
+    // Returns: today's attendance summary. "Today" is Philippine time
+    // (the app runs in UTC, which is 8 hours behind).
     public function attendanceToday()
     {
-        $today = Carbon::today()->toDateString();
+        $now   = Carbon::now(self::LOCAL_TZ);
+        $today = $now->toDateString();
 
         // Count by status for today
-        $statusCounts = Attendance::where('date', $today)
+        $statusCounts = Attendance::whereDate('date', $today)
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->get()
@@ -239,8 +249,8 @@ class BiController extends Controller
         // Weekly trend (last 7 days) for mini chart
         $weeklyTrend = [];
         for ($i = 6; $i >= 0; $i--) {
-            $day   = Carbon::today()->subDays($i);
-            $count = Attendance::where('date', $day->toDateString())
+            $day   = $now->copy()->subDays($i);
+            $count = Attendance::whereDate('date', $day->toDateString())
                 ->whereIn('status', ['present', 'late', 'half_day'])
                 ->count();
             $weeklyTrend[] = [
@@ -325,14 +335,22 @@ class BiController extends Controller
     }
 
     // GET /api/bi/overdue-receipts
-    // Returns: unpaid receipts older than 15 days
+    // Returns: receipts that are overdue. Counts BOTH receipts already marked
+    // "overdue" (the Receipts page marks them) AND unpaid receipts older than
+    // 15 days that have not been marked yet. Previously only "unpaid" was
+    // counted, so the card showed 0 once the Receipts page had marked them.
     public function overdueReceipts()
     {
-        $cutoff = Carbon::now()->subDays(15);
+        $cutoff = Carbon::now()->subDays(self::OVERDUE_DAYS);
 
         $overdue = Receipt::with(['delivery.customer'])
-            ->where('payment_status', 'unpaid')
-            ->where('created_at', '<=', $cutoff)
+            ->where(function ($q) use ($cutoff) {
+                $q->where('payment_status', 'overdue')
+                  ->orWhere(function ($q2) use ($cutoff) {
+                      $q2->where('payment_status', 'unpaid')
+                         ->where('created_at', '<=', $cutoff);
+                  });
+            })
             ->orderBy('created_at', 'asc')
             ->get()
             ->map(fn($r) => [
@@ -341,16 +359,15 @@ class BiController extends Controller
                 'total_amount'   => (float) $r->total_amount,
                 'created_at'     => $r->created_at->toDateString(),
                 'days_overdue'   => (int) $r->created_at->diffInDays(Carbon::now()),
-                'customer_name'  => $r->customer?->name ?? 'N/A',
+                'customer_name'  => $r->delivery?->customer?->name ?? 'N/A',
                 'customer_id'    => $r->customer_id,
             ]);
 
-        $totalOverdue = $overdue->sum('total_amount');
-
         return response()->json([
-            'total_overdue_amount' => (float) $totalOverdue,
+            'total_overdue_amount' => (float) $overdue->sum('total_amount'),
             'overdue_count'        => $overdue->count(),
-            'receipts'             => $overdue,
+            'overdue_customers'    => $overdue->pluck('customer_id')->filter()->unique()->count(),
+            'receipts'             => $overdue->values(),
         ]);
     }
 
@@ -358,8 +375,7 @@ class BiController extends Controller
     // Single endpoint - returns ALL BI data in one call
     public function summary()
     {
-        $salesRequest    = request();
-        $expenseRequest  = new \Illuminate\Http\Request();
+        $expenseRequest = new \Illuminate\Http\Request();
 
         return response()->json([
             'sales'      => json_decode($this->salesOverview()->content(), true),
@@ -369,6 +385,25 @@ class BiController extends Controller
             'expenses'   => json_decode($this->getExpenses($expenseRequest)->content(), true),
             'overdue'    => json_decode($this->overdueReceipts()->content(), true),
         ]);
+    }
+
+    // If a reply was cut off by the token limit, keep only complete
+    // sentences so the dashboard never shows a half sentence.
+    private function trimToCompleteSentence(string $text): string
+    {
+        $text = trim($text);
+
+        if ($text === '' || preg_match('/[.!?]["\')\]]?$/u', $text)) {
+            return $text;
+        }
+
+        $lastEnd = max(
+            (int) mb_strrpos($text, '. '),
+            (int) mb_strrpos($text, '! '),
+            (int) mb_strrpos($text, '? ')
+        );
+
+        return $lastEnd > 0 ? mb_substr($text, 0, $lastEnd + 1) : $text;
     }
 
     // GET /api/bi/ai-summary
@@ -384,33 +419,59 @@ class BiController extends Controller
     Total deliveries: " . $data['deliveries']['total'] . " (" . $data['deliveries']['delivery_rate_pct'] . "% delivery rate)
     Inventory: " . $data['inventory']['out_of_stock'] . " out of stock, " . $data['inventory']['low_stock'] . " low stock items
     Attendance today: " . $data['attendance']['total_in'] . " / " . $data['attendance']['total_employees'] . " employees present
-    Overdue receivables: ₱" . number_format($data['overdue']['total_overdue_amount']) . " across " . $data['overdue']['overdue_count'] . " customers
+    Overdue receivables: ₱" . number_format($data['overdue']['total_overdue_amount']) . " across " . $data['overdue']['overdue_customers'] . " customer(s)
 
     Respond with ONLY the summary paragraph, no labels or headers.";
 
-        $apiKey   = env('GROQ_API_KEY');
-        $url      = "https://api.groq.com/openai/v1/chat/completions";
-        $response = Http::withoutVerifying()
-        ->withHeaders(['Authorization' => "Bearer {$apiKey}"])
-        ->post($url, [
-        'model'    => 'openai/gpt-oss-20b',
-        'messages' => [
-            ['role' => 'user', 'content' => $prompt]
-        ],
-        'max_tokens'  => 300,
-        'temperature' => 0.7,
-    ]);
+        // Read the key through config (env() returns null in production once
+        // the config is cached). Falls back to env() for local development.
+        $apiKey = config('services.groq.key') ?: env('GROQ_API_KEY');
+
+        if (!$apiKey) {
+            return response()->json(['summary' => 'AI summary unavailable at this time.']);
+        }
+
+        try {
+            $http = Http::timeout(30)
+                ->withHeaders(['Authorization' => "Bearer {$apiKey}"]);
+
+            // SSL verification is skipped ONLY on the local machine (old
+            // Windows cURL certificate issue). Production always verifies.
+            if (app()->environment('local')) {
+                $http = $http->withoutVerifying();
+            }
+
+            $response = $http->post('https://api.groq.com/openai/v1/chat/completions', [
+                'model'       => 'openai/gpt-oss-20b',
+                'messages'    => [
+                    ['role' => 'user', 'content' => $prompt],
+                ],
+                // gpt-oss is a reasoning model: part of the budget is used for
+                // its hidden "thinking" before the answer. 300 was too small
+                // and cut the summary mid-sentence.
+                'max_tokens'  => 1024,
+                'temperature' => 0.7,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Groq AI summary request failed', ['error' => $e->getMessage()]);
+            return response()->json(['summary' => 'AI summary unavailable at this time.']);
+        }
 
         if ($response->failed()) {
-    return response()->json([
-        'summary' => 'AI summary unavailable at this time.',
-        'debug'   => $response->json(),
-        'status'  => $response->status(),
-    ], 200);
-}
+            // Details go to the server log only, never to the browser
+            Log::warning('Groq AI summary returned an error', [
+                'status' => $response->status(),
+                'body'   => $response->json(),
+            ]);
+            return response()->json(['summary' => 'AI summary unavailable at this time.']);
+        }
 
-        $text = $response->json('choices.0.message.content') ?? 'AI summary unavailable.';
+        $text = $response->json('choices.0.message.content');
 
-        return response()->json(['summary' => trim($text)]);
+        if (!is_string($text) || trim($text) === '') {
+            return response()->json(['summary' => 'AI summary unavailable at this time.']);
+        }
+
+        return response()->json(['summary' => $this->trimToCompleteSentence($text)]);
     }
 }
