@@ -61,7 +61,7 @@ class DeliveryProofController extends Controller
 
         $delivery = Delivery::with('customer')->findOrFail($request->delivery_id);
 
-        // Look up prices BEFORE starting the transaction / storing the photo 
+        // Look up prices BEFORE starting the transaction / storing the photo,
         // fail fast if any product has no price set for this customer.
         $lineItems     = [];
         $missingPrices = [];
@@ -114,7 +114,7 @@ class DeliveryProofController extends Controller
                 'customer_id'       => $delivery->customer_id,
                 'salesman_id'       => auth()->id(),
                 'quantity'          => $totalQuantity,
-                'unit_price'        => null, // multi-product — see receipt_items for breakdown
+                'unit_price'        => null, // multi-product, see receipt_items for breakdown
                 'total_amount'      => $totalAmount,
                 'payment_status'    => 'unpaid',
             ]);
@@ -123,7 +123,10 @@ class DeliveryProofController extends Controller
                 $receipt->items()->create($item);
             }
 
-            $delivery->update(['status' => 'delivered']);
+            $delivery->update([
+                'status'       => 'delivered',
+                'delivered_at' => now(),
+            ]);
             event(new \App\Events\DeliveryStatusUpdated($delivery->id, 'delivered'));
 
             DB::commit();
@@ -144,10 +147,13 @@ class DeliveryProofController extends Controller
         }
     }
 
+    // Salesman: deliveries still waiting for confirmation
+    // (Driver may or may not have started them yet)
     public function myDeliveries()
     {
         $deliveries = Delivery::with(['customer', 'items.product'])
-            ->where('status', '!=', 'delivered')
+            ->whereIn('status', ['pending', 'in_transit'])
+            ->whereDoesntHave('proofs')
             ->orderBy('created_at', 'desc')
             ->get();
 

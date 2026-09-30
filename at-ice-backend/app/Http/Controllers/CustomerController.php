@@ -75,6 +75,7 @@ class CustomerController extends Controller
     }
 
     // Creates a Customer Portal login account for an existing Customer
+    // Email format: name_customerid@atice.com (customers.id padded to 3 digits)
     public function createAccount($id)
     {
         $customer = Customer::findOrFail($id);
@@ -83,16 +84,12 @@ class CustomerController extends Controller
             return response()->json(['message' => 'This customer already has a login account.'], 422);
         }
 
-        $baseSlug = Str::slug($customer->name . '-' . ($customer->branch_code ?: $customer->city));
-        $loginEmail = $baseSlug . '@atice-portal.com';
-
-        $suffix = 1;
-        $candidate = $loginEmail;
-        while (User::where('email', $candidate)->exists()) {
-            $suffix++;
-            $candidate = $baseSlug . '-' . $suffix . '@atice-portal.com';
-        }
-        $loginEmail = $candidate;
+        // customers.id is unique, so no collision loop is needed.
+        // Slug with an empty separator removes spaces:
+        // "Alfamart Tungkong Mangga" -> "alfamarttungkongmangga"
+        $loginEmail = Str::slug($customer->name, '')
+            . '_' . str_pad($customer->id, 3, '0', STR_PAD_LEFT)
+            . '@atice.com';
 
         $plainPassword = Str::random(10);
 

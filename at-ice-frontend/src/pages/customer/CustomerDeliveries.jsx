@@ -6,9 +6,6 @@ const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
 
-const peso = (n) =>
-  "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 const fmtDate = (v) => {
   if (!v) return "Not set";
   const d = new Date(v);
@@ -94,9 +91,6 @@ export default function CustomerDeliveries() {
     });
   }, [deliveries, filter, search]);
 
-  const itemsTotal = (d) =>
-    (d.items || []).reduce((s, i) => s + Number(i.quantity_ordered || 0) * Number(i.unit_price || 0), 0);
-
   return (
     <CustomerLayout pageTitle="My Deliveries" breadcrumb="Deliveries">
       {loading ? (
@@ -144,7 +138,6 @@ export default function CustomerDeliveries() {
                       <th className="px-5 py-3 font-medium">Delivery No.</th>
                       <th className="px-3 py-3 font-medium">Scheduled</th>
                       <th className="px-3 py-3 font-medium hidden md:table-cell">Driver</th>
-                      <th className="px-3 py-3 font-medium hidden sm:table-cell text-right">Total</th>
                       <th className="px-3 py-3 font-medium">Status</th>
                       <th className="px-5 py-3" />
                     </tr>
@@ -155,7 +148,6 @@ export default function CustomerDeliveries() {
                         <td className="px-5 py-3 font-medium text-slate-800">{d.delivery_no}</td>
                         <td className="px-3 py-3 text-slate-600">{fmtDate(d.scheduled_date)}</td>
                         <td className="px-3 py-3 text-slate-600 hidden md:table-cell">{d.driver_name || "Not yet assigned"}</td>
-                        <td className="px-3 py-3 text-slate-600 hidden sm:table-cell text-right">{peso(itemsTotal(d))}</td>
                         <td className="px-3 py-3"><Badge status={d.status} /></td>
                         <td className="px-5 py-3 text-right">
                           <button
@@ -195,6 +187,10 @@ export default function CustomerDeliveries() {
                 <div className="text-slate-800 mt-0.5">{selected.driver_name || "Not yet assigned"}</div>
               </div>
               <div>
+                <div className="text-slate-400">Confirmed by</div>
+                <div className="text-slate-800 mt-0.5">{selected.confirmed_by || "Not yet confirmed"}</div>
+              </div>
+              <div>
                 <div className="text-slate-400">Scheduled date</div>
                 <div className="text-slate-800 mt-0.5">{fmtDate(selected.scheduled_date)}</div>
               </div>
@@ -204,7 +200,9 @@ export default function CustomerDeliveries() {
               </div>
               <div>
                 <div className="text-slate-400">Delivered</div>
-                <div className="text-slate-800 mt-0.5">{fmtDateTime(selected.delivered_at)}</div>
+                <div className="text-slate-800 mt-0.5">
+                  {fmtDateTime(selected.delivered_at || selected.confirmed_at)}
+                </div>
               </div>
               {selected.notes && (
                 <div className="col-span-2">
@@ -224,9 +222,7 @@ export default function CustomerDeliveries() {
                     <thead>
                       <tr className="text-left text-slate-400 bg-slate-50">
                         <th className="px-3 py-2 font-medium">Product</th>
-                        <th className="px-3 py-2 font-medium text-right">Ordered</th>
-                        <th className="px-3 py-2 font-medium text-right">Delivered</th>
-                        <th className="px-3 py-2 font-medium text-right">Unit price</th>
+                        <th className="px-3 py-2 font-medium text-right">Quantity</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-black/[0.06]">
@@ -234,14 +230,15 @@ export default function CustomerDeliveries() {
                         <tr key={idx}>
                           <td className="px-3 py-2 text-slate-800">{it.product_name || "Product"}</td>
                           <td className="px-3 py-2 text-right text-slate-600">{it.quantity_ordered}</td>
-                          <td className="px-3 py-2 text-right text-slate-600">{it.quantity_delivered ?? 0}</td>
-                          <td className="px-3 py-2 text-right text-slate-600">{peso(it.unit_price)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
+              <div className="mt-2 text-[11px] text-slate-400">
+                Prices and amounts are shown in Receipts & Balance once your delivery is confirmed.
+              </div>
             </div>
           </div>
         </div>

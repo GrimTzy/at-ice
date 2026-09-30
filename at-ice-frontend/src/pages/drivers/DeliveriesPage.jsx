@@ -156,7 +156,8 @@ export function DeliveriesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function updateStatus(deliveryId, status) {
+  // Driver can only start a delivery. "Delivered" is confirmed by the Salesman.
+  async function startDelivery(deliveryId) {
     setActionLoading(deliveryId);
     try {
       const token = localStorage.getItem("token");
@@ -167,11 +168,11 @@ export function DeliveriesPage() {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: "in_transit" }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => null);
-        console.error("Failed to update delivery status:", res.status, errData);
+        console.error("Failed to start delivery:", res.status, errData);
         return;
       }
       const data = await res.json();
@@ -179,7 +180,7 @@ export function DeliveriesPage() {
         prev.map((d) => (d.id === deliveryId ? data.delivery : d))
       );
     } catch (err) {
-      console.error("Network error updating delivery status:", err);
+      console.error("Network error starting delivery:", err);
     } finally {
       setActionLoading(null);
     }
@@ -360,7 +361,7 @@ export function DeliveriesPage() {
                   {d.status === "pending" && (
                     <div className="flex gap-2 mt-1">
                       <button
-                        onClick={() => updateStatus(d.id, "in_transit")}
+                        onClick={() => startDelivery(d.id)}
                         disabled={actionLoading === d.id}
                         className="flex-1 py-3 bg-blue-500 active:bg-blue-600 text-white text-[12px] font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60"
                       >
@@ -375,17 +376,16 @@ export function DeliveriesPage() {
                     </div>
                   )}
                   {d.status === "in_transit" && (
-                    <div className="flex gap-2 mt-1">
-                      <button
-                        onClick={() => updateStatus(d.id, "delivered")}
-                        disabled={actionLoading === d.id}
-                        className="flex-1 py-3 bg-green-500 active:bg-green-600 text-white text-[12px] font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60"
-                      >
-                        {actionLoading === d.id ? "Updating…" : "Mark as Delivered"}
-                      </button>
+                    <div className="flex flex-col gap-2 mt-1">
+                      <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                        <span className="text-[12px] text-blue-600 font-medium">
+                          On the way. The Salesman will confirm once the delivery is received.
+                        </span>
+                      </div>
                       <button
                         onClick={() => navigate("/driver/gps")}
-                        className="flex-1 py-3 bg-slate-100 active:bg-slate-200 text-slate-600 text-[12px] font-semibold rounded-xl transition-colors cursor-pointer"
+                        className="w-full py-3 bg-slate-100 active:bg-slate-200 text-slate-600 text-[12px] font-semibold rounded-xl transition-colors cursor-pointer"
                       >
                         View on Map
                       </button>

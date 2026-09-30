@@ -41,8 +41,8 @@ class CustomerPortalController extends Controller
     }
 
     // GET /api/my-delivery-history
-    // (named to avoid colliding with the Salesman's own GET /api/my-deliveries,
-    // which is a completely different endpoint — DeliveryProofController@myDeliveries)
+    // Named to avoid colliding with the Salesman's own GET /api/my-deliveries,
+    // which is a completely different endpoint (DeliveryProofController@myDeliveries).
     public function myDeliveries(Request $request)
     {
         $customer = $this->resolveCustomer($request);
@@ -50,14 +50,15 @@ class CustomerPortalController extends Controller
             return response()->json(['message' => 'No customer account linked to this login.'], 404);
         }
 
-        $deliveries = Delivery::with(['driver.employee', 'items.product'])
+        $deliveries = Delivery::with(['driver.employee', 'items.product', 'proofs.salesman'])
             ->where('customer_id', $customer->id)
             ->orderBy('scheduled_date', 'desc')
             ->get();
 
         $result = $deliveries->map(function ($delivery) {
             $driverName = $delivery->driver?->name;
-            $plate = $delivery->driver?->employee?->vehicle_plate;
+            $plate      = $delivery->driver?->employee?->vehicle_plate;
+            $proof      = $delivery->proofs->first();
 
             return [
                 'id'             => $delivery->id,
@@ -67,11 +68,11 @@ class CustomerPortalController extends Controller
                 'dispatched_at'  => $delivery->dispatched_at,
                 'delivered_at'   => $delivery->delivered_at,
                 'notes'          => $delivery->notes,
-                // Plate number is folded into the display name here, server
-                // side, rather than sent as a separate field the frontend
-                // has to know how to combine — e.g. "Rhalf Valencia (PN:
-                // V7824)". Falls back to the plain name if no plate is set.
+                // Plate number is folded into the display name on the server,
+                // for example "Rhalf Valencia (PN: V7824)".
                 'driver_name'    => $plate ? "{$driverName} (PN: {$plate})" : $driverName,
+                'confirmed_by'   => $proof?->salesman?->name,
+                'confirmed_at'   => $proof?->confirmed_at,
                 'items'          => $delivery->items->map(function ($item) {
                     return [
                         'product_name'       => $item->product?->name,

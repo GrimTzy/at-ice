@@ -30,12 +30,17 @@ class DeliveryController extends Controller
             'items.*.unit_price'       => 'required|numeric|min:0',
         ]);
 
-        // Auto-generate a sequential delivery_no (DEL-0001, DEL-0002, ...)
-        // instead of requiring the frontend to supply one or using a random
-        // uniqid() — per team decision, delivery numbers should reflect
-        // "which delivery number this is" in order.
-        $count = Delivery::count() + 1;
-        $data['delivery_no'] = 'DEL-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+        // Sequential delivery number: DEL-0001, DEL-0002, ...
+        // Uses the highest existing number (including soft deleted rows)
+        // instead of a row count, so deleting a delivery never causes a
+        // duplicate number.
+        $last = Delivery::withTrashed()
+            ->where('delivery_no', 'REGEXP', '^DEL-[0-9]{4}$')
+            ->orderByDesc('delivery_no')
+            ->value('delivery_no');
+
+        $next = $last ? ((int) substr($last, 4)) + 1 : 1;
+        $data['delivery_no'] = 'DEL-' . str_pad($next, 4, '0', STR_PAD_LEFT);
 
         $data['prepared_by'] = Auth::id();
         $items = $data['items'];
@@ -69,11 +74,12 @@ class DeliveryController extends Controller
         return response()->json(['message' => 'Delivery cancelled']);
     }
 
-    // Driver — update delivery status (pending → in_transit → delivered)
+    // Driver: can only START a delivery (pending to in_transit).
+    // "Delivered" is set by the Salesman through DeliveryProofController@confirm.
     public function updateStatus(Request $request, $id)
     {
         $request->validate([
-            'status' => 'required|in:in_transit,delivered',
+            'status' => 'required|in:in_transit',
         ]);
 
         $delivery = Delivery::with(['customer', 'items.product', 'proofs'])->findOrFail($id);
@@ -82,15 +88,22 @@ class DeliveryController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
-        $delivery->update(['status' => $request->status]);
+        if ($delivery->status !== 'pending') {
+            return response()->json(['message' => 'Only pending deliveries can be started.'], 422);
+        }
+
+        $delivery->update([
+            'status'        => 'in_transit',
+            'dispatched_at' => now(),
+        ]);
 
         broadcast(new DeliveryStatusUpdated([
-            'delivery_id'  => $delivery->id,
-            'delivery_no'  => $delivery->delivery_no,
-            'driver_id'    => $delivery->driver_id,
-            'customer'     => $delivery->customer?->name ?? 'Unknown',
-            'status'       => $request->status,
-            'message'      => "Delivery {$delivery->delivery_no} is now {$request->status}.",
+            'delivery_id' => $delivery->id,
+            'delivery_no' => $delivery->delivery_no,
+            'driver_id'   => $delivery->driver_id,
+            'customer'    => $delivery->customer?->name ?? 'Unknown',
+            'status'      => 'in_transit',
+            'message'     => "Delivery {$delivery->delivery_no} is now in_transit.",
         ]))->toOthers();
 
         return response()->json([
@@ -99,7 +112,7 @@ class DeliveryController extends Controller
         ]);
     }
 
-    // Salesman — view assigned deliveries
+    // Salesman: view assigned deliveries (not yet confirmed)
     public function myDeliveries(Request $request)
     {
         $deliveries = Delivery::with(['driver', 'customer', 'items.product'])
@@ -110,7 +123,7 @@ class DeliveryController extends Controller
         return response()->json($deliveries);
     }
 
-    // Driver — view assigned deliveries
+    // Driver: view assigned deliveries
     public function driverDeliveries(Request $request)
     {
         $deliveries = Delivery::with(['customer', 'items.product', 'proofs'])
