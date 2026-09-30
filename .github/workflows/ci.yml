@@ -1,7 +1,8 @@
-# CI: build both production images on every push to main and on every PR,
-# so a broken Dockerfile or frontend build shows up on GitHub.
-# Deployment itself is done by Coolify's GitHub App, which auto-deploys
-# main on push; if that build fails, the running version stays up.
+# CI on every push to main and every PR:
+#   build       - both production images build (Dockerfiles, frontend bundle)
+#   migrations  - every migration runs cleanly on a fresh MySQL 8.4, the same
+#                 engine as production (SQLite in local dev hides FK/order bugs)
+# Deployment is separate: the hosting platform auto-deploys main on push.
 name: CI
 
 on:
@@ -35,3 +36,42 @@ jobs:
           push: false
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
+
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: atice
+          MYSQL_ROOT_PASSWORD: ci-only-password
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-only-password --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    defaults:
+      run:
+        working-directory: at-ice-backend
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_DATABASE: atice
+      DB_USERNAME: root
+      DB_PASSWORD: ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_mysql, bcmath
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Run all migrations on an empty MySQL database
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+          php artisan migrate --force
