@@ -28,6 +28,10 @@ services:
       APP_DEBUG: "false"
       APP_KEY: ${APP_KEY}
       APP_URL: ${APP_URL:-https://www.atice.cloud}
+      # Philippine time for dates, month grouping and receipt numbers.
+      # PH has no DST, so the fixed DB offset always matches.
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Manila}
+      DB_TIMEZONE: ${DB_TIMEZONE:-+08:00}
       LOG_CHANNEL: stderr
       LOG_LEVEL: ${LOG_LEVEL:-warning}
       DB_CONNECTION: mysql

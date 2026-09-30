@@ -58,6 +58,10 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            // Session time zone, kept in step with APP_TIMEZONE so MySQL's
+            // TIMESTAMP columns, NOW() and MONTH() agree with PHP. Use an
+            // offset: the mysql image has no named-zone tables.
+            'timezone' => env('DB_TIMEZONE'),
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
