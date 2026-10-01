@@ -72,6 +72,21 @@ const nowInputValue = () => {
 };
 const isSameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
+// Philippine mobile number: 11 digits starting with 09
+const PHONE_REGEX = /^09\d{9}$/;
+const PHONE_MESSAGE = "Phone must be 11 digits starting with 09 (e.g. 09171234567).";
+const digitsOnly = (v) => String(v || "").replace(/\D/g, "").slice(0, 11);
+
+// "Mark Interviewed" is allowed only after the scheduled interview time has passed
+const interviewDue = (a) => {
+  const d = parseLocal(a.interview_date);
+  return !!d && d <= new Date();
+};
+const interviewBlockReason = (a) => {
+  if (!parseLocal(a.interview_date)) return "Schedule an interview first (use Edit).";
+  return `Available after the interview on ${fmtInterview(a.interview_date)}.`;
+};
+
 // Small hint next to the interview time for pending applicants
 const scheduleHint = (a) => {
   if (a.status !== "pending") return null;
@@ -83,7 +98,7 @@ const scheduleHint = (a) => {
   return null;
 };
 
-const EMPTY_FORM = { name: "", email: "", phone: "", position_applied: "", interview_date: "", status: "pending", notes: "" };
+const EMPTY_FORM = { name: "", email: "", phone: "", position_applied: "", interview_date: "", notes: "" };
 
 function Modal({ title, onClose, children, width = "max-w-lg" }) {
   return (
@@ -187,32 +202,35 @@ export default function InterviewsPage() {
       phone: a.phone || "",
       position_applied: a.position_applied || "",
       interview_date: toInputValue(a.interview_date),
-      status: a.status || "pending",
       notes: a.notes || "",
     });
     setFormError("");
     setEditing(a);
   };
   const isNew = editing && !editing.id;
+  // Schedule can be set or changed only while the applicant is still pending
+  const canEditSchedule = isNew || editing?.status === "pending";
+  const scheduleChanged = !isNew && editing && form.interview_date !== toInputValue(editing.interview_date);
 
   const submitForm = async (e) => {
     e.preventDefault();
     setFormError("");
     if (!form.name.trim()) return setFormError("Enter the applicant's name.");
     if (!form.position_applied.trim()) return setFormError("Enter the position applied for.");
-    if (isNew && form.interview_date && form.interview_date <= nowInputValue()) {
+    if (form.phone && !PHONE_REGEX.test(form.phone)) return setFormError(PHONE_MESSAGE);
+    if ((isNew || scheduleChanged) && form.interview_date && form.interview_date <= nowInputValue()) {
       return setFormError("The interview date and time must be in the future.");
     }
 
     const payload = {
       name: form.name.trim(),
       email: form.email.trim() || null,
-      phone: form.phone.trim() || null,
+      phone: form.phone || null,
       position_applied: form.position_applied.trim(),
-      interview_date: form.interview_date || null,
       notes: form.notes.trim() || null,
     };
-    if (!isNew) payload.status = form.status;
+    // Send the schedule only when it is editable, so a non-pending record is never rescheduled
+    if (canEditSchedule) payload.interview_date = form.interview_date || null;
 
     setSaving(true);
     try {
@@ -376,9 +394,11 @@ export default function InterviewsPage() {
                           <div className="flex items-center justify-end gap-1.5">
                             <button onClick={() => setViewing(a)} className={`${actionBtn} border-black/[0.09] text-slate-600 hover:border-cyan-400 hover:text-cyan-500`}>View</button>
                             <button onClick={() => openEdit(a)} className={`${actionBtn} border-black/[0.09] text-slate-600 hover:border-cyan-400 hover:text-cyan-500`}>Edit</button>
-                            {a.status === "pending" && (
+                            {a.status === "pending" && (interviewDue(a) ? (
                               <button onClick={() => openStatus(a, "interviewed")} className={`${actionBtn} border-cyan-200 text-cyan-600 hover:bg-cyan-50`}>Mark Interviewed</button>
-                            )}
+                            ) : (
+                              <button disabled title={interviewBlockReason(a)} className={`${actionBtn} border-black/[0.09] text-slate-400 bg-slate-50 cursor-not-allowed`}>Mark Interviewed</button>
+                            ))}
                             {a.status === "interviewed" && (
                               <button onClick={() => openStatus(a, "hired")} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`}>Hire</button>
                             )}
@@ -408,7 +428,18 @@ export default function InterviewsPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Phone (optional)">
-                <input type="text" maxLength={20} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputClass} placeholder="09171234567" />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={11}
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: digitsOnly(e.target.value) })}
+                  className={`${inputClass} ${form.phone && !PHONE_REGEX.test(form.phone) ? "border-red-300 focus:border-red-400" : ""}`}
+                  placeholder="09171234567"
+                />
+                {form.phone && !PHONE_REGEX.test(form.phone) && (
+                  <span className="text-[10px] text-red-600">11 digits starting with 09</span>
+                )}
               </Field>
               <Field label="Email (optional)">
                 <input type="email" maxLength={255} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} placeholder="name@example.com" />
@@ -434,17 +465,24 @@ export default function InterviewsPage() {
               <input
                 type="datetime-local"
                 value={form.interview_date}
-                min={isNew ? nowInputValue() : undefined}
+                min={canEditSchedule ? nowInputValue() : undefined}
+                disabled={!canEditSchedule}
                 onChange={(e) => setForm({ ...form, interview_date: e.target.value })}
-                className={inputClass}
+                className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
               />
+              {!canEditSchedule && (
+                <span className="text-[10px] text-slate-400">The schedule is locked because this applicant is already {STATUS_LABEL[editing.status] || editing.status}.</span>
+              )}
             </Field>
 
             {!isNew && (
               <Field label="Status">
-                <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className={inputClass}>
-                  {Object.entries(STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_CLASS[editing.status] || "bg-slate-100 text-slate-500"}`}>
+                    {STATUS_LABEL[editing.status] || editing.status}
+                  </span>
+                  <span className="text-[10px] text-slate-400">Change the status using the action buttons in the table.</span>
+                </div>
               </Field>
             )}
 

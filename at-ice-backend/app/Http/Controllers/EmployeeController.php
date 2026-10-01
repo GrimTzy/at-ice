@@ -9,14 +9,18 @@ use Illuminate\Support\Facades\Hash;
 
 class EmployeeController extends Controller
 {
-    // GET all employees
-    // NOTE (v29.7): scope widened to also include Driver accounts (role:
-    // driver on the users table) alongside Checker/Salesman/Maintenance
-    // (role: employee, sub_role in [...]). Drivers keep their own separate
-    // login/routes (role:driver, /driver/login unchanged) — this filter
-    // only controls who shows up on the Employees management page, not
-    // how anyone logs in. Still excludes Admin/HR — see the original
-    // defensive-filter note this replaces, same reasoning applies.
+    // Philippine mobile number: 11 digits starting with 09 (e.g. 09171234567)
+    private const PHONE_REGEX = '/^09\d{9}$/';
+    private const PHONE_MESSAGE = 'Phone must be 11 digits starting with 09 (e.g. 09171234567).';
+
+    // Remove spaces and dashes so "0917 123 4567" or "0917-123-4567" are accepted.
+    private function cleanPhone(Request $request): void
+    {
+        if ($request->filled('phone')) {
+            $request->merge(['phone' => preg_replace('/[\s\-]/', '', (string) $request->phone)]);
+        }
+    }
+
     public function index()
     {
         $employees = Employee::with('user')
@@ -34,11 +38,14 @@ class EmployeeController extends Controller
     // POST create employee
     public function store(Request $request)
     {
+        $this->cleanPhone($request);
+
         $request->validate([
             'first_name' => 'required|string',
             'last_name' => 'required|string',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|min:6',
+            'phone' => ['nullable', 'regex:' . self::PHONE_REGEX],
             'position' => 'required|string',
             'daily_rate' => 'required|numeric',
             'date_hired' => 'required|date',
@@ -53,6 +60,8 @@ class EmployeeController extends Controller
             // generically here — the frontend only shows/sends this field
             // when Employee Role is set to Driver.
             'vehicle_plate' => 'nullable|string|max:20',
+        ], [
+            'phone.regex' => self::PHONE_MESSAGE,
         ]);
 
         $isDriver = $request->sub_role === 'driver';
@@ -107,8 +116,13 @@ class EmployeeController extends Controller
     {
         $employee = Employee::findOrFail($id);
 
+        $this->cleanPhone($request);
+
         $request->validate([
+            'phone' => ['nullable', 'regex:' . self::PHONE_REGEX],
             'vehicle_plate' => 'nullable|string|max:20',
+        ], [
+            'phone.regex' => self::PHONE_MESSAGE,
         ]);
 
         $employee->update($request->only([

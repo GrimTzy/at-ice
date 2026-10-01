@@ -11,6 +11,10 @@ class ApplicantController extends Controller
 {
     private const LOCAL_TZ = 'Asia/Manila';
 
+    // Philippine mobile number: 11 digits starting with 09 (e.g. 09171234567)
+    private const PHONE_REGEX = '/^09\d{9}$/';
+    private const PHONE_MESSAGE = 'Phone must be 11 digits starting with 09 (e.g. 09171234567).';
+
     private function nowLocal(): string
     {
         return now(self::LOCAL_TZ)->format('Y-m-d H:i:s');
@@ -22,6 +26,71 @@ class ApplicantController extends Controller
             return null;
         }
         return Carbon::parse($value)->format('Y-m-d H:i:s');
+    }
+
+    // Remove spaces and dashes so "0917 123 4567" or "0917-123-4567" are accepted.
+    private function cleanPhone(Request $request): void
+    {
+        if ($request->filled('phone')) {
+            $request->merge(['phone' => preg_replace('/[\s\-]/', '', (string) $request->phone)]);
+        }
+    }
+
+    private function assertTransition(Applicant $applicant, string $newStatus): void
+    {
+        $current = $applicant->status;
+
+        if ($current === $newStatus) {
+            return;
+        }
+
+        if (in_array($current, ['hired', 'rejected'], true)) {
+            throw ValidationException::withMessages([
+                'status' => ["This applicant is already {$current}. The status can no longer be changed."],
+            ]);
+        }
+
+        switch ($newStatus) {
+            case 'interviewed':
+                if ($current !== 'pending') {
+                    throw ValidationException::withMessages([
+                        'status' => ['Only pending applicants can be marked as interviewed.'],
+                    ]);
+                }
+
+                $interviewDate = $this->normalizeDate($applicant->getRawOriginal('interview_date'));
+
+                if (!$interviewDate) {
+                    throw ValidationException::withMessages([
+                        'status' => ['Schedule an interview first before marking the applicant as interviewed.'],
+                    ]);
+                }
+
+                if ($interviewDate > $this->nowLocal()) {
+                    $when = Carbon::parse($interviewDate)->format('M j, Y g:i A');
+                    throw ValidationException::withMessages([
+                        'status' => ["The interview is scheduled on {$when}. It can be marked as interviewed only after that time."],
+                    ]);
+                }
+                break;
+
+            case 'hired':
+                if ($current !== 'interviewed') {
+                    throw ValidationException::withMessages([
+                        'status' => ['Only interviewed applicants can be hired.'],
+                    ]);
+                }
+                break;
+
+            case 'rejected':
+                // Allowed from pending or interviewed (final states handled above).
+                break;
+
+            case 'pending':
+                throw ValidationException::withMessages([
+                    'status' => ['An applicant cannot be moved back to pending.'],
+                ]);
+        }
     }
 
     // GET all applicants (HR)
@@ -57,13 +126,17 @@ class ApplicantController extends Controller
     // New applicants always start as "pending".
     public function store(Request $request)
     {
+        $this->cleanPhone($request);
+
         $request->validate([
             'name'             => 'required|string|max:255',
             'email'            => 'nullable|email|max:255',
-            'phone'            => 'nullable|string|max:20',
+            'phone'            => ['nullable', 'regex:' . self::PHONE_REGEX],
             'position_applied' => 'required|string|max:255',
             'interview_date'   => 'nullable|date',
             'notes'            => 'nullable|string|max:1000',
+        ], [
+            'phone.regex' => self::PHONE_MESSAGE,
         ]);
 
         $interviewDate = $this->normalizeDate($request->interview_date);
@@ -90,25 +163,46 @@ class ApplicantController extends Controller
         ], 201);
     }
 
-    // UPDATE applicant / reschedule interview (HR)
+    // UPDATE applicant details / reschedule interview (HR)
+    // Status is NOT changed here. Use the status endpoint so the rules apply.
     public function update(Request $request, $id)
     {
         $applicant = Applicant::findOrFail($id);
 
+        $this->cleanPhone($request);
+
         $request->validate([
             'name'             => 'sometimes|required|string|max:255',
             'email'            => 'nullable|email|max:255',
-            'phone'            => 'nullable|string|max:20',
+            'phone'            => ['nullable', 'regex:' . self::PHONE_REGEX],
             'position_applied' => 'sometimes|required|string|max:255',
             'interview_date'   => 'nullable|date',
-            'status'           => 'sometimes|in:pending,interviewed,hired,rejected',
             'notes'            => 'nullable|string|max:1000',
+        ], [
+            'phone.regex' => self::PHONE_MESSAGE,
         ]);
 
-        $data = $request->only(['name', 'email', 'phone', 'position_applied', 'status', 'notes']);
+        $data = $request->only(['name', 'email', 'phone', 'position_applied', 'notes']);
 
         if ($request->exists('interview_date')) {
-            $data['interview_date'] = $this->normalizeDate($request->interview_date);
+            $newDate     = $this->normalizeDate($request->interview_date);
+            $currentDate = $this->normalizeDate($applicant->getRawOriginal('interview_date'));
+
+            if ($newDate !== $currentDate) {
+                if ($applicant->status !== 'pending') {
+                    throw ValidationException::withMessages([
+                        'interview_date' => ['The interview schedule can only be changed while the applicant is pending.'],
+                    ]);
+                }
+
+                if ($newDate && $newDate <= $this->nowLocal()) {
+                    throw ValidationException::withMessages([
+                        'interview_date' => ['The new interview date and time must be in the future.'],
+                    ]);
+                }
+
+                $data['interview_date'] = $newDate;
+            }
         }
 
         $applicant->update($data);
@@ -119,7 +213,7 @@ class ApplicantController extends Controller
         ]);
     }
 
-    // UPDATE status only (HR - quick action)
+    // UPDATE status only (HR quick action) with transition rules
     public function updateStatus(Request $request, $id)
     {
         $request->validate([
@@ -127,6 +221,9 @@ class ApplicantController extends Controller
         ]);
 
         $applicant = Applicant::findOrFail($id);
+
+        $this->assertTransition($applicant, $request->status);
+
         $applicant->update(['status' => $request->status]);
 
         return response()->json([
