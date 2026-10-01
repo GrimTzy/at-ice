@@ -27,10 +27,10 @@ const ClockIcon = () => (
 
 const MATCH_THRESHOLD = 0.5;
 const DETECTION_INTERVAL_MS = 1500;
-const RESULT_DISPLAY_MS = 3000;
-
-const todayDate = () => new Date().toISOString().split("T")[0];
-const nowTime = () => new Date().toTimeString().split(" ")[0];
+const RESULT_DISPLAY_MS = 3500;
+// After any result, the same worker is ignored for this long so one visit
+// to the kiosk does not record Time In and Time Out back to back.
+const SAME_WORKER_COOLDOWN_MS = 60_000;
 
 export default function AttendanceStation() {
   const videoRef = useRef(null);
@@ -116,30 +116,25 @@ export default function AttendanceStation() {
     };
   }, [modelsLoaded, descriptorsLoaded]);
 
-  // Records attendance via the public POST /api/attendances endpoint (no auth —
-  // this is a kiosk page with no login). Returns true only on a real 2xx success;
-  // logs the response body on failure so real errors surface in the console
-  // instead of silently looking like a "duplicate" in the UI.
+  // Records attendance via the public POST /api/attendances endpoint (no login,
+  // this is a kiosk). The server decides the date, the time, and whether this
+  // scan is a Time In or a Time Out, so only the matched face id is sent.
+  // Returns { type, hours } where type is time_in, time_out, too_soon,
+  // completed or error.
   const recordAttendance = useCallback(async (faceDataId) => {
     try {
       const res = await fetch("/api/attendances", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          face_data_id: Number(faceDataId),
-          date: todayDate(),
-          time_in: nowTime(),
-          status: "present",
-        }),
+        body: JSON.stringify({ face_data_id: Number(faceDataId) }),
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        console.error("Attendance post failed:", res.status, errData);
-      }
-      return res.ok;
+      const data = await res.json().catch(() => null);
+      if (data?.type) return { type: data.type, hours: data.hours_worked };
+      console.error("Attendance post failed:", res.status, data);
+      return { type: "error" };
     } catch (err) {
       console.warn("Attendance post error:", err);
-      return false;
+      return { type: "error" };
     }
   }, []);
 
@@ -164,22 +159,15 @@ export default function AttendanceStation() {
           const now = Date.now();
           const info = window.__faceLookup?.[faceDataId];
 
-          if (lastMarked && now - lastMarked < 60_000) {
-            // Client-side throttle only — this worker was already successfully
-            // recorded in this browser session within the last 60s.
-            setResult({ status: "duplicate", name: info?.name, role: info?.role });
-          } else {
-            const ok = await recordAttendance(faceDataId);
-            if (ok) {
-              // Only mark as "recently recorded" if the POST actually succeeded —
-              // otherwise a failed request would wrongly look like "duplicate"
-              // instead of surfacing as an error.
-              recentlyMarkedRef.current.set(faceDataId, now);
-              setResult({ status: "match", name: info?.name, role: info?.role });
-            } else {
-              setResult({ status: "no-match", name: info?.name, role: info?.role });
-            }
+          if (lastMarked && now - lastMarked < SAME_WORKER_COOLDOWN_MS) {
+            // Same worker still in front of the camera: do not post again
+            busyRef.current = false;
+            return;
           }
+
+          const { type, hours } = await recordAttendance(faceDataId);
+          if (type !== "error") recentlyMarkedRef.current.set(faceDataId, now);
+          setResult({ status: type, name: info?.name, role: info?.role, hours });
         }
         setTimeout(() => setResult(null), RESULT_DISPLAY_MS);
       } catch (err) {
@@ -194,9 +182,12 @@ export default function AttendanceStation() {
   }, [cameraReady, recordAttendance]);
 
   const statusConfig = {
-    match:     { label: "Time In Recorded",     sub: "Attendance confirmed",  cls: "text-cyan-400 border-cyan-400/40 bg-cyan-500/10", icon: <CheckIcon /> },
-    duplicate: { label: "Already Recorded Today", sub: "No duplicate entry needed", cls: "text-amber-400 border-amber-400/40 bg-amber-500/10", icon: <ClockIcon /> },
-    "no-match": { label: "Face Not Recognized", sub: "Not enrolled in the system", cls: "text-red-400 border-red-400/40 bg-red-500/10", icon: <XIcon /> },
+    time_in:    { label: "Time In Recorded",  sub: "Proceed to the fingerprint scanner", bg: "bg-cyan-600/90",  icon: <CheckIcon /> },
+    time_out:   { label: "Time Out Recorded", sub: "Proceed to the fingerprint scanner", bg: "bg-green-600/90", icon: <CheckIcon /> },
+    too_soon:   { label: "Already Timed In",  sub: "Scan again at the end of your shift to time out", bg: "bg-amber-600/90", icon: <ClockIcon /> },
+    completed:  { label: "Done for Today",    sub: "Time In and Time Out are already recorded", bg: "bg-amber-600/90", icon: <ClockIcon /> },
+    "no-match": { label: "Face Not Recognized", sub: "Not enrolled in the system. Please see HR.", bg: "bg-red-600/90", icon: <XIcon /> },
+    error:      { label: "Could Not Record",  sub: "Please try again or inform HR", bg: "bg-red-600/90", icon: <XIcon /> },
   };
   const active = result ? statusConfig[result.status] : null;
 
@@ -227,7 +218,7 @@ export default function AttendanceStation() {
           <div className="px-8 pt-7 pb-5 border-b border-black/[0.06] flex items-center justify-between">
             <div>
               <h2 className="text-[18px] font-semibold text-slate-800 leading-tight">Face Recognition Check-In</h2>
-              <p className="text-[13px] text-slate-400 mt-1">Stand in front of the camera to record attendance.</p>
+              <p className="text-[13px] text-slate-400 mt-1">Scan once to time in, and again at the end of your shift to time out.</p>
             </div>
             <div className="text-right flex-shrink-0">
               <div className="text-[15px] font-semibold text-slate-800 font-mono">
@@ -257,11 +248,14 @@ export default function AttendanceStation() {
               )}
 
               {active && (
-                <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 backdrop-blur-sm ${active.cls.includes("cyan") ? "bg-cyan-600/90" : active.cls.includes("amber") ? "bg-amber-600/90" : "bg-red-600/90"}`}>
+                <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 backdrop-blur-sm ${active.bg}`}>
                   <div className="text-white">{active.icon}</div>
                   <span className="text-white text-xl font-semibold mt-1">{active.label}</span>
                   {result?.name && (
                     <span className="text-white/90 text-[13px]">{result.name}{result.role ? ` — ${result.role}` : ""}</span>
+                  )}
+                  {result?.status === "time_out" && result?.hours != null && (
+                    <span className="text-white text-[13px] font-medium">Hours worked: {result.hours}</span>
                   )}
                   <span className="text-white/70 text-[11px] mt-0.5">{active.sub}</span>
                 </div>
@@ -276,7 +270,7 @@ export default function AttendanceStation() {
             </div>
 
             <p className="text-center text-[11px] text-slate-400 mt-5">
-              Face recognition only — one step. No fingerprint required.
+              Step 1: Face recognition (this screen). Step 2: Fingerprint on the existing biometric scanner.
             </p>
           </div>
         </div>
