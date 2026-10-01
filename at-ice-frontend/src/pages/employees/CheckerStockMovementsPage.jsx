@@ -20,6 +20,14 @@ const statusStyle = {
   cancelled: "bg-slate-50 text-slate-400 border-black/[0.09]",
 };
 
+function firstError(data, fallback) {
+  if (data?.errors) {
+    const first = Object.values(data.errors).flat()[0];
+    if (first) return first;
+  }
+  return data?.message || fallback;
+}
+
 function fmtDate(d) {
   if (!d) return "";
   return new Date(d).toLocaleString("en-PH", {
@@ -102,8 +110,8 @@ export default function CheckerStockMovementsPage() {
           reason: notes || null,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Could not log the movement.");
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(firstError(data, "Could not log the movement."));
       setProductId("");
       setType("stock_in");
       setQuantity("");
@@ -125,9 +133,10 @@ export default function CheckerStockMovementsPage() {
         method: "PUT",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || `Could not ${action} this movement.`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(firstError(data, `Could not ${action} this movement.`));
       fetchMovements();
+      fetchProducts(); // stock levels change after a confirm
     } catch (e) {
       setError(e.message || "Something went wrong.");
     } finally {
@@ -138,7 +147,8 @@ export default function CheckerStockMovementsPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="sticky top-0 z-10 bg-white border-b border-black/[0.09]">
-        <div className="flex items-center gap-3 px-4 py-3">
+        {/* pr-24 leaves room for the floating Night toggle in the top-right corner */}
+        <div className="flex items-center gap-3 pl-4 pr-24 py-3">
           <button
             onClick={() => navigate("/checker/dashboard")}
             className="text-slate-500 hover:text-slate-800 transition-colors"
@@ -152,15 +162,19 @@ export default function CheckerStockMovementsPage() {
               Stock In / Stock Out
             </div>
             <div className="text-[12px] text-slate-400 leading-tight">
-              Double-entry — a second Checker confirms each movement
+              Double-entry: a second Checker confirms each movement
             </div>
           </div>
+        </div>
+
+        <div className="px-4 pb-3 flex">
           <button
             onClick={() => setShowForm((s) => !s)}
-            className="flex items-center gap-1 text-[13px] font-medium text-cyan-600 hover:text-cyan-700 transition-colors"
+            className={`flex items-center gap-1 text-[12px] font-semibold rounded-lg px-3 py-1.5 transition-colors ${
+              showForm ? "border border-black/[0.09] text-slate-600" : "bg-cyan-500 hover:bg-cyan-600 text-white"
+            }`}
           >
-            <PlusIcon />
-            New
+            {showForm ? "Close form" : (<><PlusIcon /> New Movement</>)}
           </button>
         </div>
 
@@ -172,10 +186,10 @@ export default function CheckerStockMovementsPage() {
               required
               className="text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
             >
-              <option value="">Select product</option>
+              <option value="">{products.length ? "Select item" : "No items yet. Add one in Inventory Management."}</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {p.name} ({p.current_stock ?? 0} {p.unit || "on hand"})
                 </option>
               ))}
             </select>
@@ -245,7 +259,7 @@ export default function CheckerStockMovementsPage() {
                     {m.type === "stock_in" ? "Stock In" : "Stock Out"} · logged by{" "}
                     {m.entered_by?.name || "—"} · {fmtDate(m.created_at)}
                   </div>
-                  {m.notes && <div className="text-[12px] text-slate-500 mt-1">{m.notes}</div>}
+                  {(m.reason || m.notes) && <div className="text-[12px] text-slate-500 mt-1">{m.reason || m.notes}</div>}
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-[16px] font-semibold font-mono text-slate-800">

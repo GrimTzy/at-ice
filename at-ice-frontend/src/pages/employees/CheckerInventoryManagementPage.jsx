@@ -15,6 +15,35 @@ const SearchIcon = () => (
   </svg>
 );
 
+const PlusIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+    <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+  </svg>
+);
+
+const XIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+  </svg>
+);
+
+// Supplies and materials only. Ice is not inventoried.
+const CATEGORIES = ["Packaging", "Truck Parts", "Machine Components", "Cleaning Supplies", "Other"];
+const UNITS = ["pcs", "packs", "rolls", "boxes", "bundles", "liters", "sets"];
+
+const EMPTY_ITEM = { name: "", category: "", unit: "pcs", minimum_stock: "", maximum_stock: "", description: "" };
+
+const inputCls =
+  "w-full text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400 bg-white";
+
+function firstError(data, fallback) {
+  if (data?.errors) {
+    const first = Object.values(data.errors).flat()[0];
+    if (first) return first;
+  }
+  return data?.message || fallback;
+}
+
 function stockStatus(current, min) {
   if (current <= 0) return { label: "Out of stock", tone: "red" };
   if (current <= min) return { label: "Low stock", tone: "amber" };
@@ -58,6 +87,83 @@ export default function CheckerInventoryManagementPage() {
   const [resolving, setResolving] = useState(null);
 
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  // Add / edit item
+  const [editing, setEditing] = useState(null); // null = closed, {} = new, product = edit
+  const [form, setForm] = useState(EMPTY_ITEM);
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const isNew = editing && !editing.id;
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(""), 3500);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  function openNew() {
+    setForm(EMPTY_ITEM);
+    setFormError("");
+    setEditing({});
+  }
+
+  function openEdit(p) {
+    setForm({
+      name: p.name || "",
+      category: p.category || "",
+      unit: p.unit || "pcs",
+      minimum_stock: p.minimum_stock ?? "",
+      maximum_stock: p.maximum_stock ?? "",
+      description: p.description || "",
+    });
+    setFormError("");
+    setEditing(p);
+  }
+
+  async function saveItem(e) {
+    e.preventDefault();
+    setFormError("");
+
+    const name = form.name.trim();
+    if (!name) return setFormError("Enter the item name.");
+    const min = form.minimum_stock === "" ? null : Number(form.minimum_stock);
+    const max = form.maximum_stock === "" ? null : Number(form.maximum_stock);
+    if (min !== null && (!Number.isInteger(min) || min < 0)) return setFormError("Minimum stock must be a whole number, 0 or more.");
+    if (max !== null && (!Number.isInteger(max) || max < 0)) return setFormError("Maximum stock must be a whole number, 0 or more.");
+    if (min !== null && max !== null && max < min) return setFormError("Maximum stock must be greater than or equal to the minimum stock.");
+
+    const payload = {
+      name,
+      category: form.category.trim() || null,
+      unit: form.unit.trim() || null,
+      minimum_stock: min,
+      maximum_stock: max,
+      description: form.description.trim() || null,
+    };
+
+    setSaving(true);
+    try {
+      const res = await fetch(isNew ? "/api/products" : `/api/products/${editing.id}`, {
+        method: isNew ? "POST" : "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(firstError(data, "Could not save this item."));
+      setNotice(isNew ? `${name} added. Use Stock In to add its stock.` : `${name} updated.`);
+      setEditing(null);
+      fetchProducts();
+    } catch (err) {
+      setFormError(err.message || "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     fetchProducts();
@@ -107,8 +213,8 @@ export default function CheckerInventoryManagementPage() {
         method: "PUT",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Could not resolve this alert.");
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(firstError(data, "Could not resolve this alert."));
       fetchAlerts();
     } catch (e) {
       setError(e.message || "Something went wrong.");
@@ -150,7 +256,8 @@ export default function CheckerInventoryManagementPage() {
     <div className="min-h-screen bg-white">
       {/* Sticky top bar */}
       <div className="sticky top-0 z-10 bg-white border-b border-black/[0.09]">
-        <div className="flex items-center gap-3 px-4 py-3">
+        {/* pr-24 leaves room for the floating Night toggle in the top-right corner */}
+        <div className="flex items-center gap-3 pl-4 pr-24 py-3">
           <button
             onClick={() => navigate("/checker/dashboard")}
             className="text-slate-500 hover:text-slate-800 transition-colors"
@@ -199,6 +306,13 @@ export default function CheckerInventoryManagementPage() {
               <span>{counts.total} items</span>
               {counts.low > 0 && <span className="text-amber-600 font-medium">{counts.low} low stock</span>}
               {counts.out > 0 && <span className="text-red-500 font-medium">{counts.out} out of stock</span>}
+              <div className="flex-1" />
+              <button
+                onClick={openNew}
+                className="flex items-center gap-1 text-[12px] font-semibold bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg px-3 py-1.5 transition-colors"
+              >
+                <PlusIcon /> Add Item
+              </button>
             </div>
             <div className="px-4 pb-3">
               <div className="flex items-center gap-2 border border-black/[0.09] rounded-lg px-3 py-2">
@@ -234,6 +348,11 @@ export default function CheckerInventoryManagementPage() {
       </div>
 
       {error && <div className="px-4 pt-3 text-[13px] text-red-500 text-center">{error}</div>}
+      {notice && (
+        <div className="mx-4 mt-3 max-w-2xl md:mx-auto px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-[12px] text-green-700 text-center">
+          {notice}
+        </div>
+      )}
 
       {/* ── ALL ITEMS VIEW ── */}
       {view === "items" && (
@@ -243,7 +362,7 @@ export default function CheckerInventoryManagementPage() {
           )}
           {!loadingProducts && filteredProducts.length === 0 && (
             <div className="text-[13px] text-slate-400 py-8 text-center">
-              {query ? "No items match your search." : "No inventory items yet."}
+              {query ? "No items match your search." : "No inventory items yet. Use Add Item to create one."}
             </div>
           )}
 
@@ -261,9 +380,16 @@ export default function CheckerInventoryManagementPage() {
                   <div className="min-w-0">
                     <div className="text-[14px] font-medium text-slate-800 truncate">{p.name}</div>
                     <div className="text-[12px] text-slate-400 mt-0.5">
+                      {p.product_code ? `${p.product_code} · ` : ""}
                       {p.category || "Uncategorized"}
                       {p.unit ? ` · ${p.unit}` : ""}
                     </div>
+                    <button
+                      onClick={() => openEdit(p)}
+                      className="mt-2 text-[11px] font-medium text-cyan-600 hover:text-cyan-700"
+                    >
+                      Edit details
+                    </button>
                   </div>
                   <div className="text-right shrink-0">
                     <div className={`text-[18px] font-semibold font-mono leading-none ${tone.text}`}>
@@ -330,6 +456,137 @@ export default function CheckerInventoryManagementPage() {
                 </div>
               );
             })}
+        </div>
+      )}
+
+      {/* ── ADD / EDIT ITEM ── */}
+      {editing && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => !saving && setEditing(null)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl max-h-[92vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-black/[0.09]">
+              <div className="text-[15px] font-semibold text-slate-800">{isNew ? "Add Item" : "Edit Item"}</div>
+              <button onClick={() => !saving && setEditing(null)} className="text-slate-400 hover:text-slate-700" aria-label="Close">
+                <XIcon />
+              </button>
+            </div>
+
+            <form onSubmit={saveItem} className="px-4 py-4 flex flex-col gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-slate-500">Item Name</span>
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  maxLength={255}
+                  placeholder="e.g. Plastic Bags (Tube Ice)"
+                  className={inputCls}
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-medium text-slate-500">Category</span>
+                  <input
+                    list="inv-categories"
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    maxLength={100}
+                    placeholder="Select or type"
+                    className={inputCls}
+                  />
+                  <datalist id="inv-categories">
+                    {CATEGORIES.map((c) => <option key={c} value={c} />)}
+                  </datalist>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-medium text-slate-500">Unit</span>
+                  <input
+                    list="inv-units"
+                    value={form.unit}
+                    onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                    maxLength={50}
+                    placeholder="pcs"
+                    className={inputCls}
+                  />
+                  <datalist id="inv-units">
+                    {UNITS.map((u) => <option key={u} value={u} />)}
+                  </datalist>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-medium text-slate-500">Minimum Stock (low stock alert)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    value={form.minimum_stock}
+                    onChange={(e) => setForm({ ...form, minimum_stock: e.target.value })}
+                    placeholder="e.g. 500"
+                    className={inputCls}
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-medium text-slate-500">Maximum Stock (optional)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    value={form.maximum_stock}
+                    onChange={(e) => setForm({ ...form, maximum_stock: e.target.value })}
+                    placeholder="e.g. 5000"
+                    className={inputCls}
+                  />
+                </label>
+              </div>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-medium text-slate-500">Description (optional)</span>
+                <textarea
+                  rows={2}
+                  maxLength={1000}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="Size, brand, or where it is used"
+                  className={`${inputCls} resize-none`}
+                />
+              </label>
+
+              <div className="text-[11px] text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-2">
+                {isNew
+                  ? "New items start at 0 stock. Add stock through Stock In, which a second Checker must confirm."
+                  : `Current stock: ${editing.current_stock ?? 0}. Stock can only be changed through Stock In or Stock Out, confirmed by a second Checker.`}
+              </div>
+
+              {formError && <div className="text-[12px] text-red-500">{formError}</div>}
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditing(null)}
+                  disabled={saving}
+                  className="flex-1 text-[13px] font-medium border border-black/[0.09] text-slate-600 rounded-lg py-2 disabled:opacity-50"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 text-[13px] font-semibold bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg py-2 transition-colors disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : isNew ? "Add Item" : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
