@@ -37,16 +37,16 @@ const MODULES = [
     route: "/checker/stock-movements",
   },
   {
+    title: "Stock-Out Release",
+    description: "Release Admin-approved Maintenance requests. Stock is deducted on release.",
+    route: "/checker/stock-out-release",
+  },
+  {
     title: "Supplier Management",
     description: "Manage supplier records and details.",
     route: "/checker/suppliers",
   },
-  // NOTE: "Low Stock Alert" card REMOVED — merged into Inventory Management
-  // as a second tab, since both read from closely related stock data. This
-  // is a UI-consolidation decision (both features still exist and work),
-  // not a scope removal.
-  // NOTE: "Maintenance Stock-Out Release" card REMOVED — release action
-  // moved to Admin (StockOutApprovalPage.jsx).
+
 ];
 
 export default function CheckerDashboard() {

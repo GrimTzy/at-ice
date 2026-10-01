@@ -33,7 +33,7 @@ import DriverLogin from './pages/drivers/DriverLogin'
 import { DeliveriesPage as DriverDeliveriesPage } from './pages/drivers/DeliveriesPage'
 import { GpsTrackingPage } from './pages/drivers/GpsTrackingPage'
 
-// -- HR Module 
+// -- HR Module
 import HRLogin from './pages/hr/HRLogin'
 import HRDashboard from './pages/hr/HRDashboard'
 import FaceEnrollment from './pages/hr/FaceEnrollment'
@@ -43,7 +43,7 @@ import LeaveRequestsPage from './pages/hr/LeaveRequestsPage'
 import InterviewsPage from './pages/hr/InterviewsPage'
 import PayrollPage from './pages/hr/PayrollPage'
 
-// -- Employee Module 
+// -- Employee Module
 import CheckerLogin from './pages/employees/CheckerLogin'
 import CheckerDashboard from './pages/employees/CheckerDashboard'
 import CheckerPickupLogPage from './pages/employees/CheckerPickupLogPage'
@@ -51,6 +51,7 @@ import CheckerIceLoadingPage from './pages/employees/CheckerIceLoadingPage'
 import CheckerInventoryManagementPage from './pages/employees/CheckerInventoryManagementPage'
 import CheckerStockMovementsPage from './pages/employees/CheckerStockMovementsPage'
 import CheckerSupplierManagementPage from './pages/employees/CheckerSupplierManagementPage'
+import CheckerStockOutReleasePage from './pages/employees/CheckerStockOutReleasePage'
 import SalesmanLogin from './pages/employees/SalesmanLogin'
 import SalesmanDashboard from './pages/employees/SalesmanDashboard'
 import SalesmanDeliveryConfirmation from './pages/employees/SalesmanDeliveryConfirmation'
@@ -140,6 +141,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* Stock-Out Approvals: Admin approves or rejects Maintenance
+            requests. Release is done by the Checker. */}
         <Route
           path="/admin/stock-out-approvals"
           element={
@@ -347,7 +350,17 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* /checker/low-stock and /checker/stock-out-release routes REMOVED, see notes above */}
+        {/* Stock-Out Release: Checker releases Admin-approved Maintenance
+            requests; stock is deducted on release. (/checker/low-stock stays
+            removed: Low Stock Alert is a tab in Inventory Management.) */}
+        <Route
+          path="/checker/stock-out-release"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
+              <NightScope><CheckerStockOutReleasePage /></NightScope>
+            </ProtectedRoute>
+          }
+        />
         <Route path="/salesman/login" element={<SalesmanLogin />} />
         <Route
           path="/salesman/deliveries"

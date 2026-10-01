@@ -107,10 +107,10 @@ Route::middleware(['auth:sanctum', 'throttle:120,1,api'])->group(function () {
         // Pickup Logs (Admin full access: Alexandra/J-Maxine plant pickups, no price/receipt)
         Route::apiResource('pickup-logs', PickupLogController::class)->only(['update', 'destroy']);
 
-        // Stock-Out Requests (Admin approves/rejects/releases, consolidated onto /admin/stock-out-approvals since v29.2)
+        // Stock-Out Requests: Admin approves or rejects. Release is done by the
+        // Checker (see the Checker group), which also deducts the stock.
         Route::put('stock-out-requests/{stockOutRequest}/approve', [StockOutRequestController::class, 'approve']);
         Route::put('stock-out-requests/{stockOutRequest}/reject',  [StockOutRequestController::class, 'reject']);
-        Route::put('stock-out-requests/{stockOutRequest}/release', [StockOutRequestController::class, 'release']);
 
         // BUSINESS INTELLIGENCE 
         Route::get('bi/summary',            [BiController::class, 'summary']);
@@ -192,6 +192,10 @@ Route::middleware(['auth:sanctum', 'throttle:120,1,api'])->group(function () {
         Route::get('ice-loadings',                  [IceLoadingController::class, 'index']);
         Route::post('ice-loadings',                 [IceLoadingController::class, 'store']);
         Route::get('ice-loadings/{iceLoading}',     [IceLoadingController::class, 'show']);
+
+        // Stock-Out Release: Checker releases an Admin-approved Maintenance
+        // request. This deducts the stock and records a confirmed Stock Out.
+        Route::put('stock-out-requests/{stockOutRequest}/release', [StockOutRequestController::class, 'release']);
     });
 
     // EMPLOYEE: SALESMAN ROUTES
@@ -206,6 +210,9 @@ Route::middleware(['auth:sanctum', 'throttle:120,1,api'])->group(function () {
     Route::middleware('role:employee,maintenance')->group(function () {
 
         Route::post('stock-out-requests', [StockOutRequestController::class, 'store']);
+
+        // Inventory items Maintenance can request (read only: name, unit, stock)
+        Route::get('stock-out-items', [StockOutRequestController::class, 'items']);
     });
 
     // EMPLOYEE: STOCK-OUT VIEW (shared: Checker and Maintenance can both view)

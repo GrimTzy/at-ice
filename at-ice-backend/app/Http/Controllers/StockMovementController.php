@@ -31,6 +31,14 @@ class StockMovementController extends Controller
 
         $product = Product::findOrFail($validated['product_id']);
 
+        // A Stock Out cannot take more than what is on hand.
+        if ($validated['type'] === 'stock_out' && $validated['quantity'] > $product->current_stock) {
+            return response()->json([
+                'message' => "Not enough stock. Available: {$product->current_stock} {$product->unit}.",
+                'errors'  => ['quantity' => ["Not enough stock. Available: {$product->current_stock} {$product->unit}."]],
+            ], 422);
+        }
+
         $movement = StockMovement::create([
             ...$validated,
             'stock_before' => $product->current_stock,
@@ -54,8 +62,16 @@ class StockMovementController extends Controller
             return response()->json(['message' => 'Cannot confirm your own entry. Double-entry requires a different user.'], 403);
         }
 
+        try {
         DB::transaction(function () use ($movement, $request) {
             $product = Product::lockForUpdate()->findOrFail($movement->product_id);
+
+            // Stock may have changed since this movement was logged.
+            if ($movement->type === 'stock_out' && $movement->quantity > $product->current_stock) {
+                throw new \RuntimeException(
+                    "Not enough stock to confirm this Stock Out. Available: {$product->current_stock} {$product->unit}."
+                );
+            }
 
             $newStock = match($movement->type) {
                 'stock_in'   => $product->current_stock + $movement->quantity,
@@ -80,6 +96,9 @@ class StockMovementController extends Controller
                 );
             }
         });
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message'  => 'Stock movement confirmed.',

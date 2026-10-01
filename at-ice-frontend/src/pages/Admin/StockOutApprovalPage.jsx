@@ -107,29 +107,6 @@ export default function StockOutApprovalPage() {
     }
   };
 
-  const handleRelease = async (id) => {
-    setActionLoading(id);
-    setError('');
-    try {
-      const res = await fetch(`/api/stock-out-requests/${id}/release`, {
-        method: 'PUT',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || 'Release failed.');
-      }
-      await fetchRequests();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   const filtered = activeTab === 'all'
     ? requests
     : requests.filter((r) => r.status === activeTab);
@@ -172,8 +149,16 @@ export default function StockOutApprovalPage() {
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="font-semibold text-slate-900">{req.item_name}</h3>
-                    <p className="text-sm text-slate-500">Quantity: {req.quantity}</p>
+                    <h3 className="font-semibold text-slate-900">{req.product?.name || req.item_name}</h3>
+                    <p className="text-sm text-slate-500">
+                      Quantity: {req.quantity} {req.product?.unit || ''}
+                      {req.product && (req.status === 'pending' || req.status === 'approved') && (
+                        <span className={req.product.current_stock < req.quantity ? 'text-red-600' : 'text-slate-400'}>
+                          {' '}· On hand: {req.product.current_stock}
+                          {req.product.current_stock < req.quantity ? ' (not enough)' : ''}
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <StatusBadge status={req.status} />
                 </div>
@@ -259,16 +244,10 @@ export default function StockOutApprovalPage() {
                   </div>
                 )}
 
-                {/* NEW: Release action for approved requests */}
+                {/* Release is done by the Checker, who hands over the item and deducts the stock */}
                 {req.status === 'approved' && (
-                  <div className="mt-3">
-                    <button
-                      onClick={() => handleRelease(req.id)}
-                      disabled={actionLoading === req.id}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-medium disabled:opacity-50"
-                    >
-                      {actionLoading === req.id ? 'Releasing…' : 'Release'}
-                    </button>
+                  <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-medium">
+                    Awaiting release by Checker
                   </div>
                 )}
               </div>

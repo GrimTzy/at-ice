@@ -39,10 +39,11 @@ export default function CheckerStockOutReleasePage() {
           Authorization: `Bearer ${token}`,
         },
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Failed to load requests.');
       setRequests(data.data || []);
     } catch (err) {
-      setError('Failed to load requests.');
+      setError(err.message || 'Failed to load requests.');
     } finally {
       setLoading(false);
     }
@@ -52,9 +53,13 @@ export default function CheckerStockOutReleasePage() {
     fetchRequests();
   }, []);
 
+  const [notice, setNotice] = useState('');
+  const [confirmId, setConfirmId] = useState(null);
+
   const handleRelease = async (id) => {
     setActionLoading(id);
     setError('');
+    setNotice('');
     try {
       const res = await fetch(`/api/stock-out-requests/${id}/release`, {
         method: 'PUT',
@@ -63,15 +68,15 @@ export default function CheckerStockOutReleasePage() {
           Authorization: `Bearer ${token}`,
         },
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || 'Release failed.');
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Release failed.');
+      setNotice(data.message || 'Item released and stock updated.');
       await fetchRequests();
     } catch (err) {
       setError(err.message);
     } finally {
       setActionLoading(null);
+      setConfirmId(null);
     }
   };
 
@@ -82,14 +87,15 @@ export default function CheckerStockOutReleasePage() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Sticky top bar */}
-      <div className="sticky top-0 z-10 bg-white border-b border-black/[0.09] px-4 py-3 flex items-center gap-3">
+      {/* pr-24 leaves room for the floating Night toggle in the top-right corner */}
+      <div className="sticky top-0 z-10 bg-white border-b border-black/[0.09] pl-4 pr-24 py-3 flex items-center gap-3">
         <button onClick={() => navigate('/checker/dashboard')} className="text-slate-500">
           <ChevronLeftIcon />
         </button>
         <img src={logo} alt="logo" className="w-7 h-7" />
         <div>
           <h1 className="text-[15px] font-semibold text-slate-900">Stock-Out Release</h1>
-          <p className="text-[11px] text-slate-400">Release approved Maintenance requests</p>
+          <p className="text-[11px] text-slate-400">Release Admin-approved Maintenance requests. Stock is deducted on release.</p>
         </div>
       </div>
 
@@ -116,6 +122,11 @@ export default function CheckerStockOutReleasePage() {
             {error}
           </div>
         )}
+        {notice && (
+          <div className="mb-3 px-4 py-2.5 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
+            {notice}
+          </div>
+        )}
 
         {loading ? (
           <p className="text-sm text-slate-500">Loading requests...</p>
@@ -130,8 +141,17 @@ export default function CheckerStockOutReleasePage() {
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="font-semibold text-slate-900">{req.item_name}</h3>
-                    <p className="text-sm text-slate-500">Quantity: {req.quantity}</p>
+                    <h3 className="font-semibold text-slate-900">{req.product?.name || req.item_name}</h3>
+                    <p className="text-sm text-slate-500">
+                      Quantity: {req.quantity} {req.product?.unit || ''}
+                    </p>
+                    {req.product && req.status === 'approved' && (
+                      <p className={`text-xs mt-0.5 ${req.product.current_stock < req.quantity ? 'text-red-600' : 'text-slate-400'}`}>
+                        On hand: {req.product.current_stock} {req.product.unit || ''}
+                        {req.product.current_stock < req.quantity ? ' (not enough to release)' : ''}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-400 mt-0.5">Requested by {req.requested_by?.name || 'Unknown'}</p>
                   </div>
                   <StatusBadge status={req.status} />
                 </div>
@@ -155,13 +175,31 @@ export default function CheckerStockOutReleasePage() {
                 )}
 
                 {req.status === 'approved' && (
-                  <button
-                    onClick={() => handleRelease(req.id)}
-                    disabled={actionLoading === req.id}
-                    className="mt-3 px-3 py-1.5 rounded-lg bg-cyan-500 text-white text-sm font-medium disabled:opacity-50"
-                  >
-                    Release
-                  </button>
+                  confirmId === req.id ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="text-sm text-slate-600">Hand over the item and deduct the stock?</span>
+                      <button
+                        onClick={() => handleRelease(req.id)}
+                        disabled={actionLoading === req.id}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-medium disabled:opacity-50"
+                      >
+                        {actionLoading === req.id ? 'Releasing…' : 'Yes, release'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmId(null)}
+                        className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-sm font-medium text-slate-600"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmId(req.id)}
+                      className="mt-3 px-3 py-1.5 rounded-lg bg-cyan-500 text-white text-sm font-medium"
+                    >
+                      Release
+                    </button>
+                  )
                 )}
               </div>
             ))}
