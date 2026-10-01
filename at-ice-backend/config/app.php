@@ -65,7 +65,7 @@ return [
     |
     */
 
-    // Production sets APP_TIMEZONE=Asia/Manila (see docker-compose.yml).
+    // Production sets APP_TIMEZONE=Asia/Manila (see .env.production.example).
     'timezone' => env('APP_TIMEZONE', 'UTC'),
 
     /*
