@@ -1,8 +1,8 @@
-# AT Ice — production stack for Coolify (Docker Compose build pack).
+# AT Ice — production Docker Compose stack.
 # Only `frontend` is public: https://www.atice.cloud (canonical) and
 # https://atice.cloud (nginx 301s it to www). It serves the SPA and
 # forwards /api to `backend` over the internal network; backend, worker
-# and mysql are never exposed. Values come from Coolify's environment
+# and mysql are never exposed. Values come from the server's environment
 # variables — see .env.production.example for the full list.
 
 services:

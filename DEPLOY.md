@@ -1,13 +1,13 @@
-# Deploying AT Ice (Coolify)
+# Deploying AT Ice
 
-Production runs as one Coolify **Docker Compose** resource built from
-`docker-compose.yml` on the `main` branch (Coolify project "AT Ice", server
-`localhost`). A push to `main` redeploys automatically through Coolify's
-GitHub App; if that build fails, the running version stays up. GitHub Actions
+Production runs as one **Docker Compose** stack built from
+`docker-compose.yml` on the `main` branch. A push to `main` redeploys
+automatically through the hosting platform's GitHub App; if that build fails,
+the running version stays up. GitHub Actions
 (`.github/workflows/ci.yml`) builds both images on every push and PR as a check.
 
 ```
-Internet ─▶ Coolify proxy (TLS) ─▶ frontend (nginx :80)
+Internet ─▶ reverse proxy (TLS) ─▶ frontend (nginx :80)
                                      ├─ /          React SPA
                                      ├─ /storage/  delivery-proof photos (shared volume, read-only)
                                      └─ /api, /up ─FastCGI─▶ backend (php-fpm :9000) ─▶ mysql
@@ -23,8 +23,8 @@ Internet ─▶ Coolify proxy (TLS) ─▶ frontend (nginx :80)
 
 ## Environment
 
-All variables are listed in `.env.production.example`. Set them in Coolify under
-the resource's Environment Variables. `VITE_GOOGLE_MAPS_API_KEY` and
+All variables are listed in `.env.production.example`. Set them in the hosting
+panel's environment variables for the stack. `VITE_GOOGLE_MAPS_API_KEY` and
 `PUSHER_APP_KEY` are compiled into the frontend, so **redeploy** after changing them.
 
 Realtime stays on `BROADCAST_CONNECTION=log` until `PUSHER_APP_ID` and
@@ -32,8 +32,8 @@ Realtime stays on `BROADCAST_CONNECTION=log` until `PUSHER_APP_ID` and
 
 ## First deploy
 
-After the stack is healthy, create the first admin from the Coolify terminal
-(`backend` container):
+After the stack is healthy, create the first admin from a terminal in the
+`backend` container:
 
 ```sh
 php artisan admin:create owner@example.com --name="Owner"
@@ -43,7 +43,7 @@ It prints a one-time password. Running it again for the same email resets the pa
 
 ## Backups
 
-A Coolify **scheduled task** (`mysql-backup`, container `mysql`) runs nightly at
+A **scheduled task** (`mysql-backup`, container `mysql`) runs nightly at
 02:00 Philippine time (`0 18 * * *` UTC). It writes a consistent, gzipped
 `mysqldump` to the `mysql-backups` volume (`/backups` in the mysql container)
 and deletes dumps older than 14 days:
@@ -53,7 +53,7 @@ mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --trig
 ```
 
 These dumps live on the same server. To survive losing the server, add an S3
-destination in Coolify and a storage backup of the `mysql-backups` and
+destination in the hosting panel and a storage backup of the `mysql-backups` and
 `public-storage` (delivery photos) volumes.
 
 **Restore** (mysql container terminal; overwrites current data):

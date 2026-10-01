@@ -1,5 +1,5 @@
 # Stage 1: build the SPA. VITE_* values are baked into the bundle at build
-# time, so they arrive as build args (set them as build variables in Coolify).
+# time, so they arrive as build args (set them as build variables on the server).
 FROM node:22-alpine AS build
 WORKDIR /app
 

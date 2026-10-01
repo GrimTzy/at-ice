@@ -23,7 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Local env (production values live in Coolify)
+# Local env (production values live on the server)
 .env
 .env.*
 !.env.example
