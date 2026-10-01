@@ -69,16 +69,154 @@ function computeWithholdingTax(taxableMonthly) {
   if (t <= 666667) return +(33541.80 + (t - 166667) * 0.30).toFixed(2);
   return +(183541.80 + (t - 666667) * 0.35).toFixed(2);
 }
+// Contributions and tax are MONTHLY amounts, so they are computed on the
+// employee's monthly basis (daily rate x 26 working days, 6-day work week),
+// then split evenly across the two payroll cutoffs of the month.
+const WORK_DAYS_PER_MONTH = 26;
+const CUTOFFS_PER_MONTH = 2;
+const half = (v) => +(v / CUTOFFS_PER_MONTH).toFixed(2);
+
 function computePayroll(daysWorked, dailyRate) {
   const grossPay = +(daysWorked * dailyRate).toFixed(2);
-  const sss = computeSSS(grossPay);
-  const philhealth = computePhilHealth(grossPay);
-  const pagibig = computePagIbig(grossPay);
-  const taxable = Math.max(grossPay - sss - philhealth - pagibig, 0);
-  const tax = computeWithholdingTax(taxable);
+  const monthlyBasis = +(dailyRate * WORK_DAYS_PER_MONTH).toFixed(2);
+
+  if (grossPay <= 0 || monthlyBasis <= 0) {
+    return { grossPay, monthlyBasis, sss: 0, philhealth: 0, pagibig: 0, tax: 0, netPay: grossPay };
+  }
+
+  const sssMonthly = computeSSS(monthlyBasis);
+  const philhealthMonthly = computePhilHealth(monthlyBasis);
+  const pagibigMonthly = computePagIbig(monthlyBasis);
+  const taxableMonthly = Math.max(monthlyBasis - sssMonthly - philhealthMonthly - pagibigMonthly, 0);
+  const taxMonthly = computeWithholdingTax(taxableMonthly);
+
+  const sss = half(sssMonthly);
+  const philhealth = half(philhealthMonthly);
+  const pagibig = half(pagibigMonthly);
+  const tax = half(taxMonthly);
+
   const totalDeductions = +(sss + philhealth + pagibig + tax).toFixed(2);
   const netPay = +(grossPay - totalDeductions).toFixed(2);
-  return { grossPay, sss, philhealth, pagibig, tax, netPay };
+  return { grossPay, monthlyBasis, sss, philhealth, pagibig, tax, netPay };
+}
+
+// ── Payslip printing (computed payroll in the Payroll modal) ──
+const PrintIcon = () => <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pesoTxt = (v) => `₱${(Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtDay = (d) => {
+  if (!d) return "—";
+  const dt = new Date(`${String(d).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+};
+
+function printPayslip({ employee, periodStart, periodEnd, days, rate, preview, notes }) {
+  const name = `${employee.first_name || ""} ${employee.last_name || ""}`.trim();
+  const total = preview.sss + preview.philhealth + preview.pagibig + preview.tax;
+  const line = (label, value, cls = "") => `<tr class="${cls}"><td>${esc(label)}</td><td class="amt">${esc(value)}</td></tr>`;
+
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Payslip - ${esc(name)} - ${esc(fmtDay(periodStart))} to ${esc(fmtDay(periodEnd))}</title>
+<style>
+  @page { size: A4; margin: 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; font-size: 12px; margin: 0; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1E3A5F; padding-bottom: 10px; }
+  .co { font-size: 16px; font-weight: 700; color: #1E3A5F; }
+  .addr { color: #475569; font-size: 10.5px; margin-top: 3px; max-width: 360px; }
+  .title { text-align: right; }
+  .title h1 { margin: 0; font-size: 18px; letter-spacing: 2px; color: #1E3A5F; }
+  .title div { color: #475569; font-size: 10.5px; margin-top: 3px; }
+  .info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin: 14px 0; }
+  .info div span { color: #64748b; display: inline-block; width: 105px; }
+  h2 { font-size: 12px; margin: 14px 0 4px; color: #1E3A5F; text-transform: uppercase; letter-spacing: 1px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
+  td.amt { text-align: right; font-family: "Courier New", monospace; }
+  tr.total td { font-weight: 700; border-top: 1px solid #94a3b8; }
+  .net { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px 12px; font-size: 14px; font-weight: 700; }
+  .net .amt { font-family: "Courier New", monospace; font-size: 16px; }
+  .note { color: #64748b; font-size: 10px; margin-top: 10px; }
+  .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 48px; }
+  .sign div { border-top: 1px solid #0f172a; padding-top: 4px; text-align: center; font-size: 10.5px; color: #334155; }
+  .foot { margin-top: 24px; color: #94a3b8; font-size: 9.5px; text-align: center; }
+</style></head>
+<body>
+  <div class="head">
+    <div>
+      <div class="co">Bella Erin Tube Ice Inc.</div>
+      <div class="addr">Block 63, Lot 4 Anubing St, Amparo Subdivision, Barangay 179 Zone 16, Caloocan City North, Metro Manila</div>
+    </div>
+    <div class="title">
+      <h1>PAYSLIP</h1>
+      <div>Payroll computation</div>
+    </div>
+  </div>
+
+  <div class="info">
+    <div><span>Employee</span><strong>${esc(name)}</strong></div>
+    <div><span>Pay Period</span>${esc(fmtDay(periodStart))} – ${esc(fmtDay(periodEnd))}</div>
+    <div><span>Employee ID</span>${esc(employee.employee_id || "—")}</div>
+    <div><span>Days Worked</span>${esc(days)}</div>
+    <div><span>Position</span>${esc(employee.position || "—")}</div>
+    <div><span>Daily Rate</span>${esc(pesoTxt(rate))}</div>
+  </div>
+
+  <h2>Earnings</h2>
+  <table>
+    ${line(`Basic Pay (${days} days × ${pesoTxt(rate)})`, pesoTxt(preview.grossPay))}
+    ${line("Gross Pay", pesoTxt(preview.grossPay), "total")}
+  </table>
+
+  <h2>Deductions</h2>
+  <table>
+    ${line("SSS", pesoTxt(preview.sss))}
+    ${line("PhilHealth", pesoTxt(preview.philhealth))}
+    ${line("Pag-IBIG", pesoTxt(preview.pagibig))}
+    ${line("Withholding Tax", pesoTxt(preview.tax))}
+    ${line("Total Deductions", pesoTxt(total), "total")}
+  </table>
+
+  <div class="net"><span>NET PAY</span><span class="amt">${esc(pesoTxt(preview.netPay))}</span></div>
+
+  <div class="note">
+    Monthly basis: ${esc(pesoTxt(rate))} × ${WORK_DAYS_PER_MONTH} days = ${esc(pesoTxt(preview.monthlyBasis))}.
+    SSS, PhilHealth, Pag-IBIG and withholding tax are computed on the monthly basis and half is deducted per payroll cutoff.
+    ${notes ? `<br>Notes: ${esc(notes)}` : ""}
+  </div>
+
+  <div class="sign">
+    <div>Prepared by: HR Staff</div>
+    <div>Received by: ${esc(name)}</div>
+  </div>
+
+  <div class="foot">Printed ${esc(new Date().toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }))} · AT-ICE ERP</div>
+</body></html>`;
+
+  // Hidden iframe: no popup window, and the HR page itself is not affected.
+  const frame = document.createElement("iframe");
+  Object.assign(frame.style, { position: "fixed", right: "0", bottom: "0", width: "0", height: "0", border: "0" });
+  document.body.appendChild(frame);
+  const doc = frame.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  const cleanup = () => setTimeout(() => frame.remove(), 1000);
+  frame.contentWindow.onafterprint = cleanup;
+  setTimeout(() => {
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+    setTimeout(cleanup, 60000); // fallback if onafterprint does not fire
+  }, 250);
+}
+
+// Inclusive number of calendar days between two "YYYY-MM-DD" dates
+function daysInPeriod(start, end) {
+  if (!start || !end) return null;
+  const a = new Date(`${start}T00:00:00`);
+  const b = new Date(`${end}T00:00:00`);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  return Math.round((b - a) / 86400000) + 1;
 }
 
 export default function EmployeesPage() {
@@ -592,11 +730,26 @@ function PayrollModal({ employee, authHeaders, onClose }) {
   const days = parseFloat(daysWorked) || 0;
   const rate = parseFloat(dailyRate) || 0;
   const preview = computePayroll(days, rate);
+  const periodDays = daysInPeriod(periodStart, periodEnd);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSaving(true);
     setError(null);
+
+    if (periodDays !== null && periodDays < 1) {
+      setError("Period End must be on or after Period Start.");
+      return;
+    }
+    if (periodDays !== null && days > periodDays) {
+      setError(`Days Worked (${days}) cannot be more than the ${periodDays} calendar days in this period.`);
+      return;
+    }
+    if (preview.netPay < 0) {
+      setError("Deductions are higher than the gross pay for this period. Check the days worked and daily rate.");
+      return;
+    }
+
+    setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/payrolls`, {
         method: "POST",
@@ -619,7 +772,10 @@ function PayrollModal({ employee, authHeaders, onClose }) {
         }),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || `Request failed (${res.status})`);
+      if (!res.ok) {
+        const firstError = data?.errors ? Object.values(data.errors).flat()[0] : null;
+        throw new Error(firstError || data?.message || `Request failed (${res.status})`);
+      }
 
       setPeriodStart(""); setPeriodEnd(""); setDaysWorked(""); setDailyRate(""); setNotes("");
       await fetchRecords();
@@ -708,7 +864,11 @@ function PayrollModal({ employee, authHeaders, onClose }) {
 
             {days > 0 && rate > 0 && (
               <div className="bg-slate-50 border border-black/[0.09] rounded-md px-3.5 py-3 text-[12px] flex flex-col gap-1">
-                <Row label="Gross Pay" value={preview.grossPay} bold />
+                <div className="flex justify-between text-[11px] text-slate-400">
+                  <span>Monthly basis (₱{rate.toLocaleString(undefined, {minimumFractionDigits:2})} × {WORK_DAYS_PER_MONTH} days)</span>
+                  <span>₱{preview.monthlyBasis.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                </div>
+                <Row label={`Gross Pay (${days} day${days === 1 ? "" : "s"} × ₱${rate.toLocaleString(undefined, {minimumFractionDigits:2})})`} value={preview.grossPay} bold />
                 <Row label="SSS" value={-preview.sss} />
                 <Row label="PhilHealth" value={-preview.philhealth} />
                 <Row label="Pag-IBIG" value={-preview.pagibig} />
@@ -716,10 +876,23 @@ function PayrollModal({ employee, authHeaders, onClose }) {
                 <div className="border-t border-black/[0.09] mt-1 pt-1">
                   <Row label="Net Pay" value={preview.netPay} bold highlight />
                 </div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  SSS, PhilHealth, Pag-IBIG and withholding tax are computed on the monthly basis, then half is deducted per payroll cutoff (two cutoffs per month).
+                </div>
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="flex items-center gap-2 pt-1">
+              {days > 0 && rate > 0 && periodStart && periodEnd && (
+                <button
+                  type="button"
+                  onClick={() => printPayslip({ employee, periodStart, periodEnd, days, rate, preview, notes })}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 border border-cyan-500/40 text-cyan-600 hover:bg-cyan-50 text-xs font-medium rounded-md transition-colors"
+                >
+                  <PrintIcon /> Print
+                </button>
+              )}
+              <div className="flex-1" />
               <button type="button" onClick={onClose} className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-700">Close</button>
               <button
                 type="submit"

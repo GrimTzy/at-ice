@@ -71,6 +71,120 @@ const fmtPeriod = (p) => `${fmtDate(p.period_start)} – ${fmtDate(p.period_end)
 // preparedBy relation is serialized under "prepared_by"
 const preparedByName = (p) => (p.prepared_by && typeof p.prepared_by === "object" ? p.prepared_by.name : null) || "—";
 
+const PrintIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Prints one payroll record as a payslip. Uses a hidden iframe so no
+// popup window is opened and the HR page itself is not affected.
+function printPayslip(p) {
+  const line = (label, value, cls = "") =>
+    `<tr class="${cls}"><td>${esc(label)}</td><td class="amt">${esc(value)}</td></tr>`;
+
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Payslip - ${esc(empName(p.employee))} - ${esc(fmtPeriod(p))}</title>
+<style>
+  @page { size: A4; margin: 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; font-size: 12px; margin: 0; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1E3A5F; padding-bottom: 10px; }
+  .co { font-size: 16px; font-weight: 700; color: #1E3A5F; }
+  .addr { color: #475569; font-size: 10.5px; margin-top: 3px; max-width: 360px; }
+  .title { text-align: right; }
+  .title h1 { margin: 0; font-size: 18px; letter-spacing: 2px; color: #1E3A5F; }
+  .title div { color: #475569; font-size: 10.5px; margin-top: 3px; }
+  .info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin: 14px 0; }
+  .info div span { color: #64748b; display: inline-block; width: 105px; }
+  h2 { font-size: 12px; margin: 14px 0 4px; color: #1E3A5F; text-transform: uppercase; letter-spacing: 1px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
+  td.amt { text-align: right; font-family: "Courier New", monospace; }
+  tr.total td { font-weight: 700; border-top: 1px solid #94a3b8; }
+  .net { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px 12px; font-size: 14px; font-weight: 700; }
+  .net .amt { font-family: "Courier New", monospace; font-size: 16px; }
+  .note { color: #64748b; font-size: 10px; margin-top: 10px; }
+  .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 48px; }
+  .sign div { border-top: 1px solid #0f172a; padding-top: 4px; text-align: center; font-size: 10.5px; color: #334155; }
+  .foot { margin-top: 24px; color: #94a3b8; font-size: 9.5px; text-align: center; }
+</style></head>
+<body>
+  <div class="head">
+    <div>
+      <div class="co">Bella Erin Tube Ice Inc.</div>
+      <div class="addr">Block 63, Lot 4 Anubing St, Amparo Subdivision, Barangay 179 Zone 16, Caloocan City North, Metro Manila</div>
+    </div>
+    <div class="title">
+      <h1>PAYSLIP</h1>
+      <div>Payroll No. ${esc(p.id)}</div>
+      <div>Status: ${esc(STATUS_LABEL[p.status] || p.status)}</div>
+    </div>
+  </div>
+
+  <div class="info">
+    <div><span>Employee</span><strong>${esc(empName(p.employee))}</strong></div>
+    <div><span>Pay Period</span>${esc(fmtPeriod(p))}</div>
+    <div><span>Employee ID</span>${esc(empCode(p.employee) || "—")}</div>
+    <div><span>Days Worked</span>${esc(p.days_worked ?? "—")}</div>
+    <div><span>Position</span>${esc(p.employee?.position || "—")}</div>
+    <div><span>Daily Rate</span>${esc(peso(p.daily_rate))}</div>
+  </div>
+
+  <h2>Earnings</h2>
+  <table>
+    ${line(`Basic Pay (${p.days_worked ?? 0} days × ${peso(p.daily_rate)})`, peso(p.gross_pay))}
+    ${line("Gross Pay", peso(p.gross_pay), "total")}
+  </table>
+
+  <h2>Deductions</h2>
+  <table>
+    ${line("SSS", peso(p.sss_deduction))}
+    ${line("PhilHealth", peso(p.philhealth_deduction))}
+    ${line("Pag-IBIG", peso(p.pagibig_deduction))}
+    ${line("Withholding Tax", peso(p.tax_deduction))}
+    ${line("Other Deductions", peso(p.other_deductions))}
+    ${line("Total Deductions", peso(totalDeductions(p)), "total")}
+  </table>
+
+  <div class="net"><span>NET PAY</span><span class="amt">${esc(peso(p.net_pay))}</span></div>
+
+  <div class="note">
+    SSS, PhilHealth, Pag-IBIG and withholding tax are computed on the monthly basis and half is deducted per payroll cutoff.
+    ${p.notes ? `<br>Notes: ${esc(p.notes)}` : ""}
+  </div>
+
+  <div class="sign">
+    <div>Prepared by: ${esc(preparedByName(p))}</div>
+    <div>Received by: ${esc(empName(p.employee))}</div>
+  </div>
+
+  <div class="foot">
+    Created ${esc(fmtDateTime(p.created_at))}${p.status === "paid" ? ` · Paid ${esc(fmtDateTime(p.paid_at))}` : ""} · Printed ${esc(fmtDateTime(new Date().toISOString()))} · AT-ICE ERP
+  </div>
+</body></html>`;
+
+  const frame = document.createElement("iframe");
+  frame.style.position = "fixed";
+  frame.style.right = "0";
+  frame.style.bottom = "0";
+  frame.style.width = "0";
+  frame.style.height = "0";
+  frame.style.border = "0";
+  document.body.appendChild(frame);
+
+  const doc = frame.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const cleanup = () => setTimeout(() => frame.remove(), 1000);
+  frame.contentWindow.onafterprint = cleanup;
+  setTimeout(() => {
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+    setTimeout(cleanup, 60000); // fallback if onafterprint does not fire
+  }, 250);
+}
+
 function Modal({ title, onClose, children, width = "max-w-lg" }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
@@ -427,7 +541,13 @@ export default function PayrollPage() {
 
             <div className="text-[10px] text-slate-400">Deductions were computed with the Sweldong Pinoy reference tables when this payroll was created.</div>
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => printPayslip(viewing)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold rounded-md cursor-pointer transition-colors"
+              >
+                <PrintIcon /> Print Payslip
+              </button>
               <button onClick={() => setViewing(null)} className="px-3.5 py-2 border border-black/[0.09] rounded-md text-xs text-slate-600 cursor-pointer hover:bg-slate-50">Close</button>
             </div>
           </div>

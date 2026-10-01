@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Payroll;
 use App\Models\Employee;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -31,8 +32,9 @@ class PayrollController extends Controller
 
     // POST /api/payrolls
     // The computation (Sweldong Pinoy reference: SSS, PhilHealth, Pag-IBIG,
-    // withholding tax) happens on the frontend. This endpoint stores the
-    // computed values.
+    // withholding tax) happens on the frontend. This endpoint checks the
+    // period (no overlap, days worked within the period, net pay consistent)
+    // and stores the computed values.
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -54,6 +56,45 @@ class PayrollController extends Controller
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Days worked cannot exceed the calendar days in the period.
+        // (Carbon 3 returns a float from diffInDays, so round and cast to int.)
+        $periodDays = (int) round(abs(Carbon::parse($request->period_start)
+            ->startOfDay()
+            ->diffInDays(Carbon::parse($request->period_end)->startOfDay()))) + 1;
+
+        if ((float) $request->days_worked > $periodDays) {
+            return response()->json(['errors' => [
+                'days_worked' => ["Days worked ({$request->days_worked}) cannot be more than the {$periodDays} calendar days in this period."],
+            ]], 422);
+        }
+
+        // One payroll per employee per period: block overlapping periods.
+        $overlap = Payroll::where('employee_id', $request->employee_id)
+            ->whereDate('period_start', '<=', $request->period_end)
+            ->whereDate('period_end', '>=', $request->period_start)
+            ->first();
+
+        if ($overlap) {
+            $from = Carbon::parse($overlap->period_start)->format('M j, Y');
+            $to   = Carbon::parse($overlap->period_end)->format('M j, Y');
+            return response()->json(['errors' => [
+                'period_start' => ["This employee already has a payroll for {$from} to {$to}. Payroll periods cannot overlap."],
+            ]], 422);
+        }
+
+        // Net pay must equal gross pay minus all deductions.
+        $deductions = (float) ($request->sss_deduction ?? 0)
+            + (float) ($request->philhealth_deduction ?? 0)
+            + (float) ($request->pagibig_deduction ?? 0)
+            + (float) ($request->tax_deduction ?? 0)
+            + (float) ($request->other_deductions ?? 0);
+
+        if (abs(((float) $request->gross_pay - $deductions) - (float) $request->net_pay) > 0.01) {
+            return response()->json(['errors' => [
+                'net_pay' => ['Net pay does not match gross pay minus total deductions.'],
+            ]], 422);
         }
 
         $status = $request->status ?? 'pending';
