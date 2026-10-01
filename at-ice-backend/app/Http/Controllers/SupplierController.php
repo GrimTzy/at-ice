@@ -3,27 +3,73 @@ namespace App\Http\Controllers;
 
 use App\Models\Supplier;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class SupplierController extends Controller
 {
+    // Mobile 09XXXXXXXXX, or landline with area code, e.g. 0281234567 (Metro Manila)
+    // or 0441234567 (provincial). Spaces and dashes are removed first.
+    private const PHONE_REGEX = '/^(09\d{9}|0[2-8]\d{8})$/';
+    private const PHONE_MESSAGE = 'Contact number must be a mobile number (09XXXXXXXXX) or a landline with area code (e.g. 0281234567).';
+
+    private function cleanPhone(Request $request): void
+    {
+        if ($request->filled('contact_number')) {
+            $request->merge(['contact_number' => preg_replace('/[\s\-()]/', '', (string) $request->contact_number)]);
+        }
+    }
+
+    // Next free code in the format SPL-0001, SPL-0002, ...
+    private function nextSupplierCode(): string
+    {
+        $n = (Supplier::max('id') ?? 0) + 1;
+        do {
+            $code = 'SPL-' . str_pad($n, 4, '0', STR_PAD_LEFT);
+            $n++;
+        } while (Supplier::where('supplier_code', $code)->exists());
+
+        return $code;
+    }
+
+    private function rules(?Supplier $supplier = null): array
+    {
+        return [
+            'name'           => ['required', 'string', 'max:255', Rule::unique('suppliers', 'name')->ignore($supplier?->id)],
+            'contact_person' => 'nullable|string|max:255',
+            'contact_number' => ['nullable', 'regex:' . self::PHONE_REGEX],
+            'email'          => 'nullable|email|max:255',
+            'address'        => 'nullable|string|max:500',
+            'city'           => 'nullable|string|max:100',
+            'province'       => 'nullable|string|max:100',
+            'notes'          => 'nullable|string|max:1000',
+        ];
+    }
+
+    private function messages(): array
+    {
+        return [
+            'name.unique'          => 'A supplier with this name already exists.',
+            'contact_number.regex' => self::PHONE_MESSAGE,
+        ];
+    }
+
     public function index()
     {
-        return response()->json(Supplier::all());
+        return response()->json(Supplier::orderBy('name')->get());
     }
 
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'supplier_code'  => 'required|unique:suppliers',
-            'name'           => 'required|string',
-            'contact_person' => 'nullable|string',
-            'contact_number' => 'nullable|string',
-            'email'          => 'nullable|email',
-            'address'        => 'nullable|string',
-            'city'           => 'nullable|string',
-            'province'       => 'nullable|string',
-            'notes'          => 'nullable|string',
-        ]);
+        $this->cleanPhone($request);
+
+        $data = $request->validate(
+            $this->rules() + ['supplier_code' => 'nullable|string|max:50|unique:suppliers,supplier_code'],
+            $this->messages()
+        );
+
+        if (empty($data['supplier_code'])) {
+            $data['supplier_code'] = $this->nextSupplierCode();
+        }
 
         $supplier = Supplier::create($data);
         return response()->json($supplier, 201);
@@ -34,11 +80,17 @@ class SupplierController extends Controller
         return response()->json(Supplier::findOrFail($id));
     }
 
+    // Only the listed fields can be changed. The supplier code stays fixed.
     public function update(Request $request, $id)
     {
         $supplier = Supplier::findOrFail($id);
-        $supplier->update($request->all());
-        return response()->json($supplier);
+
+        $this->cleanPhone($request);
+
+        $data = $request->validate($this->rules($supplier), $this->messages());
+
+        $supplier->update($data);
+        return response()->json($supplier->fresh());
     }
 
     public function destroy($id)
@@ -46,4 +98,4 @@ class SupplierController extends Controller
         Supplier::findOrFail($id)->delete();
         return response()->json(['message' => 'Supplier deleted']);
     }
-}  
+}

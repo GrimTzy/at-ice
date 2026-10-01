@@ -14,8 +14,14 @@ const PlusIcon = () => (
   </svg>
 );
 
+// Mobile 09XXXXXXXXX, or landline with area code (e.g. 0281234567). Same rule as SupplierController.
+const PHONE_REGEX = /^(09\d{9}|0[2-8]\d{8})$/;
+const PHONE_MESSAGE = "Contact number must be a mobile number (09XXXXXXXXX) or a landline with area code (e.g. 0281234567).";
+const digitsOnly = (v) => String(v || "").replace(/\D/g, "").slice(0, 11);
+
+const inputCls = "text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400";
+
 const emptyForm = {
-  supplier_code: "",
   name: "",
   contact_person: "",
   contact_number: "",
@@ -39,6 +45,14 @@ export default function CheckerSupplierManagementPage() {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState(null);
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(""), 3500);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   useEffect(() => {
     fetchSuppliers();
@@ -64,13 +78,14 @@ export default function CheckerSupplierManagementPage() {
   function startCreate() {
     setEditingId(null);
     setForm(emptyForm);
+    setError("");
     setShowForm(true);
   }
 
   function startEdit(s) {
     setEditingId(s.id);
+    setError("");
     setForm({
-      supplier_code: s.supplier_code || "",
       name: s.name || "",
       contact_person: s.contact_person || "",
       contact_number: s.contact_number || "",
@@ -85,8 +100,10 @@ export default function CheckerSupplierManagementPage() {
 
   async function submit(e) {
     e.preventDefault();
-    setSubmitting(true);
     setError("");
+    if (!form.name.trim()) return setError("Enter the supplier name.");
+    if (form.contact_number && !PHONE_REGEX.test(form.contact_number)) return setError(PHONE_MESSAGE);
+    setSubmitting(true);
     try {
       const url = editingId ? `/api/suppliers/${editingId}` : "/api/suppliers";
       const method = editingId ? "PUT" : "POST";
@@ -97,15 +114,21 @@ export default function CheckerSupplierManagementPage() {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          name: form.name.trim(),
+          contact_number: form.contact_number || null,
+          email: form.email.trim() || null,
+        }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         // Surface Laravel validation messages (e.g. "The supplier code field is required.")
         const firstError =
           data.errors ? Object.values(data.errors)[0]?.[0] : null;
         throw new Error(firstError || data.message || "Could not save this supplier.");
       }
+      setNotice(editingId ? `${form.name.trim()} updated.` : `${form.name.trim()} added as ${data.supplier_code || "a new supplier"}.`);
       setShowForm(false);
       setEditingId(null);
       setForm(emptyForm);
@@ -129,18 +152,21 @@ export default function CheckerSupplierManagementPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Could not remove this supplier.");
       }
+      setNotice("Supplier removed.");
       fetchSuppliers();
     } catch (e) {
       setError(e.message || "Something went wrong.");
     } finally {
       setDeletingId(null);
+      setConfirmRemoveId(null);
     }
   }
 
   return (
     <div className="min-h-screen bg-white">
       <div className="sticky top-0 z-10 bg-white border-b border-black/[0.09]">
-        <div className="flex items-center gap-3 px-4 py-3">
+        {/* pr-24 leaves room for the floating Night toggle in the top-right corner */}
+        <div className="flex items-center gap-3 pl-4 pr-24 py-3">
           <button
             onClick={() => navigate("/checker/dashboard")}
             className="text-slate-500 hover:text-slate-800 transition-colors"
@@ -154,27 +180,28 @@ export default function CheckerSupplierManagementPage() {
               Supplier Management
             </div>
             <div className="text-[12px] text-slate-400 leading-tight">
-              {suppliers.length} supplier{suppliers.length === 1 ? "" : "s"}
+              {suppliers.length} supplier{suppliers.length === 1 ? "" : "s"} of supplies and materials
             </div>
           </div>
-          <button
-            onClick={showForm && !editingId ? () => setShowForm(false) : startCreate}
-            className="flex items-center gap-1 text-[13px] font-medium text-cyan-600 hover:text-cyan-700 transition-colors"
-          >
-            <PlusIcon />
-            New
-          </button>
         </div>
+
+        {!showForm && (
+          <div className="px-4 pb-3 flex">
+            <button
+              onClick={startCreate}
+              className="flex items-center gap-1 text-[12px] font-semibold bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg px-3 py-1.5 transition-colors"
+            >
+              <PlusIcon /> Add Supplier
+            </button>
+          </div>
+        )}
 
         {showForm && (
           <form onSubmit={submit} className="px-4 pb-4 flex flex-col gap-2.5 border-t border-black/[0.06] pt-3">
-            <input
-              value={form.supplier_code}
-              onChange={(e) => setForm({ ...form, supplier_code: e.target.value })}
-              placeholder="Supplier code (e.g. SUP-001)"
-              required
-              className="text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
-            />
+            <div className="text-[13px] font-semibold text-slate-800">
+              {editingId ? "Edit Supplier" : "Add Supplier"}
+              {!editingId && <span className="ml-2 text-[11px] font-normal text-slate-400">Code is assigned automatically</span>}
+            </div>
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -191,16 +218,18 @@ export default function CheckerSupplierManagementPage() {
             <div className="flex gap-2.5">
               <input
                 value={form.contact_number}
-                onChange={(e) => setForm({ ...form, contact_number: e.target.value })}
-                placeholder="Contact number"
-                className="flex-1 text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
+                onChange={(e) => setForm({ ...form, contact_number: digitsOnly(e.target.value) })}
+                inputMode="numeric"
+                maxLength={11}
+                placeholder="Contact no. (09XXXXXXXXX)"
+                className={`flex-1 min-w-0 ${inputCls} ${form.contact_number && !PHONE_REGEX.test(form.contact_number) ? "border-red-300 focus:border-red-400" : ""}`}
               />
               <input
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 type="email"
                 placeholder="Email"
-                className="flex-1 text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
+                className="flex-1 min-w-0 text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
               />
             </div>
             <input
@@ -259,9 +288,14 @@ export default function CheckerSupplierManagementPage() {
         {!showForm && error && (
           <div className="text-[13px] text-red-500 text-center py-2">{error}</div>
         )}
+        {notice && (
+          <div className="px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-[12px] text-green-700 text-center">
+            {notice}
+          </div>
+        )}
         {loading && <div className="text-[13px] text-slate-400 py-8 text-center">Loading suppliers…</div>}
         {!loading && suppliers.length === 0 && (
-          <div className="text-[13px] text-slate-400 py-8 text-center">No suppliers added yet.</div>
+          <div className="text-[13px] text-slate-400 py-8 text-center">No suppliers added yet. Use Add Supplier to create one.</div>
         )}
 
         {!loading &&
@@ -286,19 +320,39 @@ export default function CheckerSupplierManagementPage() {
                   {s.notes && <div className="text-[12px] text-slate-400 mt-1 italic">{s.notes}</div>}
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => startEdit(s)}
-                    className="text-[12px] font-medium text-cyan-600 hover:text-cyan-700 transition-colors"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => remove(s.id)}
-                    disabled={deletingId === s.id}
-                    className="text-[12px] font-medium text-red-500 hover:text-red-600 transition-colors disabled:opacity-50"
-                  >
-                    Remove
-                  </button>
+                  {confirmRemoveId === s.id ? (
+                    <>
+                      <span className="text-[12px] text-slate-500">Remove?</span>
+                      <button
+                        onClick={() => remove(s.id)}
+                        disabled={deletingId === s.id}
+                        className="text-[12px] font-semibold text-red-500 hover:text-red-600 transition-colors disabled:opacity-50"
+                      >
+                        {deletingId === s.id ? "Removing…" : "Yes"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmRemoveId(null)}
+                        className="text-[12px] font-medium text-slate-500 hover:text-slate-800 transition-colors"
+                      >
+                        No
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => startEdit(s)}
+                        className="text-[12px] font-medium text-cyan-600 hover:text-cyan-700 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setConfirmRemoveId(s.id)}
+                        className="text-[12px] font-medium text-red-500 hover:text-red-600 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
