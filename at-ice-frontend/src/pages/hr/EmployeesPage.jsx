@@ -1,36 +1,3 @@
-// src/pages/hr/EmployeesPage.jsx
-//
-// HR > Employees. Full CRUD (add, edit, deactivate) plus per-employee
-// Payroll and Performance management, via a "Manage" action per row that
-// opens a tabbed modal.
-//
-// v29.7: Driver added as a selectable "role" in the Add Employee form.
-// Driver is NOT a real sub_role on the backend — it keeps its own
-// top-level `role: driver` on the users table (see EmployeeController's
-// store()), so /driver/login and role:driver routes stay untouched. This
-// page just also creates an Employee record for them so they show up
-// here alongside Checker/Salesman/Maintenance, since they're genuinely
-// part of the workforce HR needs to track.
-//
-// v29 (this session): Driver rows now also collect a Vehicle Plate
-// Number, stored on employees.vehicle_plate (nullable, Driver-only —
-// EmployeeController forces this to null server-side for every other
-// role regardless of what's sent). Shown only when Employee Role is
-// Driver on create, or when the employee being edited is a Driver.
-//
-// Payroll tab: computes Gross Pay, SSS, PhilHealth, Pag-IBIG, and
-// withholding tax on the frontend using published 2026 Philippine rates
-// (SSS: 15% of Monthly Salary Credit, 5% employee share, MSC floor 5,000
-// ceiling 35,000; PhilHealth: 5% split 2.5%/2.5%, floor 10,000 ceiling
-// 100,000; Pag-IBIG: 2% each side, capped at 200 employee share; BIR
-// withholding tax: TRAIN Law monthly bracket table, unchanged since 2023).
-// These are simplified bracket-rounded approximations of the official
-// government tables, sufficient for a capstone demo — flag this as an
-// assumption if asked during defense. The computed figures are then sent
-// to PayrollController@store(), which just stores whatever it's given.
-//
-// Performance tab: backed by EmployeePerformanceController.
-
 import { useState, useEffect, useCallback } from "react";
 import HrLayout from "../../components/HrLayout";
 
@@ -59,6 +26,11 @@ function displayRole(user) {
   if (user.role === "driver") return "driver";
   return user.sub_role || null;
 }
+
+// Philippine mobile number: 11 digits starting with 09 (same rule as EmployeeController)
+const PHONE_REGEX = /^09\d{9}$/;
+const PHONE_MESSAGE = "Phone must be 11 digits starting with 09 (e.g. 09171234567).";
+const digitsOnly = (v) => String(v || "").replace(/\D/g, "").slice(0, 11);
 
 const emptyForm = {
   first_name: "", last_name: "", email: "", password: "",
@@ -199,8 +171,14 @@ export default function EmployeesPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSaving(true);
     setFormErrors({});
+
+    if (form.phone && !PHONE_REGEX.test(form.phone)) {
+      setFormErrors({ phone: [PHONE_MESSAGE] });
+      return;
+    }
+
+    setSaving(true);
 
     const isCreate = editingId === null;
     const url = isCreate ? `${API_BASE}/employees` : `${API_BASE}/employees/${editingId}`;
@@ -230,7 +208,11 @@ export default function EmployeesPage() {
       const data = await res.json().catch(() => null);
 
       if (res.status === 422 && data?.errors) {
-        setFormErrors(data.errors);
+        // Fields that show their own error under the input. Any other
+        // field error is shown at the top so it is never silently hidden.
+        const SHOWN = ["first_name", "last_name", "email", "password", "phone", "position", "sub_role", "vehicle_plate", "shift", "employment_type", "date_hired"];
+        const hidden = Object.keys(data.errors).filter((k) => !SHOWN.includes(k));
+        setFormErrors(hidden.length ? { ...data.errors, _general: data.errors[hidden[0]] } : data.errors);
         return;
       }
       if (!res.ok) throw new Error(data?.message || `Request failed (${res.status})`);
@@ -420,8 +402,23 @@ export default function EmployeesPage() {
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Phone">
-                  <input value={form.phone} onChange={handleChange("phone")} className={inputCls} />
+                <Field label="Phone" error={formErrors.phone}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={11}
+                    value={form.phone}
+                    onChange={(e) => {
+                      const phone = digitsOnly(e.target.value);
+                      setForm((f) => ({ ...f, phone }));
+                      if (formErrors.phone) setFormErrors((fe) => ({ ...fe, phone: undefined }));
+                    }}
+                    placeholder="09171234567"
+                    className={`${inputCls} ${form.phone && !PHONE_REGEX.test(form.phone) ? "border-red-300 focus:border-red-400" : ""}`}
+                  />
+                  {!formErrors.phone && form.phone && !PHONE_REGEX.test(form.phone) && (
+                    <span className="text-[10px] text-red-500">11 digits starting with 09</span>
+                  )}
                 </Field>
                 <Field label="Address">
                   <input value={form.address} onChange={handleChange("address")} className={inputCls} />
