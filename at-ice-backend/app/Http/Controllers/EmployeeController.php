@@ -145,13 +145,22 @@ class EmployeeController extends Controller
     }
 
     // DELETE (soft delete — set is_active to false)
+    // Deactivating an employee also disables the login account and signs it
+    // out everywhere, so a former employee can no longer access the system.
+    // Attendance, payroll and inventory history are kept.
     public function destroy($id)
     {
-        $employee = Employee::findOrFail($id);
+        $employee = Employee::with('user')->findOrFail($id);
         $employee->update(['is_active' => false]);
 
+        if ($employee->user) {
+            $employee->user->update(['is_active' => false]);
+            // Revoke all Sanctum tokens so any open session stops working immediately.
+            $employee->user->tokens()->delete();
+        }
+
         return response()->json([
-            'message' => 'Employee deactivated successfully!'
+            'message' => 'Employee deactivated successfully! Their login account has been disabled.'
         ]);
     }
 }
