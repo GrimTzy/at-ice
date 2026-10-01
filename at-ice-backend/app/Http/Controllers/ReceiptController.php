@@ -11,11 +11,14 @@ class ReceiptController extends Controller
 
     public function index(Request $request)
     {
+        // 'items' is loaded so the View modal can list each product line
+        // (product_type, quantity, unit_price, line_total).
         $query = Receipt::with([
             'delivery',
             'customer',
             'salesman',
             'deliveryProof',
+            'items',
         ]);
 
         if ($request->has('payment_status')) {
@@ -41,6 +44,7 @@ class ReceiptController extends Controller
             'customer',
             'salesman',
             'deliveryProof',
+            'items',
         ])->findOrFail($id);
 
         return response()->json($receipt);
