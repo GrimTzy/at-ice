@@ -2,34 +2,33 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\InventoryAlert;
-use App\Models\Product;
-use App\Models\StockMovement;
 use App\Models\StockOutRequest;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
-// Flow (matches the paper's scope):
-//   Maintenance requests an inventory item  ->  Admin approves or rejects
-//   ->  Admin releases the item, which deducts the stock and records a
-//       confirmed Stock Out in the stock movement history.
 class StockOutRequestController extends Controller
 {
     private const RELATIONS = [
         'requestedBy:id,name',
         'approvedBy:id,name',
         'releasedBy:id,name',
-        'product:id,product_code,name,unit,current_stock,minimum_stock',
     ];
 
-    // Maintenance sees only their own requests. Admin sees all.
+    /**
+     * Maintenance sees only their own requests.
+     * Admin sees all requests.
+     */
     public function index(Request $request)
     {
         $user = $request->user();
 
-        $query = StockOutRequest::with(self::RELATIONS)->orderBy('created_at', 'desc');
+        $query = StockOutRequest::with(self::RELATIONS)
+            ->orderBy('created_at', 'desc');
 
-        if ($user->role === 'employee' && $user->sub_role === 'maintenance') {
+        // Maintenance can only see their own requests.
+        if (
+            $user->role === 'employee' &&
+            $user->sub_role === 'maintenance'
+        ) {
             $query->where('requested_by', $user->id);
         }
 
@@ -37,82 +36,116 @@ class StockOutRequestController extends Controller
             $query->where('status', $request->status);
         }
 
-        return response()->json($query->paginate(50));
-    }
-
-    // Maintenance: inventory items that can be requested (read only).
-    public function items()
-    {
         return response()->json(
-            Product::orderBy('name')->get(['id', 'product_code', 'name', 'category', 'unit', 'current_stock'])
+            $query->paginate(50)
         );
     }
 
-    // Maintenance: submit a new stock-out request for an inventory item.
+    /**
+     * Maintenance submits a request.
+     *
+     * The requested part can be ANY text.
+     * It does NOT need to exist in the products table.
+     */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'quantity'   => 'required|integer|min:1',
-            'purpose'    => 'required|string|max:1000',
-        ], [
-            'product_id.required' => 'Select the item you need from the inventory list.',
-            'product_id.exists'   => 'The selected item no longer exists in the inventory.',
-        ]);
+        $user = $request->user();
 
-        $product = Product::findOrFail($validated['product_id']);
-
-        if ($product->current_stock < $validated['quantity']) {
+        // Only Maintenance can submit requests.
+        if (
+            $user->role !== 'employee' ||
+            $user->sub_role !== 'maintenance'
+        ) {
             return response()->json([
-                'message' => "Not enough stock. Available: {$product->current_stock} {$product->unit}.",
-                'errors'  => ['quantity' => ["Not enough stock. Available: {$product->current_stock} {$product->unit}."]],
-            ], 422);
+                'message' => 'Only Maintenance can submit stock-out requests.',
+            ], 403);
         }
 
+        $validated = $request->validate([
+            'item_name' => 'required|string|max:255',
+            'quantity' => 'required|integer|min:1',
+            'purpose' => 'required|string|max:1000',
+        ]);
+
         $stockOutRequest = StockOutRequest::create([
-            'requested_by' => $request->user()->id,
-            'product_id'   => $product->id,
-            'item_name'    => $product->name, // kept for display and older records
-            'quantity'     => $validated['quantity'],
-            'purpose'      => $validated['purpose'],
-            'status'       => 'pending',
+            'requested_by' => $user->id,
+            'item_name' => $validated['item_name'],
+            'quantity' => $validated['quantity'],
+            'purpose' => $validated['purpose'],
+            'status' => 'pending',
         ]);
 
         return response()->json([
-            'message' => 'Stock-out request submitted. Waiting for Admin approval.',
+            'message' => 'Request submitted successfully. Waiting for Admin approval.',
             'request' => $stockOutRequest->load(self::RELATIONS),
         ], 201);
     }
 
+    /**
+     * Show one request.
+     */
     public function show(StockOutRequest $stockOutRequest)
-    {
-        return response()->json($stockOutRequest->load(self::RELATIONS));
-    }
+{
+    return response()->json(
+        $stockOutRequest->load(self::RELATIONS)
+    );
+}
 
-    // Admin: approve a pending request.
-    public function approve(StockOutRequest $stockOutRequest)
+    /**
+     * ADMIN ONLY:
+     * Approve a pending request.
+     */
+    public function approve(Request $request, StockOutRequest $stockOutRequest)
     {
+        $user = $request->user();
+
+        if ($user->role !== 'admin') {
+            return response()->json([
+                'message' => 'Only Admin can approve stock-out requests.',
+            ], 403);
+        }
+
         if ($stockOutRequest->status !== 'pending') {
-            return response()->json(['message' => 'Only pending requests can be approved.'], 422);
+            return response()->json([
+                'message' => 'Only pending requests can be approved.',
+            ], 422);
         }
 
         $stockOutRequest->update([
-            'status'      => 'approved',
-            'approved_by' => auth()->id(),
+            'status' => 'approved',
+            'approved_by' => $user->id,
             'approved_at' => now(),
+            'rejection_reason' => null,
         ]);
 
         return response()->json([
-            'message' => 'Request approved. You can now release the item.',
-            'request' => $stockOutRequest->fresh()->load(self::RELATIONS),
+            'message' => 'Request approved successfully.',
+            'request' => $stockOutRequest
+                ->fresh()
+                ->load(self::RELATIONS),
         ]);
     }
 
-    // Admin: reject a pending request.
-    public function reject(Request $request, StockOutRequest $stockOutRequest)
-    {
+    /**
+     * ADMIN ONLY:
+     * Reject a pending request.
+     */
+    public function reject(
+        Request $request,
+        StockOutRequest $stockOutRequest
+    ) {
+        $user = $request->user();
+
+        if ($user->role !== 'admin') {
+            return response()->json([
+                'message' => 'Only Admin can reject stock-out requests.',
+            ], 403);
+        }
+
         if ($stockOutRequest->status !== 'pending') {
-            return response()->json(['message' => 'Only pending requests can be rejected.'], 422);
+            return response()->json([
+                'message' => 'Only pending requests can be rejected.',
+            ], 422);
         }
 
         $validated = $request->validate([
@@ -120,93 +153,57 @@ class StockOutRequestController extends Controller
         ]);
 
         $stockOutRequest->update([
-            'status'           => 'rejected',
-            'approved_by'      => auth()->id(),
-            'approved_at'      => now(),
+            'status' => 'rejected',
+            'approved_by' => $user->id,
+            'approved_at' => now(),
             'rejection_reason' => $validated['rejection_reason'],
         ]);
 
         return response()->json([
-            'message' => 'Request rejected.',
-            'request' => $stockOutRequest->fresh()->load(self::RELATIONS),
+            'message' => 'Request rejected successfully.',
+            'request' => $stockOutRequest
+                ->fresh()
+                ->load(self::RELATIONS),
         ]);
     }
 
-    // Admin: release an approved request. Deducts the stock and records a
-    // confirmed Stock Out (entered by the Maintenance requester, confirmed by
-    // the releasing Admin) so the inventory history stays complete.
-    public function release(Request $request, StockOutRequest $stockOutRequest)
-    {
+    /**
+     * ADMIN ONLY:
+     * Mark an approved request as released/completed.
+     *
+     * IMPORTANT:
+     * Since Maintenance can request ANY part, this request does not
+     * automatically deduct inventory from the products table.
+     */
+    public function release(
+        Request $request,
+        StockOutRequest $stockOutRequest
+    ) {
         $user = $request->user();
 
-        // Defensive check: the route is already admin only.
         if ($user->role !== 'admin') {
-            return response()->json(['message' => 'Only the Admin can release stock-out requests.'], 403);
+            return response()->json([
+                'message' => 'Only Admin can release stock-out requests.',
+            ], 403);
         }
 
         if ($stockOutRequest->status !== 'approved') {
-            return response()->json(['message' => 'Only approved requests can be released.'], 422);
-        }
-
-        if (!$stockOutRequest->product_id) {
             return response()->json([
-                'message' => 'This request is not linked to an inventory item, so it cannot be released. Ask Maintenance to submit a new request.',
+                'message' => 'Only approved requests can be released.',
             ], 422);
         }
 
-        $adminId = $user->id;
-
-        try {
-            DB::transaction(function () use ($stockOutRequest, $adminId) {
-                $product = Product::lockForUpdate()->findOrFail($stockOutRequest->product_id);
-
-                if ($product->current_stock < $stockOutRequest->quantity) {
-                    throw new \RuntimeException(
-                        "Not enough stock to release. Available: {$product->current_stock} {$product->unit}."
-                    );
-                }
-
-                $before = $product->current_stock;
-                $after  = $before - $stockOutRequest->quantity;
-
-                $movement = StockMovement::create([
-                    'product_id'   => $product->id,
-                    'type'         => 'stock_out',
-                    'quantity'     => $stockOutRequest->quantity,
-                    'stock_before' => $before,
-                    'stock_after'  => $after,
-                    'reference_no' => 'SOR-' . str_pad($stockOutRequest->id, 4, '0', STR_PAD_LEFT),
-                    'source'       => 'maintenance',
-                    'reason'       => 'Maintenance request: ' . $stockOutRequest->purpose,
-                    'status'       => 'confirmed',
-                    'entered_by'   => $stockOutRequest->requested_by,
-                    'confirmed_by' => $adminId,
-                    'confirmed_at' => now(),
-                ]);
-
-                $product->update(['current_stock' => $after]);
-
-                if ($product->isLowStock()) {
-                    InventoryAlert::firstOrCreate(
-                        ['product_id' => $product->id, 'alert_type' => 'low_stock', 'is_resolved' => false],
-                        ['message' => "{$product->name} is low on stock. Current: {$after} {$product->unit}(s)."]
-                    );
-                }
-
-                $stockOutRequest->update([
-                    'status'            => 'released',
-                    'released_by'       => $adminId,
-                    'released_at'       => now(),
-                    'stock_movement_id' => $movement->id,
-                ]);
-            });
-        } catch (\RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
+        $stockOutRequest->update([
+            'status' => 'released',
+            'released_by' => $user->id,
+            'released_at' => now(),
+        ]);
 
         return response()->json([
-            'message' => 'Item released and stock updated.',
-            'request' => $stockOutRequest->fresh()->load(self::RELATIONS),
+            'message' => 'Request released successfully.',
+            'request' => $stockOutRequest
+                ->fresh()
+                ->load(self::RELATIONS),
         ]);
     }
 }

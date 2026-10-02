@@ -47,8 +47,7 @@ export default function MaintenanceStockOutRequestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const [productId, setProductId] = useState("");
-  const [items, setItems] = useState([]);
+  const [itemName, setItemName] = useState("");
   const [notice, setNotice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -58,8 +57,7 @@ export default function MaintenanceStockOutRequestPage() {
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    fetchRequests();
-    fetchItems();
+  fetchRequests();
   }, []);
 
   useEffect(() => {
@@ -67,22 +65,6 @@ export default function MaintenanceStockOutRequestPage() {
     const t = setTimeout(() => setNotice(""), 4000);
     return () => clearTimeout(t);
   }, [notice]);
-
-  // Inventory items that can be requested (name, unit, current stock)
-  async function fetchItems() {
-    try {
-      const res = await fetch("/api/stock-out-items", {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setItems(Array.isArray(data) ? data : data.data || []);
-    } catch {
-      /* non-fatal: the dropdown will show no items */
-    }
-  }
-
-  const selectedItem = items.find((i) => String(i.id) === String(productId));
 
   async function fetchRequests() {
     setLoading(true);
@@ -108,16 +90,12 @@ export default function MaintenanceStockOutRequestPage() {
     e.preventDefault();
     setFormError("");
 
-    if (!productId || !quantity || !purpose.trim()) {
+    if (!itemName.trim() || !quantity || !purpose.trim()) {
       setFormError("Please fill in all fields.");
       return;
     }
     if (!Number.isInteger(Number(quantity)) || Number(quantity) < 1) {
       setFormError("Quantity must be a whole number, at least 1.");
-      return;
-    }
-    if (selectedItem && Number(quantity) > Number(selectedItem.current_stock)) {
-      setFormError(`Not enough stock. Available: ${selectedItem.current_stock} ${selectedItem.unit || ""}.`);
       return;
     }
 
@@ -131,21 +109,21 @@ export default function MaintenanceStockOutRequestPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          product_id: Number(productId),
-          quantity: Number(quantity),
-          purpose: purpose.trim(),
+        item_name: itemName.trim(),
+        quantity: Number(quantity),
+        purpose: purpose.trim(),
         }),
+
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(firstError(data, "Failed to submit request."));
 
       setNotice("Request submitted. Waiting for Admin approval.");
-      setProductId("");
+      setItemName("");
       setQuantity("");
       setPurpose("");
       setShowForm(false);
       fetchRequests();
-      fetchItems();
     } catch (err) {
       setFormError(err.message || "Something went wrong. Please try again.");
     } finally {
@@ -168,7 +146,7 @@ export default function MaintenanceStockOutRequestPage() {
           <div className="flex-1 min-w-0">
             <div className="text-[16px] font-semibold text-slate-800 leading-tight flex items-center gap-1.5">
               <WrenchIcon />
-              Request Stock Out
+              Maintenance Parts Request
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
               Request truck parts or machine components
@@ -190,28 +168,20 @@ export default function MaintenanceStockOutRequestPage() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-                Item (from inventory)
-              </label>
-              <select
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
-              >
-                <option value="">{items.length ? "Select an item" : "No inventory items available"}</option>
-                {items.map((i) => (
-                  <option key={i.id} value={i.id} disabled={Number(i.current_stock) <= 0}>
-                    {i.name} ({i.current_stock} {i.unit || "on hand"}){Number(i.current_stock) <= 0 ? " - out of stock" : ""}
-                  </option>
-                ))}
-              </select>
-              <span className="text-[11px] text-slate-400 px-0.5">
-                {selectedItem
-                  ? `Available: ${selectedItem.current_stock} ${selectedItem.unit || ""}`
-                  : "If the part you need is not listed, ask the Checker to add it to the inventory."}
-              </span>
-            </div>
-
+        <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
+            Requested Part
+        </label>
+        <input
+          type="text"
+          placeholder="e.g. Brake Pad, Fan Belt, Engine Oil, Clutch Lining"
+          value={itemName}
+          onChange={(e) => setItemName(e.target.value)}
+          className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
+          />
+          <span className="text-[11px] text-slate-400 px-0.5">
+          Enter the truck part or maintenance item you need.
+        </span>
+        </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
                 Quantity
@@ -219,7 +189,6 @@ export default function MaintenanceStockOutRequestPage() {
               <input
                 type="number"
                 min="1"
-                max={selectedItem ? selectedItem.current_stock : undefined}
                 step="1"
                 inputMode="numeric"
                 placeholder="e.g. 2"
@@ -278,7 +247,7 @@ export default function MaintenanceStockOutRequestPage() {
 
         {!loading && !loadError && requests.length === 0 && (
           <div className="text-center text-[13px] text-slate-400 py-8">
-            No stock-out requests yet. Tap "New" to submit one.
+            No maintenance requests yet. Tap "New" to submit one.
           </div>
         )}
 
@@ -292,11 +261,8 @@ export default function MaintenanceStockOutRequestPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="text-[14px] font-semibold text-slate-800">
-                    {req.product?.name || req.item_name}
+                    {req.item_name}
                   </div>
-                  {req.product?.product_code && (
-                    <div className="text-[10px] text-slate-400 font-mono">{req.product.product_code}</div>
-                  )}
                   <div className="text-[12px] text-slate-400 mt-0.5">
                     Quantity: {req.quantity}
                   </div>
@@ -314,8 +280,8 @@ export default function MaintenanceStockOutRequestPage() {
 
               <div className="text-[11px] text-slate-400 mt-2">
                 {req.status === "pending" && "Waiting for Admin approval"}
-                {req.status === "approved" && `Approved${req.approved_by?.name ? ` by ${req.approved_by.name}` : ""}. Waiting for the Checker to release.`}
-                {req.status === "released" && `Released${req.released_by?.name ? ` by ${req.released_by.name}` : ""}. Claim the item from the Checker.`}
+                {req.status === "approved" && `Approved${req.approved_by?.name ? ` by ${req.approved_by.name}` : ""}. Waiting for Admin to release the item.`}
+                {req.status === "released" && `Released${req.released_by?.name ? ` by ${req.released_by.name}` : ""}. Request completed.`}
               </div>
 
               {req.status === "rejected" && req.rejection_reason && (
