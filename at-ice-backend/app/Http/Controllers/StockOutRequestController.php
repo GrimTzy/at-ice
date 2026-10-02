@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 // Flow (matches the paper's scope):
 //   Maintenance requests an inventory item  ->  Admin approves or rejects
-//   ->  Checker releases the item, which deducts the stock and records a
+//   ->  Admin releases the item, which deducts the stock and records a
 //       confirmed Stock Out in the stock movement history.
 class StockOutRequestController extends Controller
 {
@@ -22,7 +22,7 @@ class StockOutRequestController extends Controller
         'product:id,product_code,name,unit,current_stock,minimum_stock',
     ];
 
-    // Maintenance sees only their own requests. Checker and Admin see all.
+    // Maintenance sees only their own requests. Admin sees all.
     public function index(Request $request)
     {
         $user = $request->user();
@@ -103,7 +103,7 @@ class StockOutRequestController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Request approved. The Checker will release the item.',
+            'message' => 'Request approved. You can now release the item.',
             'request' => $stockOutRequest->fresh()->load(self::RELATIONS),
         ]);
     }
@@ -132,11 +132,18 @@ class StockOutRequestController extends Controller
         ]);
     }
 
-    // Checker: release an approved request. Deducts the stock and records a
+    // Admin: release an approved request. Deducts the stock and records a
     // confirmed Stock Out (entered by the Maintenance requester, confirmed by
-    // the releasing Checker) so the inventory history stays complete.
+    // the releasing Admin) so the inventory history stays complete.
     public function release(Request $request, StockOutRequest $stockOutRequest)
     {
+        $user = $request->user();
+
+        // Defensive check: the route is already admin only.
+        if ($user->role !== 'admin') {
+            return response()->json(['message' => 'Only the Admin can release stock-out requests.'], 403);
+        }
+
         if ($stockOutRequest->status !== 'approved') {
             return response()->json(['message' => 'Only approved requests can be released.'], 422);
         }
@@ -147,21 +154,10 @@ class StockOutRequestController extends Controller
             ], 422);
         }
 
-        $user = $request->user();
-
-        // Only a Checker releases items from the stockroom (not Admin, not Maintenance).
-        if (!($user->role === 'employee' && $user->sub_role === 'checker')) {
-            return response()->json(['message' => 'Only a Checker can release stock-out requests.'], 403);
-        }
-
-        $checkerId = $user->id;
-
-        if ((int) $stockOutRequest->requested_by === (int) $checkerId) {
-            return response()->json(['message' => 'You cannot release your own request.'], 403);
-        }
+        $adminId = $user->id;
 
         try {
-            DB::transaction(function () use ($stockOutRequest, $checkerId) {
+            DB::transaction(function () use ($stockOutRequest, $adminId) {
                 $product = Product::lockForUpdate()->findOrFail($stockOutRequest->product_id);
 
                 if ($product->current_stock < $stockOutRequest->quantity) {
@@ -184,7 +180,7 @@ class StockOutRequestController extends Controller
                     'reason'       => 'Maintenance request: ' . $stockOutRequest->purpose,
                     'status'       => 'confirmed',
                     'entered_by'   => $stockOutRequest->requested_by,
-                    'confirmed_by' => $checkerId,
+                    'confirmed_by' => $adminId,
                     'confirmed_at' => now(),
                 ]);
 
@@ -199,7 +195,7 @@ class StockOutRequestController extends Controller
 
                 $stockOutRequest->update([
                     'status'            => 'released',
-                    'released_by'       => $checkerId,
+                    'released_by'       => $adminId,
                     'released_at'       => now(),
                     'stock_movement_id' => $movement->id,
                 ]);

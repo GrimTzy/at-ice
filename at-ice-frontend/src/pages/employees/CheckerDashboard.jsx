@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
 
-// Functional UI icons only — navigation + actions, not decoration
+// Functional UI icons only: navigation + actions, not decoration
 const ChevronRightIcon = () => (
   <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
     <polyline points="9 18 15 12 9 6" />
@@ -15,6 +15,8 @@ const LogOutIcon = () => (
   </svg>
 );
 
+// Stock-out release is not listed here: the Admin approves and releases
+// Maintenance stock-out requests.
 const MODULES = [
   {
     title: "Pickup Log",
@@ -37,16 +39,10 @@ const MODULES = [
     route: "/checker/stock-movements",
   },
   {
-    title: "Stock-Out Release",
-    description: "Release Admin-approved Maintenance requests. Stock is deducted on release.",
-    route: "/checker/stock-out-release",
-  },
-  {
     title: "Supplier Management",
     description: "Manage supplier records and details.",
     route: "/checker/suppliers",
   },
-
 ];
 
 export default function CheckerDashboard() {
@@ -64,7 +60,7 @@ export default function CheckerDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
 
-      {/* ── Top Bar ── */}
+      {/* Top Bar */}
       <header className="bg-white border-b border-black/[0.08] px-5 pt-10 pb-4 flex-shrink-0 sticky top-0 z-20">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
@@ -94,7 +90,7 @@ export default function CheckerDashboard() {
         </div>
       </header>
 
-      {/* ── Module List — plain text, no decorative icons or color dots ── */}
+      {/* Module List: plain text, no decorative icons or color dots */}
       <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
         {MODULES.map((mod) => (
           <button

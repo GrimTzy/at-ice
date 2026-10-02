@@ -51,7 +51,6 @@ import CheckerIceLoadingPage from './pages/employees/CheckerIceLoadingPage'
 import CheckerInventoryManagementPage from './pages/employees/CheckerInventoryManagementPage'
 import CheckerStockMovementsPage from './pages/employees/CheckerStockMovementsPage'
 import CheckerSupplierManagementPage from './pages/employees/CheckerSupplierManagementPage'
-import CheckerStockOutReleasePage from './pages/employees/CheckerStockOutReleasePage'
 import SalesmanLogin from './pages/employees/SalesmanLogin'
 import SalesmanDashboard from './pages/employees/SalesmanDashboard'
 import SalesmanDeliveryConfirmation from './pages/employees/SalesmanDeliveryConfirmation'
@@ -142,7 +141,8 @@ function App() {
           }
         />
         {/* Stock-Out Approvals: Admin approves or rejects Maintenance
-            requests. Release is done by the Checker. */}
+            requests, then releases the approved ones (stock is deducted
+            on release). */}
         <Route
           path="/admin/stock-out-approvals"
           element={
@@ -342,22 +342,14 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* No stock-out release page for the Checker: the Admin releases
+            Maintenance requests. (/checker/low-stock stays removed: Low
+            Stock Alert is a tab in Inventory Management.) */}
         <Route
           path="/checker/suppliers"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
               <NightScope><CheckerSupplierManagementPage /></NightScope>
-            </ProtectedRoute>
-          }
-        />
-        {/* Stock-Out Release: Checker releases Admin-approved Maintenance
-            requests; stock is deducted on release. (/checker/low-stock stays
-            removed: Low Stock Alert is a tab in Inventory Management.) */}
-        <Route
-          path="/checker/stock-out-release"
-          element={
-            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <NightScope><CheckerStockOutReleasePage /></NightScope>
             </ProtectedRoute>
           }
         />

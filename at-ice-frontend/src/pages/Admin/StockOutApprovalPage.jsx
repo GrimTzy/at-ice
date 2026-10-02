@@ -26,8 +26,10 @@ export default function StockOutApprovalPage() {
   const [activeTab, setActiveTab] = useState('pending');
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [releasingId, setReleasingId] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const token = localStorage.getItem('token');
 
@@ -56,6 +58,7 @@ export default function StockOutApprovalPage() {
   const handleApprove = async (id) => {
     setActionLoading(id);
     setError('');
+    setSuccess('');
     try {
       const res = await fetch(`/api/stock-out-requests/${id}/approve`, {
         method: 'PUT',
@@ -83,6 +86,7 @@ export default function StockOutApprovalPage() {
     }
     setActionLoading(id);
     setError('');
+    setSuccess('');
     try {
       const res = await fetch(`/api/stock-out-requests/${id}/reject`, {
         method: 'PUT',
@@ -102,6 +106,35 @@ export default function StockOutApprovalPage() {
       await fetchRequests();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Admin releases an approved request: deducts the stock and records a
+  // confirmed Stock Out in the movement history.
+  const handleRelease = async (id) => {
+    setActionLoading(id);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch(`/api/stock-out-requests/${id}/release`, {
+        method: 'PUT',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || 'Release failed.');
+      }
+      setReleasingId(null);
+      setSuccess(data.message || 'Item released and stock updated.');
+      await fetchRequests();
+    } catch (err) {
+      setError(err.message);
+      setReleasingId(null);
     } finally {
       setActionLoading(null);
     }
@@ -136,122 +169,170 @@ export default function StockOutApprovalPage() {
           </div>
         )}
 
+        {success && (
+          <div className="mb-4 px-4 py-2.5 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
+            {success}
+          </div>
+        )}
+
         {loading ? (
           <p className="text-sm text-slate-500">Loading requests...</p>
         ) : filtered.length === 0 ? (
           <p className="text-sm text-slate-500">No requests in this category.</p>
         ) : (
           <div className="space-y-3">
-            {filtered.map((req) => (
-              <div
-                key={req.id}
-                className="bg-white border border-black/[0.09] rounded-2xl shadow-sm px-5 py-4"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-slate-900">{req.product?.name || req.item_name}</h3>
-                    <p className="text-sm text-slate-500">
-                      Quantity: {req.quantity} {req.product?.unit || ''}
-                      {req.product && (req.status === 'pending' || req.status === 'approved') && (
-                        <span className={req.product.current_stock < req.quantity ? 'text-red-600' : 'text-slate-400'}>
-                          {' '}· On hand: {req.product.current_stock}
-                          {req.product.current_stock < req.quantity ? ' (not enough)' : ''}
-                        </span>
-                      )}
+            {filtered.map((req) => {
+              const notEnough = req.product && req.product.current_stock < req.quantity;
+              return (
+                <div
+                  key={req.id}
+                  className="bg-white border border-black/[0.09] rounded-2xl shadow-sm px-5 py-4"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold text-slate-900">{req.product?.name || req.item_name}</h3>
+                      <p className="text-sm text-slate-500">
+                        Quantity: {req.quantity} {req.product?.unit || ''}
+                        {req.product && (req.status === 'pending' || req.status === 'approved') && (
+                          <span className={notEnough ? 'text-red-600' : 'text-slate-400'}>
+                            {' '}· On hand: {req.product.current_stock}
+                            {notEnough ? ' (not enough)' : ''}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <StatusBadge status={req.status} />
+                  </div>
+
+                  <p className="text-sm text-slate-600 mt-2">{req.purpose}</p>
+
+                  <p className="text-xs text-slate-400 mt-2">
+                    Requested by {req.requested_by?.name || 'Unknown'} ·{' '}
+                    {new Date(req.created_at).toLocaleString()}
+                  </p>
+
+                  {req.status === 'approved' && req.approved_by && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      Approved by {req.approved_by.name}
+                      {req.approved_at ? ` · ${new Date(req.approved_at).toLocaleString()}` : ''}
                     </p>
-                  </div>
-                  <StatusBadge status={req.status} />
-                </div>
+                  )}
 
-                <p className="text-sm text-slate-600 mt-2">{req.purpose}</p>
+                  {req.status === 'released' && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      Approved by {req.approved_by?.name || 'Unknown'}
+                      {req.approved_at ? ` · ${new Date(req.approved_at).toLocaleString()}` : ''}
+                      {' | '}
+                      Released by {req.released_by?.name || 'Unknown'}
+                      {req.released_at ? ` · ${new Date(req.released_at).toLocaleString()}` : ''}
+                    </p>
+                  )}
 
-                <p className="text-xs text-slate-400 mt-2">
-                  Requested by {req.requested_by?.name || 'Unknown'} ·{' '}
-                  {new Date(req.created_at).toLocaleString()}
-                </p>
+                  {req.status === 'rejected' && req.rejection_reason && (
+                    <div className="mt-2 px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">
+                      Reason: {req.rejection_reason}
+                    </div>
+                  )}
 
-                {req.status === 'approved' && req.approved_by && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    Approved by {req.approved_by.name}
-                    {req.approved_at ? ` · ${new Date(req.approved_at).toLocaleString()}` : ''}
-                  </p>
-                )}
-
-                {req.status === 'released' && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    Approved by {req.approved_by?.name || 'Unknown'}
-                    {req.approved_at ? ` · ${new Date(req.approved_at).toLocaleString()}` : ''}
-                    {' — '}
-                    Released by {req.released_by?.name || 'Unknown'}
-                    {req.released_at ? ` · ${new Date(req.released_at).toLocaleString()}` : ''}
-                  </p>
-                )}
-
-                {req.status === 'rejected' && req.rejection_reason && (
-                  <div className="mt-2 px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">
-                    Reason: {req.rejection_reason}
-                  </div>
-                )}
-
-                {req.status === 'pending' && (
-                  <div className="mt-3">
-                    {rejectingId === req.id ? (
-                      <div className="flex flex-col gap-2">
-                        <textarea
-                          value={rejectionReason}
-                          onChange={(e) => setRejectionReason(e.target.value)}
-                          placeholder="Reason for rejection..."
-                          className="w-full text-sm border border-black/[0.09] rounded-lg px-3 py-2 resize-none"
-                          rows={2}
-                        />
+                  {req.status === 'pending' && (
+                    <div className="mt-3">
+                      {rejectingId === req.id ? (
+                        <div className="flex flex-col gap-2">
+                          <textarea
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                            placeholder="Reason for rejection..."
+                            className="w-full text-sm border border-black/[0.09] rounded-lg px-3 py-2 resize-none"
+                            rows={2}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleRejectSubmit(req.id)}
+                              disabled={actionLoading === req.id}
+                              className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-sm font-medium disabled:opacity-50"
+                            >
+                              Confirm Reject
+                            </button>
+                            <button
+                              onClick={() => {
+                                setRejectingId(null);
+                                setRejectionReason('');
+                                setError('');
+                              }}
+                              className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-sm font-medium text-slate-600"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
                         <div className="flex gap-2">
                           <button
-                            onClick={() => handleRejectSubmit(req.id)}
+                            onClick={() => handleApprove(req.id)}
                             disabled={actionLoading === req.id}
-                            className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-sm font-medium disabled:opacity-50"
+                            className="px-3 py-1.5 rounded-lg bg-cyan-500 text-white text-sm font-medium disabled:opacity-50"
                           >
-                            Confirm Reject
+                            Approve
                           </button>
                           <button
-                            onClick={() => {
-                              setRejectingId(null);
-                              setRejectionReason('');
-                              setError('');
-                            }}
+                            onClick={() => setRejectingId(req.id)}
                             className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-sm font-medium text-slate-600"
                           >
-                            Cancel
+                            Reject
                           </button>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleApprove(req.id)}
-                          disabled={actionLoading === req.id}
-                          className="px-3 py-1.5 rounded-lg bg-cyan-500 text-white text-sm font-medium disabled:opacity-50"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => setRejectingId(req.id)}
-                          className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-sm font-medium text-slate-600"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  )}
 
-                {/* Release is done by the Checker, who hands over the item and deducts the stock */}
-                {req.status === 'approved' && (
-                  <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-medium">
-                    Awaiting release by Checker
-                  </div>
-                )}
-              </div>
-            ))}
+                  {/* Release: Admin hands over the item, which deducts the stock */}
+                  {req.status === 'approved' && (
+                    <div className="mt-3">
+                      {releasingId === req.id ? (
+                        <div className="flex flex-col gap-2">
+                          <p className="text-sm text-slate-600">
+                            Release {req.quantity} {req.product?.unit || ''} of {req.product?.name || req.item_name}? The stock will be deducted.
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleRelease(req.id)}
+                              disabled={actionLoading === req.id}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-medium disabled:opacity-50"
+                            >
+                              {actionLoading === req.id ? 'Releasing...' : 'Confirm Release'}
+                            </button>
+                            <button
+                              onClick={() => setReleasingId(null)}
+                              disabled={actionLoading === req.id}
+                              className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-sm font-medium text-slate-600"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setError('');
+                            setSuccess('');
+                            setReleasingId(req.id);
+                          }}
+                          disabled={notEnough || actionLoading === req.id}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-medium disabled:opacity-50"
+                        >
+                          Release
+                        </button>
+                      )}
+                      {notEnough && (
+                        <p className="text-xs text-red-600 mt-1">
+                          Not enough stock on hand to release this request.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
