@@ -15,11 +15,13 @@ class LeaveRequest extends Model
         'start_date',
         'end_date',
         'total_days',
+        'is_half_day',
         'reason',
         'status',
         'approved_by',
         'approved_at',
         'admin_notes',
+        'attachment_path',
     ];
 
     // date:Y-m-d so start/end dates are sent as plain "2026-10-01"
@@ -28,15 +30,14 @@ class LeaveRequest extends Model
         'start_date'  => 'date:Y-m-d',
         'end_date'    => 'date:Y-m-d',
         'approved_at' => 'datetime',
+        'is_half_day' => 'boolean',
     ];
 
-    // Relationship - LeaveRequest belongs to Employee
     public function employee()
     {
         return $this->belongsTo(Employee::class);
     }
 
-    // Relationship - LeaveRequest decided (approved or rejected) by User
     public function approvedBy()
     {
         return $this->belongsTo(User::class, 'approved_by');

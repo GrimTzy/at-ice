@@ -53,6 +53,11 @@ Route::middleware(['auth:sanctum', 'throttle:120,1,api'])->group(function () {
     Route::put('/change-password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
     Route::post('/logout-others',  [AuthController::class, 'logoutOthers'])->middleware('throttle:5,1');
 
+     // The controller looks up the Employee row from employees.user_id.
+    Route::get('my-leave-requests',         [LeaveRequestController::class, 'myIndex']);
+    Route::post('my-leave-requests',        [LeaveRequestController::class, 'myStore']);
+    Route::delete('my-leave-requests/{id}', [LeaveRequestController::class, 'myDestroy']);
+
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
 

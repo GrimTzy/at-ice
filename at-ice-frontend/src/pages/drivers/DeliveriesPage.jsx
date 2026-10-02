@@ -217,7 +217,13 @@ export function DeliveriesPage() {
               <div className="text-[10px] text-slate-400 tracking-wide">Driver</div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/my-leave")}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 border border-black/[0.08] rounded-lg text-slate-600 text-[11px] font-medium active:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Leave
+            </button>
             <button
               onClick={() => navigate("/driver/gps")}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-lg text-cyan-600 text-[11px] font-medium active:bg-cyan-500/20 transition-colors cursor-pointer"

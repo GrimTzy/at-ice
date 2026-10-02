@@ -5,12 +5,37 @@ namespace App\Http\Controllers;
 use App\Models\LeaveRequest;
 use App\Models\Employee;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 
 class LeaveRequestController extends Controller
 {
     private const LEAVE_TYPES = 'sick,vacation,emergency,maternity,paternity,other';
+
+    // Types an employee can file by themselves from the portal.
+    private const SELF_SERVICE_TYPES = 'sick,vacation,emergency';
+
+    // Number of days: 0.5 for a half day, otherwise start to end inclusive.
+    private function computeDays(string $start, string $end, bool $half): float
+    {
+        if ($half) {
+            return 0.5;
+        }
+
+        return (float) ((int) Carbon::parse($start)->startOfDay()
+            ->diffInDays(Carbon::parse($end)->startOfDay()) + 1);
+    }
+
+    // The Employee row linked to the logged in user (employees.user_id).
+    private function myEmployee(Request $request): ?Employee
+    {
+        return Employee::where('user_id', $request->user()->id)
+            ->where('is_active', true)
+            ->first();
+    }
+
+    // HR SIDE
 
     // GET /api/leave-requests
     // Optional filters: ?employee_id=, ?status=
@@ -39,22 +64,23 @@ class LeaveRequestController extends Controller
             'start_date'  => 'required|date',
             'end_date'    => 'required|date|after_or_equal:start_date',
             'reason'      => 'required|string|max:500',
+            'is_half_day' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $totalDays = (int) Carbon::parse($request->start_date)
-            ->startOfDay()
-            ->diffInDays(Carbon::parse($request->end_date)->startOfDay()) + 1;
+        $half = $request->boolean('is_half_day');
+        $end  = $half ? $request->start_date : $request->end_date;
 
         $leave = LeaveRequest::create([
             'employee_id' => $request->employee_id,
             'leave_type'  => $request->leave_type,
             'start_date'  => $request->start_date,
-            'end_date'    => $request->end_date,
-            'total_days'  => $totalDays,
+            'end_date'    => $end,
+            'total_days'  => $this->computeDays($request->start_date, $end, $half),
+            'is_half_day' => $half,
             'reason'      => $request->reason,
             'status'      => 'pending',
         ]);
@@ -128,6 +154,122 @@ class LeaveRequestController extends Controller
 
         if ($leave->status !== 'pending') {
             return response()->json(['message' => 'Only pending requests can be cancelled.'], 403);
+        }
+
+        if ($leave->attachment_path) {
+            Storage::disk('public')->delete($leave->attachment_path);
+        }
+
+        $leave->delete();
+
+        return response()->json(['message' => 'Leave request cancelled.'], 200);
+    }
+
+    // EMPLOYEE / DRIVER SIDE (own requests only)
+
+    // GET /api/my-leave-requests
+    public function myIndex(Request $request)
+    {
+        $employee = $this->myEmployee($request);
+
+        if (!$employee) {
+            return response()->json(['message' => 'No employee record linked to this login.'], 404);
+        }
+
+        $leaves = LeaveRequest::with('approvedBy:id,name')
+            ->where('employee_id', $employee->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($leaves, 200);
+    }
+
+    // POST /api/my-leave-requests (multipart/form-data, optional attachment)
+    public function myStore(Request $request)
+    {
+        $employee = $this->myEmployee($request);
+
+        if (!$employee) {
+            return response()->json(['message' => 'No employee record linked to this login.'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'leave_type'  => 'required|in:' . self::SELF_SERVICE_TYPES,
+            'is_half_day' => 'nullable|boolean',
+            'start_date'  => 'required|date',
+            'end_date'    => 'required|date|after_or_equal:start_date',
+            'reason'      => 'required|string|max:500',
+            'attachment'  => 'nullable|file|mimes:png,jpg,jpeg,pdf|max:5120',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => $validator->errors()->first(),
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $half  = $request->boolean('is_half_day');
+        $start = $request->start_date;
+        $end   = $half ? $start : $request->end_date;
+
+        // No overlapping pending or approved leave for the same employee
+        $overlap = LeaveRequest::where('employee_id', $employee->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->where('start_date', '<=', $end)
+            ->where('end_date', '>=', $start)
+            ->exists();
+
+        if ($overlap) {
+            return response()->json([
+                'message' => 'You already have a pending or approved leave on those dates.',
+            ], 422);
+        }
+
+        $path = null;
+        if ($request->hasFile('attachment')) {
+            $path = $request->file('attachment')->store('leave-attachments', 'public');
+        }
+
+        $leave = LeaveRequest::create([
+            'employee_id'     => $employee->id,
+            'leave_type'      => $request->leave_type,
+            'start_date'      => $start,
+            'end_date'        => $end,
+            'total_days'      => $this->computeDays($start, $end, $half),
+            'is_half_day'     => $half,
+            'reason'          => $request->reason,
+            'status'          => 'pending',
+            'attachment_path' => $path,
+        ]);
+
+        return response()->json([
+            'message' => 'Leave request submitted.',
+            'data'    => $leave->load('approvedBy:id,name'),
+        ], 201);
+    }
+
+    // DELETE /api/my-leave-requests/{id} (own, pending only)
+    public function myDestroy(Request $request, $id)
+    {
+        $employee = $this->myEmployee($request);
+
+        if (!$employee) {
+            return response()->json(['message' => 'No employee record linked to this login.'], 404);
+        }
+
+        $leave = LeaveRequest::where('employee_id', $employee->id)->find($id);
+
+        if (!$leave) {
+            return response()->json(['message' => 'Leave request not found.'], 404);
+        }
+
+        if ($leave->status !== 'pending') {
+            return response()->json(['message' => 'Only pending requests can be cancelled.'], 403);
+        }
+
+        if ($leave->attachment_path) {
+            Storage::disk('public')->delete($leave->attachment_path);
         }
 
         $leave->delete();

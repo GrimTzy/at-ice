@@ -24,13 +24,52 @@ const ClockIcon = () => (
     <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
   </svg>
 );
+const LogInIcon = () => (
+  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+    <polyline points="10 17 15 12 10 7" />
+    <line x1="15" y1="12" x2="3" y2="12" />
+  </svg>
+);
+const LogOutIcon = () => (
+  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
+  </svg>
+);
 
 const MATCH_THRESHOLD = 0.5;
 const DETECTION_INTERVAL_MS = 1500;
 const RESULT_DISPLAY_MS = 3500;
-// After any result, the same worker is ignored for this long so one visit
-// to the kiosk does not record Time In and Time Out back to back.
+// After any result, the same worker is ignored for this long in the SAME
+// mode, so standing in front of the camera does not post again and again.
+// Switching the toggle (Time In to Time Out) is allowed right away.
 const SAME_WORKER_COOLDOWN_MS = 60_000;
+
+// Time In is green, Time Out is orange (adviser's request).
+const MODES = {
+  time_in: {
+    label: "Time In",
+    hint: "Select this when you arrive",
+    activeBtn: "bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/30",
+    idleBtn: "bg-white text-emerald-600 border-emerald-300 hover:bg-emerald-50",
+    ring: "ring-emerald-500",
+    pill: "bg-emerald-500/20 text-emerald-300",
+    dot: "bg-emerald-400",
+    text: "text-emerald-600",
+  },
+  time_out: {
+    label: "Time Out",
+    hint: "Select this when you leave",
+    activeBtn: "bg-orange-500 text-white border-orange-500 shadow-lg shadow-orange-500/30",
+    idleBtn: "bg-white text-orange-600 border-orange-300 hover:bg-orange-50",
+    ring: "ring-orange-500",
+    pill: "bg-orange-500/20 text-orange-300",
+    dot: "bg-orange-400",
+    text: "text-orange-600",
+  },
+};
 
 export default function AttendanceStation() {
   const videoRef = useRef(null);
@@ -39,6 +78,7 @@ export default function AttendanceStation() {
   const faceMatcherRef = useRef(null);
   const busyRef = useRef(false);
   const recentlyMarkedRef = useRef(new Map());
+  const modeRef = useRef("time_in");
 
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [descriptorsLoaded, setDescriptorsLoaded] = useState(false);
@@ -46,14 +86,21 @@ export default function AttendanceStation() {
   const [loadError, setLoadError] = useState(null);
   const [result, setResult] = useState(null);
   const [clock, setClock] = useState(new Date());
+  const [mode, setMode] = useState("time_in");
 
-  // live clock, matches AdminLogin's understated footer style
+  const changeMode = (next) => {
+    modeRef.current = next; // the detection loop reads the ref, not the state
+    setMode(next);
+    setResult(null);
+  };
+
+  // live clock
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Load models + descriptors 
+  // Load models + descriptors
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -94,7 +141,7 @@ export default function AttendanceStation() {
     return () => { cancelled = true; };
   }, []);
 
-  // Start webcam 
+  // Start webcam
   useEffect(() => {
     if (!modelsLoaded || !descriptorsLoaded) return;
     let cancelled = false;
@@ -116,17 +163,17 @@ export default function AttendanceStation() {
     };
   }, [modelsLoaded, descriptorsLoaded]);
 
-  // Records attendance via the public POST /api/attendances endpoint (no login,
-  // this is a kiosk). The server decides the date, the time, and whether this
-  // scan is a Time In or a Time Out, so only the matched face id is sent.
-  // Returns { type, hours } where type is time_in, time_out, too_soon,
-  // completed or error.
-  const recordAttendance = useCallback(async (faceDataId) => {
+  // Records attendance via the public POST /api/attendances endpoint (no
+  // login, this is a kiosk). The kiosk sends the matched face id and the
+  // selected mode (time_in or time_out). The server decides the date and
+  // the time. Returns { type, hours } where type is time_in, time_out,
+  // already_timed_in, no_time_in, completed or error.
+  const recordAttendance = useCallback(async (faceDataId, type) => {
     try {
       const res = await fetch("/api/attendances", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ face_data_id: Number(faceDataId) }),
+        body: JSON.stringify({ face_data_id: Number(faceDataId), type }),
       });
       const data = await res.json().catch(() => null);
       if (data?.type) return { type: data.type, hours: data.hours_worked };
@@ -155,18 +202,20 @@ export default function AttendanceStation() {
           setResult({ status: "no-match" });
         } else {
           const faceDataId = bestMatch.label;
-          const lastMarked = recentlyMarkedRef.current.get(faceDataId);
+          const currentMode = modeRef.current;
+          const cooldownKey = `${faceDataId}:${currentMode}`;
+          const lastMarked = recentlyMarkedRef.current.get(cooldownKey);
           const now = Date.now();
           const info = window.__faceLookup?.[faceDataId];
 
           if (lastMarked && now - lastMarked < SAME_WORKER_COOLDOWN_MS) {
-            // Same worker still in front of the camera: do not post again
+            // Same worker, same mode, still in front of the camera: do not post again
             busyRef.current = false;
             return;
           }
 
-          const { type, hours } = await recordAttendance(faceDataId);
-          if (type !== "error") recentlyMarkedRef.current.set(faceDataId, now);
+          const { type, hours } = await recordAttendance(faceDataId, currentMode);
+          if (type !== "error") recentlyMarkedRef.current.set(cooldownKey, now);
           setResult({ status: type, name: info?.name, role: info?.role, hours });
         }
         setTimeout(() => setResult(null), RESULT_DISPLAY_MS);
@@ -182,19 +231,21 @@ export default function AttendanceStation() {
   }, [cameraReady, recordAttendance]);
 
   const statusConfig = {
-    time_in:    { label: "Time In Recorded",  sub: "Proceed to the fingerprint scanner", bg: "bg-cyan-600/90",  icon: <CheckIcon /> },
-    time_out:   { label: "Time Out Recorded", sub: "Proceed to the fingerprint scanner", bg: "bg-green-600/90", icon: <CheckIcon /> },
-    too_soon:   { label: "Already Timed In",  sub: "Scan again at the end of your shift to time out", bg: "bg-amber-600/90", icon: <ClockIcon /> },
-    completed:  { label: "Done for Today",    sub: "Time In and Time Out are already recorded", bg: "bg-amber-600/90", icon: <ClockIcon /> },
-    "no-match": { label: "Face Not Recognized", sub: "Not enrolled in the system. Please see HR.", bg: "bg-red-600/90", icon: <XIcon /> },
-    error:      { label: "Could Not Record",  sub: "Please try again or inform HR", bg: "bg-red-600/90", icon: <XIcon /> },
+    time_in:          { label: "Time In Recorded",    sub: "Proceed to the fingerprint scanner", bg: "bg-emerald-600/90", icon: <CheckIcon /> },
+    time_out:         { label: "Time Out Recorded",   sub: "Proceed to the fingerprint scanner", bg: "bg-orange-500/90",  icon: <CheckIcon /> },
+    already_timed_in: { label: "Already Timed In",    sub: "Select Time Out at the end of your shift", bg: "bg-amber-600/90", icon: <ClockIcon /> },
+    no_time_in:       { label: "No Time In Found",    sub: "Select Time In first, or inform HR", bg: "bg-amber-600/90", icon: <ClockIcon /> },
+    completed:        { label: "Done for Today",      sub: "Time In and Time Out are already recorded", bg: "bg-amber-600/90", icon: <ClockIcon /> },
+    "no-match":       { label: "Face Not Recognized", sub: "Not enrolled in the system. Please see HR.", bg: "bg-red-600/90", icon: <XIcon /> },
+    error:            { label: "Could Not Record",    sub: "Please try again or inform HR", bg: "bg-red-600/90", icon: <XIcon /> },
   };
-  const active = result ? statusConfig[result.status] : null;
+  const active = result ? statusConfig[result.status] || statusConfig.error : null;
+  const m = MODES[mode];
 
   return (
     <div className="relative w-full min-h-screen flex items-center justify-center overflow-hidden font-sans">
 
-      {/* ── Background (same as AdminLogin.jsx) ── */}
+      {/* Background (same as AdminLogin.jsx) */}
       <div className="absolute inset-0" style={{ backgroundImage: `url(${bgImage})`, backgroundSize: "cover", backgroundPosition: "center" }} />
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-cyan-900/40" />
 
@@ -218,7 +269,7 @@ export default function AttendanceStation() {
           <div className="px-8 pt-7 pb-5 border-b border-black/[0.06] flex items-center justify-between">
             <div>
               <h2 className="text-[18px] font-semibold text-slate-800 leading-tight">Face Recognition Check-In</h2>
-              <p className="text-[13px] text-slate-400 mt-1">Scan once to time in, and again at the end of your shift to time out.</p>
+              <p className="text-[13px] text-slate-400 mt-1">Choose Time In or Time Out below, then face the camera.</p>
             </div>
             <div className="text-right flex-shrink-0">
               <div className="text-[15px] font-semibold text-slate-800 font-mono">
@@ -231,7 +282,7 @@ export default function AttendanceStation() {
           </div>
 
           <div className="px-8 py-6">
-            <div className="relative w-full aspect-video bg-slate-900 rounded-xl overflow-hidden">
+            <div className={`relative w-full aspect-video bg-slate-900 rounded-xl overflow-hidden ring-4 ${m.ring} transition-shadow`}>
               <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
 
               {(!modelsLoaded || !descriptorsLoaded || !cameraReady) && !loadError && (
@@ -252,7 +303,7 @@ export default function AttendanceStation() {
                   <div className="text-white">{active.icon}</div>
                   <span className="text-white text-xl font-semibold mt-1">{active.label}</span>
                   {result?.name && (
-                    <span className="text-white/90 text-[13px]">{result.name}{result.role ? ` — ${result.role}` : ""}</span>
+                    <span className="text-white/90 text-[13px]">{result.name}{result.role ? ` · ${result.role}` : ""}</span>
                   )}
                   {result?.status === "time_out" && result?.hours != null && (
                     <span className="text-white text-[13px] font-medium">Hours worked: {result.hours}</span>
@@ -262,21 +313,49 @@ export default function AttendanceStation() {
               )}
 
               {!result && cameraReady && !loadError && (
-                <div className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1.5 bg-black/50 backdrop-blur-sm rounded-full">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                  <span className="text-cyan-300 text-[11px] font-medium tracking-wide">Scanning</span>
+                <div className={`absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1.5 backdrop-blur-sm rounded-full ${m.pill}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${m.dot}`} />
+                  <span className="text-[11px] font-medium tracking-wide">Scanning for {m.label}</span>
                 </div>
               )}
             </div>
 
-            <p className="text-center text-[11px] text-slate-400 mt-5">
+            {/* Time In / Time Out toggle: Time In green, Time Out orange */}
+            <div className="mt-5">
+              <div className="grid grid-cols-2 gap-3">
+                {Object.entries(MODES).map(([key, cfg]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => changeMode(key)}
+                    aria-pressed={mode === key}
+                    className={`flex flex-col items-center justify-center gap-0.5 py-4 rounded-xl border-2 text-[17px] font-semibold cursor-pointer transition-all ${
+                      mode === key ? cfg.activeBtn : cfg.idleBtn
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      {key === "time_in" ? <LogInIcon /> : <LogOutIcon />}
+                      {cfg.label}
+                    </span>
+                    <span className={`text-[11px] font-normal ${mode === key ? "text-white/80" : "text-slate-400"}`}>
+                      {cfg.hint}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-center text-[12px] text-slate-500 mt-3">
+                Mode selected: <span className={`font-semibold ${m.text}`}>{m.label}</span>
+              </p>
+            </div>
+
+            <p className="text-center text-[11px] text-slate-400 mt-4">
               Step 1: Face recognition (this screen). Step 2: Fingerprint on the existing biometric scanner.
             </p>
           </div>
         </div>
 
         <p className="text-center text-[10px] text-white/30 mt-5 tracking-wide">
-          © 2026 AT-ICE ERP · Attendance Station v1.0
+          © 2026 AT-ICE ERP · Attendance Station v1.1
         </p>
       </div>
     </div>

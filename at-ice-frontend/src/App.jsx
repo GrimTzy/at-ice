@@ -5,6 +5,7 @@ import { NightScope } from './components/NightMode'
 // -- General Pages
 import PortalPage from './pages/PortalPage'
 import AttendanceStation from './pages/AttendanceStation'
+import LeaveRequestPage from './pages/LeaveRequestPage'
 
 // -- Admin Module (folder is "Admin" with a capital A: Linux servers are
 // case-sensitive, so every import must match it exactly)
@@ -70,6 +71,16 @@ function App() {
         <Route path="/" element={<PortalPage />} />
         <Route path="/login" element={<PortalPage />} />
         <Route path="/attendance-station" element={<AttendanceStation />} />
+
+        {/* -- Leave Request (every Employee role and Driver, own requests only) -- */}
+        <Route
+          path="/my-leave"
+          element={
+            <ProtectedRoute allowedRoles={["employee", "driver"]}>
+              <NightScope><LeaveRequestPage /></NightScope>
+            </ProtectedRoute>
+          }
+        />
 
         {/* -- Customer Module -- */}
         <Route path="/customer/login" element={<CustomerLogin />} />
@@ -250,8 +261,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Leave Requests: HR encodes the employee's verbal or written
-            request, then approves or rejects it. */}
+        {/* Leave Requests: employees file their own from /my-leave, HR can
+            also encode one, then approves or rejects it here. */}
         <Route
           path="/hr/leave-requests"
           element={

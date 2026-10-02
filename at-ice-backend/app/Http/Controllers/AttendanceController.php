@@ -4,17 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Events\AttendanceRecorded;
 use App\Models\Attendance;
-use App\Models\Employee;
 use App\Models\FaceData;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class AttendanceController extends Controller
 {
-    // A second scan within this many minutes of Time In is ignored, so a
-    // worker who walks past the kiosk twice is not timed out by accident.
-    private const MIN_MINUTES_BEFORE_TIME_OUT = 5;
-
+    // An open Time In older than this is treated as a missed Time Out and
+    // is no longer matched by a new scan.
     private const MAX_SHIFT_HOURS = 16;
 
     public function index(Request $request)
@@ -39,13 +36,14 @@ class AttendanceController extends Controller
     }
 
     // POST /api/attendances (public, used by the Attendance Station kiosk)
-    // First scan of the day records Time In. The next scan records Time Out
-    // and computes hours worked. Date and time always come from the server
-    // clock (Asia/Manila), never from the browser.
+    // The kiosk now sends which button was selected: "time_in" or
+    // "time_out". Date and time always come from the server clock
+    // (Asia/Manila), never from the browser.
     public function store(Request $request)
     {
         $request->validate([
             'face_data_id' => 'required|exists:face_data,id',
+            'type'         => 'required|in:time_in,time_out',
         ]);
 
         $faceData = FaceData::select('id', 'worker_name', 'role', 'employee_id')
@@ -61,58 +59,65 @@ class AttendanceController extends Controller
             ->orderByDesc('date')
             ->first();
 
+        $openIn = null;
         if ($open) {
-            $timeIn = Carbon::parse(
+            $openIn = Carbon::parse(
                 Carbon::parse($open->date)->toDateString() . ' ' . $open->time_in
             );
-
-            // Too long ago: treat as a missed Time Out, not this scan
-            if ($timeIn->diffInHours($now) <= self::MAX_SHIFT_HOURS) {
-                $minutes = $timeIn->diffInMinutes($now);
-
-                if ($minutes < self::MIN_MINUTES_BEFORE_TIME_OUT) {
-                    return response()->json([
-                        'type'    => 'too_soon',
-                        'message' => 'Time In already recorded. Scan again at the end of your shift to time out.',
-                        'worker'  => $faceData->worker_name,
-                        'role'    => $faceData->role,
-                    ], 409);
-                }
-
-                $hours = round($minutes / 60, 2);
-
-                $open->update([
-                    'time_out'     => $now->format('H:i:s'),
-                    'hours_worked' => $hours,
-                ]);
-
-                $this->notify($faceData, $open, 'time_out',
-                    "{$faceData->worker_name} timed out at {$now->format('g:i A')} ({$hours} hrs).");
-
-                return response()->json([
-                    'type'         => 'time_out',
-                    'message'      => 'Time Out recorded.',
-                    'worker'       => $faceData->worker_name,
-                    'role'         => $faceData->role,
-                    'hours_worked' => $hours,
-                    'attendance'   => $open,
-                ], 200);
+            // Too long ago: treat as a missed Time Out, not an open shift
+            if ($openIn->diffInHours($now, true) > self::MAX_SHIFT_HOURS) {
+                $open   = null;
+                $openIn = null;
             }
         }
 
-        // Already timed in and out today
-        $done = Attendance::where('face_data_id', $faceData->id)
+        // Worker already has a complete Time In and Time Out today
+        $doneToday = Attendance::where('face_data_id', $faceData->id)
             ->whereDate('date', $today)
             ->whereNotNull('time_out')
             ->exists();
 
-        if ($done) {
+        // TIME OUT
+        if ($request->type === 'time_out') {
+            if (!$open) {
+                if ($doneToday) {
+                    return $this->reject($faceData, 'completed',
+                        'Time In and Time Out are already recorded for today.');
+                }
+                return $this->reject($faceData, 'no_time_in',
+                    'No Time In found. Select Time In first, or inform HR.');
+            }
+
+            $minutes = $openIn->diffInMinutes($now, true);
+            $hours   = round($minutes / 60, 2);
+
+            $open->update([
+                'time_out'     => $now->format('H:i:s'),
+                'hours_worked' => $hours,
+            ]);
+
+            $this->notify($faceData, $open, 'time_out',
+                "{$faceData->worker_name} timed out at {$now->format('g:i A')} ({$hours} hrs).");
+
             return response()->json([
-                'type'    => 'completed',
-                'message' => 'Time In and Time Out are already recorded for today.',
-                'worker'  => $faceData->worker_name,
-                'role'    => $faceData->role,
-            ], 409);
+                'type'         => 'time_out',
+                'message'      => 'Time Out recorded.',
+                'worker'       => $faceData->worker_name,
+                'role'         => $faceData->role,
+                'hours_worked' => $hours,
+                'attendance'   => $open,
+            ], 200);
+        }
+
+        // TIME IN
+        if ($open) {
+            return $this->reject($faceData, 'already_timed_in',
+                'Time In already recorded. Select Time Out at the end of your shift.');
+        }
+
+        if ($doneToday) {
+            return $this->reject($faceData, 'completed',
+                'Time In and Time Out are already recorded for today.');
         }
 
         $attendance = Attendance::create([
@@ -137,6 +142,17 @@ class AttendanceController extends Controller
             'role'       => $faceData->role,
             'attendance' => $attendance,
         ], 201);
+    }
+
+    // A scan that is understood but not recorded (wrong button, already done)
+    private function reject(FaceData $faceData, string $type, string $message)
+    {
+        return response()->json([
+            'type'    => $type,
+            'message' => $message,
+            'worker'  => $faceData->worker_name,
+            'role'    => $faceData->role,
+        ], 409);
     }
 
     // Live notification for HR and the Admin dashboard (Pusher)

@@ -43,6 +43,11 @@ const MODULES = [
     description: "Manage supplier records and details.",
     route: "/checker/suppliers",
   },
+  {
+    title: "Leave Request",
+    description: "File a leave and view your past requests.",
+    route: "/my-leave",
+  },
 ];
 
 export default function CheckerDashboard() {

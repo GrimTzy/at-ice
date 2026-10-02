@@ -6,6 +6,14 @@ const WrenchIcon = () => (
     <path d="M14.7 6.3a4 4 0 10-5.66 5.66L2 19l3 3 7.03-7.04a4 4 0 005.67-5.66l-2.83 2.83-2.12-2.12 2.83-2.83z" />
   </svg>
 );
+const CalendarIcon = () => (
+  <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
 const ChevronRightIcon = () => (
   <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
     <polyline points="9 18 15 12 9 6" />
@@ -27,6 +35,13 @@ const MODULES = [
     dot: "bg-cyan-500",
     route: "/maintenance/stock-out-request",
   },
+  {
+    title: "Leave Request",
+    description: "File a leave and view your past requests.",
+    icon: CalendarIcon,
+    dot: "bg-cyan-500",
+    route: "/my-leave",
+  },
 ];
 
 export default function MaintenanceDashboard() {
@@ -44,7 +59,7 @@ export default function MaintenanceDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
 
-      {/* ── Top Bar ── */}
+      {/* Top Bar */}
       <header className="bg-white border-b border-black/[0.08] px-5 pt-10 pb-4 flex-shrink-0 sticky top-0 z-20">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
@@ -74,7 +89,7 @@ export default function MaintenanceDashboard() {
         </div>
       </header>
 
-      {/* ── Module List ── */}
+      {/* Module List */}
       <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
         {MODULES.map((mod) => (
           <button

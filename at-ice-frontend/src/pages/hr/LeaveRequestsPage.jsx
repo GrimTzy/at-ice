@@ -81,6 +81,13 @@ const daysBetween = (start, end) => {
 // approvedBy relation is serialized under "approved_by"
 const decidedBy = (l) => (l.approved_by && typeof l.approved_by === "object" ? l.approved_by.name : null) || "—";
 
+// Attachments filed by employees are stored on the public disk
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
+const attachmentUrl = (p) => (p ? `${BACKEND_URL}/storage/${String(p).replace(/^\/+/, "")}` : null);
+
+// total_days is a decimal now ("1.0"), show it as 1 or 0.5
+const fmtDays = (l) => (l.is_half_day ? "0.5 (half day)" : String(Number(l.total_days)));
+
 const EMPTY_FORM = { employee_id: "", leave_type: "sick", start_date: "", end_date: "", reason: "" };
 
 function Modal({ title, onClose, children, width = "max-w-lg" }) {
@@ -274,7 +281,7 @@ export default function LeaveRequestsPage() {
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
           <div>
             <div className="text-[13px] font-semibold text-slate-800">Leave Requests</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Encoded by HR from the employee's verbal or written request, then approved or rejected.</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">Filed by employees from their own page, or encoded by HR, then approved or rejected here.</div>
           </div>
           <div className="flex-1" />
           <div className="flex items-center gap-2 px-2.5 py-1.5 border border-black/[0.09] rounded-md text-slate-400 w-full sm:w-60">
@@ -343,7 +350,7 @@ export default function LeaveRequestsPage() {
                       <td className="px-[18px] py-2.5 text-slate-600 whitespace-nowrap">
                         {fmtDate(l.start_date)}{l.end_date && l.end_date !== l.start_date ? ` – ${fmtDate(l.end_date)}` : ""}
                       </td>
-                      <td className="px-[18px] py-2.5 text-slate-600 font-mono">{l.total_days ?? "—"}</td>
+                      <td className="px-[18px] py-2.5 text-slate-600 font-mono">{l.total_days == null ? "—" : l.is_half_day ? "0.5" : Number(l.total_days)}</td>
                       <td className="px-[18px] py-2.5">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_CLASS[l.status] || "bg-slate-100 text-slate-500"}`}>
                           {STATUS_LABEL[l.status] || l.status}
@@ -442,11 +449,19 @@ export default function LeaveRequestsPage() {
           <div className="p-5 flex flex-col gap-3.5">
             <div className="bg-slate-50 border border-black/[0.06] rounded-lg p-3 text-xs flex flex-col gap-1">
               <div className="text-slate-800 font-semibold">{empName(decision.leave.employee)}</div>
-              <div className="text-slate-600">{typeLabel(decision.leave.leave_type)}, {decision.leave.total_days} day{decision.leave.total_days === 1 ? "" : "s"}</div>
+              <div className="text-slate-600">
+                {typeLabel(decision.leave.leave_type)}, {fmtDays(decision.leave)}
+                {decision.leave.is_half_day ? "" : Number(decision.leave.total_days) === 1 ? " day" : " days"}
+              </div>
               <div className="text-slate-500">
                 {fmtDate(decision.leave.start_date)}{decision.leave.end_date !== decision.leave.start_date ? ` – ${fmtDate(decision.leave.end_date)}` : ""}
               </div>
               <div className="text-slate-500 mt-1">Reason: {decision.leave.reason}</div>
+              {decision.leave.attachment_path && (
+                <a href={attachmentUrl(decision.leave.attachment_path)} target="_blank" rel="noreferrer" className="text-cyan-600 font-semibold mt-1">
+                  View attachment
+                </a>
+              )}
             </div>
 
             <Field label={decision.status === "rejected" ? "HR Notes (reason for rejection, optional)" : "HR Notes (optional)"}>
@@ -503,8 +518,11 @@ export default function LeaveRequestsPage() {
               ["Leave Type", typeLabel(viewing.leave_type)],
               ["Start Date", fmtDate(viewing.start_date)],
               ["End Date", fmtDate(viewing.end_date)],
-              ["Total Days", viewing.total_days ?? "—"],
+              ["Total Days", viewing.total_days == null ? "—" : fmtDays(viewing)],
               ["Reason", viewing.reason || "—"],
+              ["Attachment", viewing.attachment_path
+                ? <a href={attachmentUrl(viewing.attachment_path)} target="_blank" rel="noreferrer" className="text-cyan-600 font-semibold">View attachment</a>
+                : "—"],
               ["Status", STATUS_LABEL[viewing.status] || viewing.status],
               ["Filed On", fmtDateTime(viewing.created_at)],
               ["Decided By", viewing.status === "pending" ? "—" : decidedBy(viewing)],

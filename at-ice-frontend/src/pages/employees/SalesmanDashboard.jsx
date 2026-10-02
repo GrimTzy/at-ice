@@ -125,13 +125,21 @@ export default function SalesmanDashboard() {
               <div className="text-[10px] text-slate-400 tracking-wide">Salesman</div>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            title="Sign out"
-            className="flex items-center gap-1.5 text-slate-400 active:text-red-500 transition-colors cursor-pointer p-1"
-          >
-            <LogOutIcon />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/my-leave")}
+              className="px-3 py-1.5 bg-slate-100 border border-black/[0.08] rounded-lg text-slate-600 text-[11px] font-medium active:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Leave
+            </button>
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              className="flex items-center gap-1.5 text-slate-400 active:text-red-500 transition-colors cursor-pointer p-1"
+            >
+              <LogOutIcon />
+            </button>
+          </div>
         </div>
 
         <div className="mt-3">
