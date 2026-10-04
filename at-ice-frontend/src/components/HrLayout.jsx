@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
+import { clearSession } from "../lib/auth";
 import bgImage from "../assets/iceproduct.png";
 import { useNightMode, NightStyle, NightToggle, nightOverlay } from "./NightMode";
 
@@ -37,8 +38,8 @@ export default function HrLayout({ pageTitle, breadcrumb, headerActions, childre
   const today = new Date().toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" });
 
   const handleLogout = () => {
-    ["token", "role", "sub_role", "user"].forEach((k) => localStorage.removeItem(k));
-    navigate("/hr/login");
+    clearSession();
+    navigate("/login");
   };
 
   const overlay = nightOverlay(dark);

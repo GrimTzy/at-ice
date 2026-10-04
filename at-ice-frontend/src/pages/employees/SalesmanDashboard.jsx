@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
+import { clearSession } from "../../lib/auth";
 
 // Icons 
 const MapPinIcon = () => (
@@ -91,8 +92,8 @@ export default function SalesmanDashboard() {
   // Sign out: clear the session first (same as the Checker and Driver pages).
   // Previously this only navigated to the login page and kept the token.
   const handleLogout = () => {
-    ["token", "role", "sub_role", "user"].forEach((k) => localStorage.removeItem(k));
-    navigate("/salesman/login");
+    clearSession();
+    navigate("/login");
   };
 
   const statusLabel = (s) => STATUS_CONFIG[s]?.label || s;

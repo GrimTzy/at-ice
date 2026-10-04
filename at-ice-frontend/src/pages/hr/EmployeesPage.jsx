@@ -22,8 +22,8 @@ const SUB_ROLE_STYLE = {
   driver:      "bg-violet-500/10 text-violet-600 border-violet-500/20",
 };
 
-// Driver's account uses role:"driver" with no sub_role (keeps /driver/login
-// and role:driver routes unchanged), so its "role badge" has to be derived
+// Driver's account uses role:"driver" with no sub_role (keeps the
+// role:driver routes unchanged), so its "role badge" has to be derived
 // rather than read straight off user.sub_role like the other three.
 function displayRole(user) {
   if (!user) return null;

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
+import { clearSession } from "../../lib/auth";
 import PasswordRules from "../../components/PasswordRules";
 import { isStrongPassword } from "../../lib/password";
 
@@ -26,8 +27,8 @@ export default function CustomerChangePassword() {
     } catch {
       // the local session is cleared either way
     }
-    ["token", "role", "sub_role", "user", "must_change_password"].forEach((k) => localStorage.removeItem(k));
-    navigate("/customer/login", { replace: true });
+    clearSession();
+    navigate("/login", { replace: true });
   };
 
   const handleSubmit = async (e) => {

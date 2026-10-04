@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
+import { clearSession } from "../../lib/auth";
 
 // Functional UI icons only: navigation + actions, not decoration
 const ChevronRightIcon = () => (
@@ -55,11 +56,8 @@ export default function CheckerDashboard() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    localStorage.removeItem("sub_role");
-    localStorage.removeItem("user");
-    navigate("/checker/login");
+    clearSession();
+    navigate("/login");
   };
 
   return (

@@ -73,7 +73,7 @@ class EmployeeController extends Controller
             'employment_type' => 'required|in:regular,contractual,part_time',
             // 'driver' added (v29.7) — Driver is now manageable from this
             // page, but is NOT a real sub_role; see below, it maps to its
-            // own top-level `role` instead so /driver/login and
+            // own top-level `role` instead so the
             // role:driver routes keep working unchanged.
             'sub_role' => 'nullable|in:checker,salesman,maintenance,driver',
             // vehicle_plate: only meaningful for Driver, but validated
@@ -95,7 +95,7 @@ class EmployeeController extends Controller
             'email'     => $request->email,
             'password'  => Hash::make($request->password),
             // Driver keeps its own top-level role, not employee+sub_role —
-            // this is what keeps /driver/login and role:driver routes
+            // this is what keeps the role:driver routes
             // working exactly as before, with no changes needed there.
             'role'      => $isDriver ? 'driver' : 'employee',
             'sub_role'  => $isDriver ? null : $subRole,

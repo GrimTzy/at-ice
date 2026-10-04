@@ -245,7 +245,7 @@ export default function AttendanceStation() {
   return (
     <div className="relative w-full min-h-screen flex items-center justify-center overflow-hidden font-sans">
 
-      {/* Background (same as AdminLogin.jsx) */}
+      {/* Background (same as the login page) */}
       <div className="absolute inset-0" style={{ backgroundImage: `url(${bgImage})`, backgroundSize: "cover", backgroundPosition: "center" }} />
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-cyan-900/40" />
 

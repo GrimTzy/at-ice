@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
+import { clearSession } from "../../lib/auth";
 
 const WrenchIcon = () => (
   <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -49,11 +50,8 @@ export default function MaintenanceDashboard() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    localStorage.removeItem("sub_role");
-    localStorage.removeItem("user");
-    navigate("/maintenance/login");
+    clearSession();
+    navigate("/login");
   };
 
   return (

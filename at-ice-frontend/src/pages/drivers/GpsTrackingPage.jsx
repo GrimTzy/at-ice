@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
+import { clearSession } from "../../lib/auth";
 
 // Icons (unchanged)
 const LogOutIcon = () => (
@@ -106,8 +107,8 @@ export function GpsTrackingPage() {
   // Previously this only navigated to the login page and kept the token.
   const handleLogout = () => {
     if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-    ["token", "role", "sub_role", "user"].forEach((k) => localStorage.removeItem(k));
-    navigate("/driver/login");
+    clearSession();
+    navigate("/login");
   };
 
   // ── Fetch real deliveries (same endpoint DeliveriesPage.jsx uses) ─────────

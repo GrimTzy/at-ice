@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
+import { clearSession } from "../../lib/auth";
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
 
@@ -233,8 +234,8 @@ export function DeliveriesPage() {
             </button>
             <button
               onClick={() => {
-                ["token", "role", "sub_role", "user"].forEach((k) => localStorage.removeItem(k));
-                navigate("/driver/login");
+                clearSession();
+                navigate("/login");
               }}
               className="flex items-center gap-1.5 text-slate-400 active:text-red-500 transition-colors cursor-pointer p-1"
             >

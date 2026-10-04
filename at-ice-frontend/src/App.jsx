@@ -3,13 +3,12 @@ import ProtectedRoute from './components/ProtectedRoute'
 import { NightScope } from './components/NightMode'
 
 // -- General Pages
-import PortalPage from './pages/PortalPage'
+import LoginPage from './pages/LoginPage'
 import AttendanceStation from './pages/AttendanceStation'
 import LeaveRequestPage from './pages/LeaveRequestPage'
 
 // -- Admin Module (folder is "Admin" with a capital A: Linux servers are
 // case-sensitive, so every import must match it exactly)
-import AdminLogin from './pages/Admin/AdminLogin'
 import Dashboard from './pages/Admin/Dashboard'
 import CustomerPriceManagement from './pages/Admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
@@ -21,7 +20,6 @@ import ReceiptsPage from './pages/Admin/ReceiptsPage'
 import SettingsPage from './pages/Admin/SettingsPage'
 
 // -- Customer Module
-import CustomerLogin from './pages/customer/CustomerLogin'
 import CustomerChangePassword from './pages/customer/CustomerChangePassword'
 import CustomerDashboard from './pages/customer/CustomerDashboard'
 import CustomerDeliveries from './pages/customer/CustomerDeliveries'
@@ -31,12 +29,10 @@ import CustomerPrices from './pages/customer/CustomerPrices'
 import CustomerSupport from './pages/customer/CustomerSupport'
 
 // -- Driver Module
-import DriverLogin from './pages/drivers/DriverLogin'
 import { DeliveriesPage as DriverDeliveriesPage } from './pages/drivers/DeliveriesPage'
 import { GpsTrackingPage } from './pages/drivers/GpsTrackingPage'
 
 // -- HR Module
-import HRLogin from './pages/hr/HRLogin'
 import HRDashboard from './pages/hr/HRDashboard'
 import FaceEnrollment from './pages/hr/FaceEnrollment'
 import EmployeesPage from './pages/hr/EmployeesPage'
@@ -46,17 +42,14 @@ import InterviewsPage from './pages/hr/InterviewsPage'
 import PayrollPage from './pages/hr/PayrollPage'
 
 // -- Employee Module
-import CheckerLogin from './pages/employees/CheckerLogin'
 import CheckerDashboard from './pages/employees/CheckerDashboard'
 import CheckerPickupLogPage from './pages/employees/CheckerPickupLogPage'
 import CheckerIceLoadingPage from './pages/employees/CheckerIceLoadingPage'
 import CheckerInventoryManagementPage from './pages/employees/CheckerInventoryManagementPage'
 import CheckerStockMovementsPage from './pages/employees/CheckerStockMovementsPage'
 import CheckerSupplierManagementPage from './pages/employees/CheckerSupplierManagementPage'
-import SalesmanLogin from './pages/employees/SalesmanLogin'
 import SalesmanDashboard from './pages/employees/SalesmanDashboard'
 import SalesmanDeliveryConfirmation from './pages/employees/SalesmanDeliveryConfirmation'
-import MaintenanceLogin from './pages/employees/MaintenanceLogin'
 import MaintenanceDashboard from './pages/employees/MaintenanceDashboard'
 import MaintenanceStockOutRequestPage from './pages/employees/MaintenanceStockOutRequestPage'
 
@@ -67,10 +60,15 @@ function App() {
       <Routes>
 
         {/* -- General (public, no auth needed) -- */}
-        {/* Portal: one card per module. "/login" is also ProtectedRoute's
-            last-resort fallback, so it shows the portal too. */}
-        <Route path="/" element={<PortalPage />} />
-        <Route path="/login" element={<PortalPage />} />
+        {/* One login page for every role. After login the user goes to their own
+            dashboard, chosen by the role and sub_role the API returns. */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<LoginPage />} />
+
+        {/* Old per-role login links still work: they all go to the one login page. */}
+        {["/admin/login", "/hr/login", "/driver/login", "/customer/login", "/checker/login", "/salesman/login", "/maintenance/login"].map((path) => (
+          <Route key={path} path={path} element={<Navigate to="/login" replace />} />
+        ))}
         <Route path="/attendance-station" element={<AttendanceStation />} />
 
         {/* -- Leave Request (every Employee role and Driver, own requests only) -- */}
@@ -84,7 +82,6 @@ function App() {
         />
 
         {/* -- Customer Module -- */}
-        <Route path="/customer/login" element={<CustomerLogin />} />
         <Route
           path="/customer/change-password"
           element={
@@ -143,7 +140,6 @@ function App() {
         />
 
         {/* -- Admin Module -- */}
-        <Route path="/admin/login" element={<AdminLogin />} />
         <Route
           path="/dashboard"
           element={
@@ -235,7 +231,6 @@ function App() {
         />
 
         {/* -- HR Module -- */}
-        <Route path="/hr/login" element={<HRLogin />} />
         <Route
           path="/hr/dashboard"
           element={
@@ -302,7 +297,6 @@ function App() {
         />
 
         {/* -- Driver Module (night mode through NightScope) -- */}
-        <Route path="/driver/login" element={<DriverLogin />} />
         <Route
           path="/driver/deliveries"
           element={
@@ -321,7 +315,6 @@ function App() {
         />
 
         {/* -- Employee Module (Phase 13, night mode through NightScope) -- */}
-        <Route path="/checker/login" element={<CheckerLogin />} />
         <Route
           path="/checker/dashboard"
           element={
@@ -373,7 +366,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/salesman/login" element={<SalesmanLogin />} />
         <Route
           path="/salesman/deliveries"
           element={
@@ -390,7 +382,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/maintenance/login" element={<MaintenanceLogin />} />
         <Route
           path="/maintenance/dashboard"
           element={
@@ -408,8 +399,8 @@ function App() {
           }
         />
 
-        {/* Any unknown URL goes to the portal instead of a blank screen */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Any unknown URL goes to the login page instead of a blank screen */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
 
       </Routes>
     </BrowserRouter>
