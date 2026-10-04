@@ -5,6 +5,7 @@ import { NightScope } from './components/NightMode'
 // -- General Pages
 import LoginPage from './pages/LoginPage'
 import AttendanceStation from './pages/AttendanceStation'
+import KioskGate from './components/KioskGate'
 import LeaveRequestPage from './pages/LeaveRequestPage'
 
 // -- Admin Module (folder is "Admin" with a capital A: Linux servers are
@@ -40,6 +41,7 @@ import AttendancePage from './pages/hr/AttendancePage'
 import LeaveRequestsPage from './pages/hr/LeaveRequestsPage'
 import InterviewsPage from './pages/hr/InterviewsPage'
 import PayrollPage from './pages/hr/PayrollPage'
+import KioskPinPage from './pages/hr/KioskPinPage'
 
 // -- Employee Module
 import CheckerDashboard from './pages/employees/CheckerDashboard'
@@ -69,7 +71,7 @@ function App() {
         {["/admin/login", "/hr/login", "/driver/login", "/customer/login", "/checker/login", "/salesman/login", "/maintenance/login"].map((path) => (
           <Route key={path} path={path} element={<Navigate to="/login" replace />} />
         ))}
-        <Route path="/attendance-station" element={<AttendanceStation />} />
+        <Route path="/attendance-station" element={<KioskGate><AttendanceStation /></KioskGate>} />
 
         {/* -- Leave Request (every Employee role and Driver, own requests only) -- */}
         <Route
@@ -287,6 +289,14 @@ function App() {
         />
         {/* Payroll: all payroll records (computed in the Employees page,
             Sweldong Pinoy reference). Pending -> Approved -> Paid. */}
+        <Route
+          path="/hr/kiosk-pin"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <KioskPinPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/hr/payroll"
           element={

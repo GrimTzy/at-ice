@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'password.changed' => \App\Http\Middleware\EnsurePasswordChanged::class,
+            'kiosk' => \App\Http\Middleware\EnsureKioskToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

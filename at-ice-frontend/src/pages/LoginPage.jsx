@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
 import { clearSession, postLoginPath, saveSession } from "../lib/auth";
@@ -234,6 +234,12 @@ export default function LoginPage() {
             <p className="text-center text-[12px] text-slate-400 mt-5">
               Having trouble signing in? Contact the Admin or HR.
             </p>
+
+            <div className="mt-4 pt-4 border-t border-black/[0.06] text-center">
+              <Link to="/attendance-station" className="text-[12px] text-cyan-600 hover:text-cyan-700 underline-offset-2 hover:underline">
+                Open Attendance Station (Kiosk Terminal)
+              </Link>
+            </div>
           </div>
         </div>
 

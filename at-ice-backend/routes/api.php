@@ -25,6 +25,7 @@ use App\Http\Controllers\PickupLogController;
 use App\Http\Controllers\IceLoadingController;
 use App\Http\Controllers\StockOutRequestController;
 use App\Http\Controllers\CustomerPortalController;
+use App\Http\Controllers\KioskController;
 
 // RATE LIMITS
 // throttle:max,minutes,name. Each limit has its own name so the counters
@@ -37,11 +38,18 @@ use App\Http\Controllers\CustomerPortalController;
 //Public
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1,login');
 
-// Face Descriptors: public, used by AttendanceStation (kiosk has no login/token)
-Route::get('face-descriptors', [FaceDataController::class, 'descriptors'])->middleware('throttle:30,1,kiosk');
+// Attendance Station kiosk. It has no user login. A device is unlocked with the
+// HR security PIN (POST kiosk/unlock) and then sends the kiosk token it gets in
+// the X-Kiosk-Token header. The unlock route is public but has its own lockout
+// (see KioskLockout). The two data routes below need the kiosk token.
+Route::post('kiosk/unlock', [KioskController::class, 'unlock'])->middleware('throttle:30,1,kiosk-unlock');
+Route::get('kiosk/status', [KioskController::class, 'status'])->middleware(['kiosk', 'throttle:60,1,kiosk']);
 
-// Attendance recording: public, used by AttendanceStation (kiosk has no login/token)
-Route::post('attendances', [AttendanceController::class, 'store'])->middleware('throttle:30,1,kiosk');
+// Face Descriptors: kiosk token required
+Route::get('face-descriptors', [FaceDataController::class, 'descriptors'])->middleware(['kiosk', 'throttle:30,1,kiosk']);
+
+// Attendance recording: kiosk token required
+Route::post('attendances', [AttendanceController::class, 'store'])->middleware(['kiosk', 'throttle:30,1,kiosk']);
 
 //Protected
 Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->group(function () {
@@ -137,6 +145,12 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     // HR ROUTES
     Route::middleware('role:hr')->group(function () {
+
+        // Attendance Station kiosk PIN: HR sets or changes it, and can clear a lockout.
+        // Both changes need the HR user's own account password.
+        Route::get('hr/kiosk-pin',                   [KioskController::class, 'show']);
+        Route::put('hr/kiosk-pin',                   [KioskController::class, 'update'])->middleware('throttle:5,1,kiosk-pin-change');
+        Route::post('hr/kiosk-pin/clear-lockout',    [KioskController::class, 'clearLockout'])->middleware('throttle:5,1,kiosk-pin-change');
 
         // Employee Management: full CRUD (create, edit, deactivate)
         Route::apiResource('employees', EmployeeController::class);

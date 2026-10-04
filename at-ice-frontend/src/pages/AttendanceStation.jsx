@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import * as faceapi from "face-api.js";
 import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
+import { clearKioskToken, kioskHeaders } from "../lib/kiosk";
 
 const ScanIcon = () => (
   <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -114,7 +115,13 @@ export default function AttendanceStation() {
         if (cancelled) return;
         setModelsLoaded(true);
 
-        const res = await fetch("/api/face-descriptors", { headers: { Accept: "application/json" } });
+        const res = await fetch("/api/face-descriptors", { headers: kioskHeaders() });
+        if (res.status === 403) {
+          // The kiosk was locked (PIN changed or token expired): the gate asks for the PIN again.
+          clearKioskToken();
+          window.location.reload();
+          return;
+        }
         const data = await res.json();
         if (cancelled) return;
 
@@ -163,8 +170,8 @@ export default function AttendanceStation() {
     };
   }, [modelsLoaded, descriptorsLoaded]);
 
-  // Records attendance via the public POST /api/attendances endpoint (no
-  // login, this is a kiosk). The kiosk sends the matched face id and the
+  // Records attendance via POST /api/attendances (no user login, this is a kiosk;
+  // the kiosk token in the X-Kiosk-Token header proves the terminal was unlocked by HR). The kiosk sends the matched face id and the
   // selected mode (time_in or time_out). The server decides the date and
   // the time. Returns { type, hours } where type is time_in, time_out,
   // already_timed_in, no_time_in, completed or error.
@@ -172,9 +179,15 @@ export default function AttendanceStation() {
     try {
       const res = await fetch("/api/attendances", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: kioskHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ face_data_id: Number(faceDataId), type }),
       });
+      if (res.status === 403) {
+        // Locked while someone was scanning: nothing was recorded. Ask for the PIN again.
+        clearKioskToken();
+        window.location.reload();
+        return { type: "error" };
+      }
       const data = await res.json().catch(() => null);
       if (data?.type) return { type: data.type, hours: data.hours_worked };
       console.error("Attendance post failed:", res.status, data);

@@ -21,12 +21,25 @@ export function takeSessionExpiredNotice() {
 // A 401 on these is not an expired session:
 //   - the login request itself (a wrong password must only show an error on the form)
 //   - logout
-//   - the public Attendance Station kiosk routes (no token is involved)
+//   - the Attendance Station kiosk routes: the kiosk has its own token (X-Kiosk-Token),
+//     and a kiosk failure is never a user session ending
 function isIgnored(pathname, method) {
   if (pathname === "/api/login" || pathname === "/api/logout") return true;
+  if (pathname.startsWith("/api/kiosk/")) return true;
   if (pathname === "/api/face-descriptors") return true;
   if (pathname === "/api/attendances" && method === "POST") return true; // HR's GET list is protected
   return false;
+}
+
+// True when the request carries the kiosk token header.
+function hasKioskHeader(input, init) {
+  const sources = [init?.headers, typeof input === "object" && !(input instanceof URL) ? input.headers : null];
+  return sources.some((h) => {
+    if (!h) return false;
+    if (typeof h.has === "function") return h.has("X-Kiosk-Token");
+    if (Array.isArray(h)) return h.some(([name]) => String(name).toLowerCase() === "x-kiosk-token");
+    return Object.keys(h).some((name) => name.toLowerCase() === "x-kiosk-token");
+  });
 }
 
 export function installSessionExpiryHandler() {
@@ -45,7 +58,9 @@ export function installSessionExpiryHandler() {
 
       const isOurApi = url.origin === window.location.origin && url.pathname.startsWith("/api/");
       // Only when someone is signed in: nothing to expire otherwise.
-      if (!isOurApi || isIgnored(url.pathname, method) || !localStorage.getItem("token")) return response;
+      if (!isOurApi || isIgnored(url.pathname, method) || hasKioskHeader(input, init) || !localStorage.getItem("token")) {
+        return response;
+      }
 
       redirecting = true;
       clearSession();
