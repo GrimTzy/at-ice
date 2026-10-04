@@ -37,6 +37,13 @@ export default function CustomerLogin() {
       localStorage.setItem("sub_role", data.sub_role || "");
       localStorage.setItem("user", JSON.stringify(data.user));
 
+      // A new account must replace its one-time password before using the portal.
+      if (data.must_change_password) {
+        localStorage.setItem("must_change_password", "1");
+        navigate("/customer/change-password");
+        return;
+      }
+      localStorage.removeItem("must_change_password");
       navigate("/customer/dashboard");
     } catch (err) {
       setError(err.message || "Something went wrong. Please try again.");

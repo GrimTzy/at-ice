@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import PasswordRules from "./PasswordRules";
+import { isStrongPassword } from "../lib/password";
 
 const ROLE_LABELS = {
   admin: "System Administrator",
@@ -89,7 +91,7 @@ export default function AccountSettings() {
   const mismatch =
     form.password_confirmation.length > 0 && form.password !== form.password_confirmation;
   const canSubmit =
-    form.current_password && form.password.length >= 8 && form.password === form.password_confirmation;
+    form.current_password && isStrongPassword(form.password) && form.password === form.password_confirmation;
 
   const submitPassword = async (e) => {
     e.preventDefault();
@@ -157,7 +159,7 @@ export default function AccountSettings() {
 
       <Card
         title="Change password"
-        description="You need your current password. Use at least 8 characters, different from your current one."
+        description="You need your current password. Choose a new password that follows the rules below, different from your current one."
       >
         <form onSubmit={submitPassword} className="space-y-3">
           <div>
@@ -179,6 +181,7 @@ export default function AccountSettings() {
               autoComplete="new-password"
               className={inputClass}
             />
+            <PasswordRules password={form.password} />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Confirm new password</label>

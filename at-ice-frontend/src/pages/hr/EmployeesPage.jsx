@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import HrLayout from "../../components/HrLayout";
+import PhoneInput from "../../components/PhoneInput";
+import PasswordRules from "../../components/PasswordRules";
+import { isStrongPassword, PASSWORD_RULES_MESSAGE } from "../../lib/password";
+import { MOBILE_REGEX, MOBILE_MESSAGE, localDigits, toStoredPhone } from "../../lib/phone";
 
 const API_BASE = "/api";
 
@@ -28,13 +32,29 @@ function displayRole(user) {
 }
 
 // Philippine mobile number: 11 digits starting with 09 (same rule as EmployeeController)
-const PHONE_REGEX = /^09\d{9}$/;
-const PHONE_MESSAGE = "Phone must be 11 digits starting with 09 (e.g. 09171234567).";
-const digitsOnly = (v) => String(v || "").replace(/\D/g, "").slice(0, 11);
+
+// Position is fixed to the roles that get a login account. The login role is
+// derived from it, so Position and Role can never disagree.
+const POSITION_ROLES = {
+  Checker: "checker",
+  Salesman: "salesman",
+  Maintenance: "maintenance",
+  Driver: "driver",
+};
+
+// Today as YYYY-MM-DD in the browser's local time (toISOString would be UTC).
+const todayStr = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 
 const emptyForm = {
   first_name: "", last_name: "", email: "", password: "",
-  phone: "", address: "", position: "", department: "",
+  phone: "", block_lot: "", street: "", subdivision: "", barangay: "",
+  city: "", province: "", postal_code: "", position: "", department: "",
+  _legacy: false, // display-only: true for an older employee with only the one-line address
+  _legacyAddress: "", // display-only: old one-line address of an older employee
   date_hired: "", shift: "day",
   employment_type: "regular", sub_role: "",
   vehicle_plate: "", // Driver-only — ignored server-side for every other role
@@ -283,8 +303,17 @@ export default function EmployeesPage() {
       last_name: emp.last_name || "",
       email: emp.user?.email || "",
       password: "",
-      phone: emp.phone || "",
-      address: emp.address || "",
+      phone: localDigits(emp.phone),
+      block_lot: emp.block_lot || "",
+      street: emp.street || "",
+      subdivision: emp.subdivision || "",
+      barangay: emp.barangay || "",
+      city: emp.city || "",
+      province: emp.province || "",
+      postal_code: emp.postal_code || "",
+      // Older employees have only the one-line address. Show it as a reference.
+      _legacy: !(emp.street || emp.barangay),
+      _legacyAddress: emp.street || emp.barangay ? "" : (emp.address || ""),
       position: emp.position || "",
       department: emp.department || "",
       date_hired: emp.date_hired ? emp.date_hired.slice(0, 10) : "",
@@ -303,16 +332,50 @@ export default function EmployeesPage() {
   const handleChange = (field) => (e) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
 
+  // Choosing a Position also sets the login role.
+  const handlePositionChange = (e) => {
+    const position = e.target.value;
+    setForm((f) => ({ ...f, position, sub_role: POSITION_ROLES[position] || "" }));
+  };
+
   const isDriverForm = editingId
     ? form._userRole === "driver"
     : form.sub_role === "driver";
+
+  // Older employees have only the one-line address and can be edited without the
+  // new fields. Once any new address field is filled, all four main fields are required.
+  const addressInUse = ["block_lot", "street", "subdivision", "barangay", "city", "province", "postal_code"]
+    .some((f) => String(form[f] || "").trim() !== "");
+  const addressRequired = !form._legacy || addressInUse;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormErrors({});
 
-    if (form.phone && !PHONE_REGEX.test(form.phone)) {
-      setFormErrors({ phone: [PHONE_MESSAGE] });
+    if (form.phone && !MOBILE_REGEX.test(form.phone)) {
+      setFormErrors({ phone: [MOBILE_MESSAGE] });
+      return;
+    }
+    if (editingId === null && !isStrongPassword(form.password)) {
+      setFormErrors({ password: [PASSWORD_RULES_MESSAGE] });
+      return;
+    }
+    if (addressRequired) {
+      const missing = {};
+      for (const f of ["street", "barangay", "city", "province"]) {
+        if (!String(form[f] || "").trim()) missing[f] = ["Required when an address is filled in."];
+      }
+      if (Object.keys(missing).length) {
+        setFormErrors(missing);
+        return;
+      }
+    }
+    if (form.postal_code && !/^\d{4}$/.test(form.postal_code)) {
+      setFormErrors({ postal_code: ["Postal code must be 4 digits."] });
+      return;
+    }
+    if (form.date_hired > todayStr()) {
+      setFormErrors({ date_hired: ["Date hired cannot be in the future."] });
       return;
     }
 
@@ -326,7 +389,9 @@ export default function EmployeesPage() {
       ? {
           first_name: form.first_name, last_name: form.last_name,
           email: form.email, password: form.password,
-          phone: form.phone, address: form.address,
+          phone: toStoredPhone(form.phone), block_lot: form.block_lot, street: form.street,
+          subdivision: form.subdivision, barangay: form.barangay, city: form.city,
+          province: form.province, postal_code: form.postal_code,
           position: form.position, department: form.department,
           daily_rate: 0, date_hired: form.date_hired,
           shift: form.shift, employment_type: form.employment_type,
@@ -335,7 +400,9 @@ export default function EmployeesPage() {
         }
       : {
           first_name: form.first_name, last_name: form.last_name,
-          phone: form.phone, address: form.address,
+          phone: toStoredPhone(form.phone), block_lot: form.block_lot, street: form.street,
+          subdivision: form.subdivision, barangay: form.barangay, city: form.city,
+          province: form.province, postal_code: form.postal_code,
           position: form.position, department: form.department,
           shift: form.shift, employment_type: form.employment_type,
           vehicle_plate: form._userRole === "driver" ? (form.vehicle_plate || null) : null,
@@ -348,7 +415,7 @@ export default function EmployeesPage() {
       if (res.status === 422 && data?.errors) {
         // Fields that show their own error under the input. Any other
         // field error is shown at the top so it is never silently hidden.
-        const SHOWN = ["first_name", "last_name", "email", "password", "phone", "position", "sub_role", "vehicle_plate", "shift", "employment_type", "date_hired"];
+        const SHOWN = ["first_name", "last_name", "email", "password", "phone", "street", "barangay", "city", "province", "block_lot", "subdivision", "postal_code", "position", "sub_role", "vehicle_plate", "shift", "employment_type", "date_hired"];
         const hidden = Object.keys(data.errors).filter((k) => !SHOWN.includes(k));
         setFormErrors(hidden.length ? { ...data.errors, _general: data.errors[hidden[0]] } : data.errors);
         return;
@@ -515,21 +582,22 @@ export default function EmployeesPage() {
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="First Name" error={formErrors.first_name}>
+                <Field label="First Name" required error={formErrors.first_name}>
                   <input required value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
                 </Field>
-                <Field label="Last Name" error={formErrors.last_name}>
+                <Field label="Last Name" required error={formErrors.last_name}>
                   <input required value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
                 </Field>
               </div>
 
               {!editingId && (
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Email" error={formErrors.email}>
+                  <Field label="Email" required error={formErrors.email}>
                     <input required type="email" value={form.email} onChange={handleChange("email")} className={inputCls} />
                   </Field>
-                  <Field label="Password" error={formErrors.password}>
-                    <input required type="password" minLength={6} value={form.password} onChange={handleChange("password")} className={inputCls} />
+                  <Field label="Password" required error={formErrors.password}>
+                    <input required type="password" minLength={8} autoComplete="new-password" value={form.password} onChange={handleChange("password")} className={inputCls} />
+                    <PasswordRules password={form.password} />
                   </Field>
                 </div>
               )}
@@ -541,31 +609,66 @@ export default function EmployeesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Phone" error={formErrors.phone}>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={11}
+                  <PhoneInput
                     value={form.phone}
-                    onChange={(e) => {
-                      const phone = digitsOnly(e.target.value);
+                    onChange={(phone) => {
                       setForm((f) => ({ ...f, phone }));
                       if (formErrors.phone) setFormErrors((fe) => ({ ...fe, phone: undefined }));
                     }}
-                    placeholder="09171234567"
-                    className={`${inputCls} ${form.phone && !PHONE_REGEX.test(form.phone) ? "border-red-300 focus:border-red-400" : ""}`}
+                    className={inputCls}
+                    invalid={!!form.phone && !MOBILE_REGEX.test(form.phone)}
                   />
-                  {!formErrors.phone && form.phone && !PHONE_REGEX.test(form.phone) && (
-                    <span className="text-[10px] text-red-500">11 digits starting with 09</span>
+                  {!formErrors.phone && form.phone && !MOBILE_REGEX.test(form.phone) && (
+                    <span className="text-[10px] text-red-500">{MOBILE_MESSAGE}</span>
                   )}
                 </Field>
-                <Field label="Address">
-                  <input value={form.address} onChange={handleChange("address")} className={inputCls} />
+                <div className="col-span-2 text-[12px] font-semibold text-slate-700 mt-1">Address</div>
+                {form._legacyAddress && !addressInUse && (
+                  <p className="col-span-2 -mt-1 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-700">
+                    Saved address (old format): {form._legacyAddress}. Fill in the fields below to replace it.
+                  </p>
+                )}
+                <Field label="Block and Lot" error={formErrors.block_lot}>
+                  <input value={form.block_lot} onChange={handleChange("block_lot")} placeholder="e.g. Blk 5 Lot 12" className={inputCls} />
+                </Field>
+                <Field label="Street" required={addressRequired} error={formErrors.street}>
+                  <input required={addressRequired} value={form.street} onChange={handleChange("street")} placeholder="e.g. Quirino Highway" className={inputCls} />
+                </Field>
+                <Field label="Subdivision" error={formErrors.subdivision}>
+                  <input value={form.subdivision} onChange={handleChange("subdivision")} placeholder="e.g. Citrus Subdivision" className={inputCls} />
+                </Field>
+                <Field label="Barangay" required={addressRequired} error={formErrors.barangay}>
+                  <input required={addressRequired} value={form.barangay} onChange={handleChange("barangay")} placeholder="e.g. Muzon" className={inputCls} />
+                </Field>
+                <Field label="City" required={addressRequired} error={formErrors.city}>
+                  <input required={addressRequired} value={form.city} onChange={handleChange("city")} placeholder="e.g. San Jose del Monte" className={inputCls} />
+                </Field>
+                <Field label="Province" required={addressRequired} error={formErrors.province}>
+                  <input required={addressRequired} value={form.province} onChange={handleChange("province")} placeholder="e.g. Bulacan" className={inputCls} />
+                </Field>
+                <Field label="Postal Code" error={formErrors.postal_code}>
+                  <input
+                    inputMode="numeric"
+                    placeholder="e.g. 3023"
+                    value={form.postal_code}
+                    onChange={(e) => { const postal_code = e.target.value.replace(/\D/g, "").slice(0, 4); setForm((f) => ({ ...f, postal_code })); }}
+                    className={inputCls}
+                  />
                 </Field>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Position" error={formErrors.position}>
-                  <input required value={form.position} onChange={handleChange("position")} className={inputCls} />
+                <Field label="Position" required error={formErrors.position}>
+                  {editingId ? (
+                    <input readOnly value={form.position || "—"} className={`${inputCls} bg-slate-100 text-slate-500`} />
+                  ) : (
+                    <select required value={form.position} onChange={handlePositionChange} className={inputCls}>
+                      <option value="">Select position</option>
+                      {Object.keys(POSITION_ROLES).map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  )}
                 </Field>
                 <Field label="Department">
                   <input value={form.department} onChange={handleChange("department")} className={inputCls} />
@@ -573,14 +676,12 @@ export default function EmployeesPage() {
               </div>
 
               {!editingId && (
-                <Field label="Employee Role (sub-role)" error={formErrors.sub_role}>
-                  <select value={form.sub_role} onChange={handleChange("sub_role")} className={inputCls}>
-                    <option value="">— None —</option>
-                    <option value="checker">Checker</option>
-                    <option value="salesman">Salesman</option>
-                    <option value="maintenance">Maintenance</option>
-                    <option value="driver">Driver</option>
-                  </select>
+                <Field label="Employee Role (set from Position)" error={formErrors.sub_role}>
+                  <input
+                    readOnly
+                    value={form.sub_role ? form.sub_role.charAt(0).toUpperCase() + form.sub_role.slice(1) : "—"}
+                    className={`${inputCls} bg-slate-100 text-slate-500`}
+                  />
                 </Field>
               )}
               {editingId && (
@@ -607,13 +708,13 @@ export default function EmployeesPage() {
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Shift" error={formErrors.shift}>
+                <Field label="Shift" required error={formErrors.shift}>
                   <select required value={form.shift} onChange={handleChange("shift")} className={inputCls}>
                     <option value="day">Day</option>
                     <option value="night">Night</option>
                   </select>
                 </Field>
-                <Field label="Employment Type" error={formErrors.employment_type}>
+                <Field label="Employment Type" required error={formErrors.employment_type}>
                   <select required value={form.employment_type} onChange={handleChange("employment_type")} className={inputCls}>
                     <option value="regular">Regular</option>
                     <option value="contractual">Contractual</option>
@@ -623,8 +724,8 @@ export default function EmployeesPage() {
               </div>
 
               {!editingId && (
-                <Field label="Date Hired" error={formErrors.date_hired}>
-                  <input required type="date" value={form.date_hired} onChange={handleChange("date_hired")} className={inputCls} />
+                <Field label="Date Hired" required error={formErrors.date_hired}>
+                  <input required type="date" max={todayStr()} value={form.date_hired} onChange={handleChange("date_hired")} className={inputCls} />
                 </Field>
               )}
 
@@ -686,10 +787,12 @@ export default function EmployeesPage() {
 
 const inputCls = "w-full px-3 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20";
 
-function Field({ label, error, children }) {
+function Field({ label, error, required, children }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[11px] text-slate-500">{label}</span>
+      <span className="text-[11px] text-slate-500">
+        {label}{required && <span className="text-red-500"> *</span>}
+      </span>
       {children}
       {error && <span className="text-[10px] text-red-500">{error[0]}</span>}
     </label>
@@ -736,6 +839,10 @@ function PayrollModal({ employee, authHeaders, onClose }) {
     e.preventDefault();
     setError(null);
 
+    if (periodStart > todayStr()) {
+      setError("Period Start cannot be a future date.");
+      return;
+    }
     if (periodDays !== null && periodDays < 1) {
       setError("Period End must be on or after Period Start.");
       return;
@@ -844,10 +951,10 @@ function PayrollModal({ employee, authHeaders, onClose }) {
             <div className="text-xs font-medium text-slate-700">New Payroll Entry</div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Period Start">
-                <input required type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className={inputCls} />
+                <input required type="date" max={todayStr()} value={periodStart} onChange={(e) => { setPeriodStart(e.target.value); if (periodEnd && e.target.value > periodEnd) setPeriodEnd(""); }} className={inputCls} />
               </Field>
               <Field label="Period End">
-                <input required type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className={inputCls} />
+                <input required type="date" min={periodStart || undefined} value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className={inputCls} />
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1024,10 +1131,10 @@ function PerformanceModal({ employee, authHeaders, onClose }) {
             <div className="text-xs font-medium text-slate-700">New Review</div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Period Start">
-                <input required type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className={inputCls} />
+                <input required type="date" max={todayStr()} value={periodStart} onChange={(e) => { setPeriodStart(e.target.value); if (periodEnd && e.target.value > periodEnd) setPeriodEnd(""); }} className={inputCls} />
               </Field>
               <Field label="Period End">
-                <input required type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className={inputCls} />
+                <input required type="date" min={periodStart || undefined} value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className={inputCls} />
               </Field>
             </div>
             <Field label="Rating">

@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import HrLayout from "../../components/HrLayout";
+import PhoneInput from "../../components/PhoneInput";
+import { MOBILE_REGEX, MOBILE_MESSAGE, localDigits, toStoredPhone } from "../../lib/phone";
 
 const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
 const SearchIcon  = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
@@ -73,9 +75,6 @@ const nowInputValue = () => {
 const isSameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
 // Philippine mobile number: 11 digits starting with 09
-const PHONE_REGEX = /^09\d{9}$/;
-const PHONE_MESSAGE = "Phone must be 11 digits starting with 09 (e.g. 09171234567).";
-const digitsOnly = (v) => String(v || "").replace(/\D/g, "").slice(0, 11);
 
 // "Mark Interviewed" is allowed only after the scheduled interview time has passed
 const interviewDue = (a) => {
@@ -199,7 +198,7 @@ export default function InterviewsPage() {
     setForm({
       name: a.name || "",
       email: a.email || "",
-      phone: a.phone || "",
+      phone: localDigits(a.phone),
       position_applied: a.position_applied || "",
       interview_date: toInputValue(a.interview_date),
       notes: a.notes || "",
@@ -217,7 +216,7 @@ export default function InterviewsPage() {
     setFormError("");
     if (!form.name.trim()) return setFormError("Enter the applicant's name.");
     if (!form.position_applied.trim()) return setFormError("Enter the position applied for.");
-    if (form.phone && !PHONE_REGEX.test(form.phone)) return setFormError(PHONE_MESSAGE);
+    if (form.phone && !MOBILE_REGEX.test(form.phone)) return setFormError(MOBILE_MESSAGE);
     if ((isNew || scheduleChanged) && form.interview_date && form.interview_date <= nowInputValue()) {
       return setFormError("The interview date and time must be in the future.");
     }
@@ -225,7 +224,7 @@ export default function InterviewsPage() {
     const payload = {
       name: form.name.trim(),
       email: form.email.trim() || null,
-      phone: form.phone || null,
+      phone: toStoredPhone(form.phone) || null,
       position_applied: form.position_applied.trim(),
       notes: form.notes.trim() || null,
     };
@@ -428,17 +427,14 @@ export default function InterviewsPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Phone (optional)">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={11}
+                <PhoneInput
                   value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: digitsOnly(e.target.value) })}
-                  className={`${inputClass} ${form.phone && !PHONE_REGEX.test(form.phone) ? "border-red-300 focus:border-red-400" : ""}`}
-                  placeholder="09171234567"
+                  onChange={(v) => setForm({ ...form, phone: v })}
+                  className={inputClass}
+                  invalid={!!form.phone && !MOBILE_REGEX.test(form.phone)}
                 />
-                {form.phone && !PHONE_REGEX.test(form.phone) && (
-                  <span className="text-[10px] text-red-600">11 digits starting with 09</span>
+                {form.phone && !MOBILE_REGEX.test(form.phone) && (
+                  <span className="text-[10px] text-red-600">{MOBILE_MESSAGE}</span>
                 )}
               </Field>
               <Field label="Email (optional)">

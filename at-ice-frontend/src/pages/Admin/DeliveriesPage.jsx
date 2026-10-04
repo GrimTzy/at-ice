@@ -29,10 +29,19 @@ const PRODUCT_TYPES = [
 const productLabel = (type) => PRODUCT_TYPES.find((p) => p.value === type)?.label || type;
 
 const EMPTY_ITEM = { product_type: "", quantity_ordered: "" };
-const EMPTY_FORM = {
-  driver_id: "", customer_id: "", scheduled_date: "", notes: "",
-  items: [{ ...EMPTY_ITEM }],
+// Today as YYYY-MM-DD in the browser's local time (toISOString would be UTC).
+const todayStr = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
+
+// A function, not a constant, so the default date is today even if the page
+// stays open past midnight.
+const emptyForm = () => ({
+  driver_id: "", customer_id: "", scheduled_date: todayStr(), notes: "",
+  items: [{ ...EMPTY_ITEM }],
+});
 
 function token() { return localStorage.getItem("token") || ""; }
 function authHeaders() {
@@ -49,7 +58,7 @@ export default function DeliveriesPage() {
   const [search, setSearch]   = useState("");
 
   const [showForm, setShowForm]     = useState(false);
-  const [form, setForm]             = useState(EMPTY_FORM);
+  const [form, setForm]             = useState(emptyForm);
   const [saving, setSaving]         = useState(false);
   const [formError, setFormError]   = useState("");
 
@@ -87,7 +96,7 @@ export default function DeliveriesPage() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   function openAddForm() {
-    setForm(EMPTY_FORM);
+    setForm(emptyForm());
     setFormError("");
     setShowForm(true);
   }
@@ -111,6 +120,11 @@ export default function DeliveriesPage() {
   async function submitForm(e) {
     e.preventDefault();
     setFormError("");
+
+    if (form.scheduled_date < todayStr()) {
+      setFormError("Scheduled date cannot be in the past.");
+      return;
+    }
 
     // Each product type can only appear once per delivery
     const types = form.items.map((it) => it.product_type);
@@ -315,6 +329,7 @@ export default function DeliveriesPage() {
                   <label className="text-[11px] text-slate-500 mb-1 block">Scheduled Date *</label>
                   <input
                     type="date"
+                    min={todayStr()}
                     value={form.scheduled_date}
                     onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })}
                     required

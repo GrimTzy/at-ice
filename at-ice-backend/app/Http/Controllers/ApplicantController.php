@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Applicant;
+use App\Services\PhoneFormatter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -11,9 +12,9 @@ class ApplicantController extends Controller
 {
     private const LOCAL_TZ = 'Asia/Manila';
 
-    // Philippine mobile number: 11 digits starting with 09 (e.g. 09171234567)
-    private const PHONE_REGEX = '/^09\d{9}$/';
-    private const PHONE_MESSAGE = 'Phone must be 11 digits starting with 09 (e.g. 09171234567).';
+    // Philippine mobile number, stored as +639XXXXXXXXX (e.g. +639171234567)
+    private const PHONE_REGEX = PhoneFormatter::MOBILE_REGEX;
+    private const PHONE_MESSAGE = PhoneFormatter::MOBILE_MESSAGE;
 
     private function nowLocal(): string
     {
@@ -28,11 +29,11 @@ class ApplicantController extends Controller
         return Carbon::parse($value)->format('Y-m-d H:i:s');
     }
 
-    // Remove spaces and dashes so "0917 123 4567" or "0917-123-4567" are accepted.
+    // Stores the phone as +63XXXXXXXXXX. "0917 123 4567" and "+63 917 123 4567" are accepted.
     private function cleanPhone(Request $request): void
     {
         if ($request->filled('phone')) {
-            $request->merge(['phone' => preg_replace('/[\s\-]/', '', (string) $request->phone)]);
+            $request->merge(['phone' => PhoneFormatter::normalize((string) $request->phone)]);
         }
     }
 

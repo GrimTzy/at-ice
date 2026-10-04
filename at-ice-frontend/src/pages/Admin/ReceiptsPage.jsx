@@ -31,7 +31,7 @@ const FILTERS = [
   { key: "paid",    label: "Paid" },
 ];
 
-const MOP_LABELS = { cash: "Cash", gcash: "GCash", check: "Check", bank_transfer: "Bank Transfer" };
+const MOP_LABELS = { cash: "Cash", gcash: "GCash", check: "Cheque", bank_transfer: "Bank Transfer" };
 
 function token() { return localStorage.getItem("token") || ""; }
 function authHeaders() {

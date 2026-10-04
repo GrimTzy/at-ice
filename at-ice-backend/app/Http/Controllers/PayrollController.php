@@ -39,7 +39,7 @@ class PayrollController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'employee_id'          => 'required|exists:employees,id',
-            'period_start'         => 'required|date',
+            'period_start'         => 'required|date|before_or_equal:today',
             'period_end'           => 'required|date|after_or_equal:period_start',
             'days_worked'          => 'required|numeric|min:0',
             'daily_rate'           => 'required|numeric|min:0',
@@ -145,8 +145,8 @@ class PayrollController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'period_start'         => 'sometimes|date',
-            'period_end'           => 'sometimes|date',
+            'period_start'         => 'sometimes|date|before_or_equal:today',
+            'period_end'           => 'sometimes|date|after_or_equal:period_start',
             'days_worked'          => 'sometimes|numeric|min:0',
             'daily_rate'           => 'sometimes|numeric|min:0',
             'gross_pay'            => 'sometimes|numeric|min:0',
@@ -162,6 +162,15 @@ class PayrollController extends Controller
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // When only one end of the period is sent, compare it with the stored other end.
+        $newStart = $request->input('period_start', $payroll->period_start);
+        $newEnd   = $request->input('period_end', $payroll->period_end);
+        if (Carbon::parse($newEnd)->lt(Carbon::parse($newStart))) {
+            return response()->json(['errors' => [
+                'period_end' => ['Period end cannot be before period start.'],
+            ]], 422);
         }
 
         $data = $request->only([

@@ -64,6 +64,16 @@ export default function ProtectedRoute({
     );
   }
 
+  // New customer accounts must change their one-time password first.
+  // (The server blocks their API calls until they do.)
+  if (
+    role === "customer" &&
+    localStorage.getItem("must_change_password") === "1" &&
+    location.pathname !== "/customer/change-password"
+  ) {
+    return <Navigate to="/customer/change-password" replace />;
+  }
+
   if (allowedRoles && !allowedRoles.includes(role)) {
     return <Navigate to={homePathFor(role, subRole)} replace />;
   }

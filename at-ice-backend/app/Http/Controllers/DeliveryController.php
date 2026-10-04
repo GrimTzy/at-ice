@@ -25,7 +25,7 @@ class DeliveryController extends Controller
             'customer_id'              => 'required_if:delivery_type,outbound|nullable|exists:customers,id',
             'delivery_type'            => 'required|in:outbound,inbound',
             'supplier_id'              => 'nullable|exists:suppliers,id',
-            'scheduled_date'           => 'required|date',
+            'scheduled_date'           => 'required|date|after_or_equal:today',
             'notes'                    => 'nullable|string',
             'items'                    => 'required|array|min:1',
             'items.*.product_type'     => 'required|in:bags,small_sack,big_sack',

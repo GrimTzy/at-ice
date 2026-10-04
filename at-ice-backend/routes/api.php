@@ -44,7 +44,7 @@ Route::get('face-descriptors', [FaceDataController::class, 'descriptors'])->midd
 Route::post('attendances', [AttendanceController::class, 'store'])->middleware('throttle:30,1,kiosk');
 
 //Protected
-Route::middleware(['auth:sanctum', 'throttle:120,1,api'])->group(function () {
+Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me',      [AuthController::class, 'me']);

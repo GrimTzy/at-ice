@@ -22,6 +22,7 @@ import SettingsPage from './pages/Admin/SettingsPage'
 
 // -- Customer Module
 import CustomerLogin from './pages/customer/CustomerLogin'
+import CustomerChangePassword from './pages/customer/CustomerChangePassword'
 import CustomerDashboard from './pages/customer/CustomerDashboard'
 import CustomerDeliveries from './pages/customer/CustomerDeliveries'
 import CustomerDeliveryProofs from './pages/customer/CustomerDeliveryProofs'
@@ -84,6 +85,14 @@ function App() {
 
         {/* -- Customer Module -- */}
         <Route path="/customer/login" element={<CustomerLogin />} />
+        <Route
+          path="/customer/change-password"
+          element={
+            <ProtectedRoute allowedRoles={["customer"]}>
+              <CustomerChangePassword />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/customer/dashboard"
           element={

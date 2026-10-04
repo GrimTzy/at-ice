@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
+import PhoneInput from "../../components/PhoneInput";
+import { ANY_REGEX, ANY_MESSAGE, localDigits, toStoredPhone } from "../../lib/phone";
 
 const ChevronLeftIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
@@ -13,11 +15,6 @@ const PlusIcon = () => (
     <path d="M12 5v14M5 12h14" strokeLinecap="round" />
   </svg>
 );
-
-// Mobile 09XXXXXXXXX, or landline with area code (e.g. 0281234567). Same rule as SupplierController.
-const PHONE_REGEX = /^(09\d{9}|0[2-8]\d{8})$/;
-const PHONE_MESSAGE = "Contact number must be a mobile number (09XXXXXXXXX) or a landline with area code (e.g. 0281234567).";
-const digitsOnly = (v) => String(v || "").replace(/\D/g, "").slice(0, 11);
 
 const inputCls = "text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400";
 
@@ -88,7 +85,7 @@ export default function CheckerSupplierManagementPage() {
     setForm({
       name: s.name || "",
       contact_person: s.contact_person || "",
-      contact_number: s.contact_number || "",
+      contact_number: localDigits(s.contact_number),
       email: s.email || "",
       address: s.address || "",
       city: s.city || "",
@@ -102,7 +99,7 @@ export default function CheckerSupplierManagementPage() {
     e.preventDefault();
     setError("");
     if (!form.name.trim()) return setError("Enter the supplier name.");
-    if (form.contact_number && !PHONE_REGEX.test(form.contact_number)) return setError(PHONE_MESSAGE);
+    if (form.contact_number && !ANY_REGEX.test(form.contact_number)) return setError(ANY_MESSAGE);
     setSubmitting(true);
     try {
       const url = editingId ? `/api/suppliers/${editingId}` : "/api/suppliers";
@@ -117,7 +114,7 @@ export default function CheckerSupplierManagementPage() {
         body: JSON.stringify({
           ...form,
           name: form.name.trim(),
-          contact_number: form.contact_number || null,
+          contact_number: toStoredPhone(form.contact_number) || null,
           email: form.email.trim() || null,
         }),
       });
@@ -216,14 +213,15 @@ export default function CheckerSupplierManagementPage() {
               className="text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
             />
             <div className="flex gap-2.5">
-              <input
-                value={form.contact_number}
-                onChange={(e) => setForm({ ...form, contact_number: digitsOnly(e.target.value) })}
-                inputMode="numeric"
-                maxLength={11}
-                placeholder="Contact no. (09XXXXXXXXX)"
-                className={`flex-1 min-w-0 ${inputCls} ${form.contact_number && !PHONE_REGEX.test(form.contact_number) ? "border-red-300 focus:border-red-400" : ""}`}
-              />
+              <div className="flex-1 min-w-0">
+                <PhoneInput
+                  value={form.contact_number}
+                  onChange={(v) => setForm({ ...form, contact_number: v })}
+                  placeholder="Contact no."
+                  className={inputCls}
+                  invalid={!!form.contact_number && !ANY_REGEX.test(form.contact_number)}
+                />
+              </div>
               <input
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}

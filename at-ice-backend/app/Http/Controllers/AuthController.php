@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
@@ -68,6 +69,7 @@ class AuthController extends Controller
             'token'    => $token,
             'role'     => $user->role,
             'sub_role' => $user->sub_role ?? null,
+            'must_change_password' => (bool) $user->must_change_password,
             'user'     => [
                 'id'    => $user->id,
                 'name'  => $user->name,
@@ -97,7 +99,9 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'current_password' => 'required|string',
-            'password'         => 'required|string|min:8|max:100|confirmed|different:current_password',
+            // At least 8 characters with uppercase, lowercase, a number and a special character.
+            'password'         => ['required', 'string', 'max:100', 'confirmed', 'different:current_password',
+                                   Password::min(8)->mixedCase()->numbers()->symbols()],
         ]);
 
         $user = $request->user();
@@ -109,7 +113,10 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $user->update(['password' => Hash::make($validated['password'])]);
+        $user->update([
+            'password'             => Hash::make($validated['password']),
+            'must_change_password' => false,
+        ]);
 
         $currentTokenId = $request->user()->currentAccessToken()->id;
         $user->tokens()->where('id', '!=', $currentTokenId)->delete();

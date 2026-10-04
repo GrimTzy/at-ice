@@ -2,20 +2,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\Supplier;
+use App\Services\PhoneFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class SupplierController extends Controller
 {
-    // Mobile 09XXXXXXXXX, or landline with area code, e.g. 0281234567 (Metro Manila)
-    // or 0441234567 (provincial). Spaces and dashes are removed first.
-    private const PHONE_REGEX = '/^(09\d{9}|0[2-8]\d{8})$/';
-    private const PHONE_MESSAGE = 'Contact number must be a mobile number (09XXXXXXXXX) or a landline with area code (e.g. 0281234567).';
+    // Stored as +63 and 9 to 10 digits: mobile (+639171234567), or a landline with
+    // area code (+63281234567 Metro Manila, +63441234567 provincial).
+    private const PHONE_REGEX = PhoneFormatter::ANY_REGEX;
+    private const PHONE_MESSAGE = PhoneFormatter::ANY_MESSAGE;
 
     private function cleanPhone(Request $request): void
     {
         if ($request->filled('contact_number')) {
-            $request->merge(['contact_number' => preg_replace('/[\s\-()]/', '', (string) $request->contact_number)]);
+            $request->merge(['contact_number' => PhoneFormatter::normalize((string) $request->contact_number)]);
         }
     }
 

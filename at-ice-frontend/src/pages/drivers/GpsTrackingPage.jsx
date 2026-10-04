@@ -49,6 +49,10 @@ const BackIcon = () => (
   </svg>
 );
 
+// Classic map pin shape for store markers, drawn with its tip at (0, 0) and the
+// round head centered at (0, -29).
+const STORE_PIN_PATH = "M 0,0 C -3,-9 -11,-17 -11,-29 A 11,11 0 1,1 11,-29 C 11,-17 3,-9 0,0 z";
+
 // Backend status -> display label + colors. Panel shows ALL stops (Option 1),
 // including "delivered" ones.
 const STATUS_CONFIG = {
@@ -202,18 +206,23 @@ export function GpsTrackingPage() {
         position: { lat: Number(store.customer.latitude), lng: Number(store.customer.longitude) },
         map,
         title: store.customer?.name,
+        // Classic map pin: round head with a point at the bottom. The anchor is the
+        // tip, so the pin points exactly at the store's coordinates. The status
+        // symbol sits in the head (labelOrigin).
         icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 10,
+          path: STORE_PIN_PATH,
+          scale: 1,
           fillColor: cfg.markerFill,
           fillOpacity: 1,
           strokeColor: cfg.markerStroke,
           strokeWeight: 2,
+          anchor: new window.google.maps.Point(0, 0),
+          labelOrigin: new window.google.maps.Point(0, -29),
         },
         label: {
           text: cfg.markerLabel,
           color: "#ffffff",
-          fontSize: "10px",
+          fontSize: "11px",
           fontWeight: "bold",
         },
       });
