@@ -37,7 +37,16 @@ class AuthController extends Controller
         // Attempt login
         $user = User::where('email', $request->email)->first();
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        // Unknown email still pays for one hash check, so response time does
+        // not reveal which emails have an account.
+        if ($user) {
+            $passwordOk = Hash::check($request->password, $user->password);
+        } else {
+            Hash::make($request->password);
+            $passwordOk = false;
+        }
+
+        if (! $user || ! $passwordOk) {
             // Increment failed attempt (decays after 180 seconds = 3 minutes)
             RateLimiter::hit($throttleKey, 180);
 
