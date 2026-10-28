@@ -24,10 +24,20 @@ Internet ─▶ reverse proxy (TLS) ─▶ frontend (nginx :80)
 
 ## Environment
 
-All variables are listed in `.env.production.example`. Set them in the hosting
-panel's environment variables for the stack. `PUSHER_APP_KEY` is compiled into
+`.env.production.example` lists the production variables. Set them in the hosting
+panel's environment variables for the stack. Only the variables that `docker-compose.yml`
+passes through reach the application containers. It does not pass `ATICE_TIMEZONE`,
+`PAYROLL_ANCHOR`, `GROQ_VISION_MODEL` or `GROQ_TEXT_MODEL`, and it has no build argument for
+`VITE_BUSINESS_TZ`, so setting those does not change the Docker deployment unless
+`docker-compose.yml` is changed to pass them (the app uses its built-in defaults). The pay
+period anchor can still be changed in Admin > Settings. `PUSHER_APP_KEY` is compiled into
 the frontend, so **redeploy** after changing it. The maps use OpenStreetMap and
-need no key.
+need no key. `docker-compose.yml` always sets `APP_DEBUG` to false and sets
+`CORS_ALLOWED_ORIGINS` from `APP_URL`.
+
+If a key or password was ever committed to Git, treat it as exposed: revoke it in the
+provider's console and make a new one. Deleting the file or adding it to `.gitignore`
+does not remove it from earlier commits.
 
 Realtime channels are private: the browser signs each subscription at `POST /api/broadcasting/auth` with its login token (roles in `routes/channels.php`).
 Realtime stays on `BROADCAST_CONNECTION=log` until `PUSHER_APP_ID` and
