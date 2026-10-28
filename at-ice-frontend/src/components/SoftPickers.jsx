@@ -440,7 +440,10 @@ export default function SoftPickers() {
   }, [open, close]);
 
   // Place the popup under the field (above it when there is no room), and keep
-  // it there while the page scrolls or resizes.
+  // it there while the page scrolls, resizes, the on-screen keyboard opens or
+  // the form grows or shrinks as it is filled in. Those layout changes fire no
+  // scroll event, so the field is followed on every frame while the popup is
+  // open (setPos only renders when the position really changed).
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
@@ -449,23 +452,24 @@ export default function SoftPickers() {
       const pop = popRef.current;
       const h = pop ? pop.offsetHeight : 320;
       const w = open.kind === "date" ? 292 : Math.max(r.width, 180);
+      const vv = window.visualViewport;
       const vw = window.innerWidth;
-      const vh = window.innerHeight;
+      const vh = vv ? Math.min(vv.height, window.innerHeight) : window.innerHeight;
       const below = r.bottom + 8 + h <= vh || r.top - 8 - h < 0;
-      setPos({
-        top: below ? r.bottom + 8 : r.top - 8 - h,
-        left: Math.min(Math.max(8, r.left), vw - w - 8),
+      const next = {
+        top: Math.round(below ? r.bottom + 8 : r.top - 8 - h),
+        left: Math.round(Math.min(Math.max(8, r.left), vw - w - 8)),
         width: w,
-        maxHeight: below ? vh - r.bottom - 16 : r.top - 16,
-      });
+        maxHeight: Math.round(below ? vh - r.bottom - 16 : r.top - 16),
+      };
+      setPos((cur) => (cur && cur.top === next.top && cur.left === next.left && cur.width === next.width && cur.maxHeight === next.maxHeight ? cur : next));
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    let frame = requestAnimationFrame(function follow() {
+      place();
+      frame = requestAnimationFrame(follow);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [open]);
 
   if (!open) return null;
