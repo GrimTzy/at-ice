@@ -4,3 +4,17 @@ node_modules/
 .env.*
 !.env.example
 !.env.production.example
+
+# Local runtime of "open atice": logs, pid file, local account list, database snapshots
+/.atice/
+# Local generated outputs (test logs, comparison reports)
+/local-outputs/
+# Local test accounts with passwords: never share
+/at-ice-backend/database/seeders/LocalTestAccountsSeeder.php
+# OS and editor files (the frontend keeps its own .vscode/extensions.json rule)
+# and any stray log file
+*.log
+.DS_Store
+Thumbs.db
+/.vscode/
+/.idea/
