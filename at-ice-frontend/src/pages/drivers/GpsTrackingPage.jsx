@@ -2,52 +2,38 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
 import { clearSession } from "../../lib/auth";
+import { useLogoutConfirm } from "../../lib/useLogoutConfirm";
+import { SkeletonList } from "../../components/Skeleton";
+import HeaderAvatar from "../../components/HeaderAvatar";
+import { ScopeStatusRow } from "../../components/NightMode";
+import { initialsOf } from "../../lib/initials";
+import { useLiveTick } from "../../lib/live";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import EmptyState from "../../components/EmptyState";
+import { Icon } from "../../components/icons";
 
 // Icons (unchanged)
-const LogOutIcon = () => (
-  <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-    <polyline points="16 17 21 12 16 7" />
-    <line x1="21" y1="12" x2="9" y2="12" />
-  </svg>
-);
 const MapIcon = () => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
-    <line x1="8" y1="2" x2="8" y2="18" />
-    <line x1="16" y1="6" x2="16" y2="22" />
-  </svg>
+  <Icon name="map" size={14} />
 );
 const NavIcon = () => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <polygon points="3 11 22 2 13 21 11 13 3 11" />
-  </svg>
+  <Icon name="nav" size={14} />
 );
 const ChevronUpIcon = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <polyline points="18 15 12 9 6 15" />
-  </svg>
+  <Icon name="chevronUp" size={15} />
 );
 const ChevronDownIcon = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
+  <Icon name="chevronDown" size={15} />
 );
 const MapPinIcon = () => (
-  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-    <circle cx="12" cy="10" r="3" />
-  </svg>
+  <Icon name="mapPin" size={12} />
 );
 const PackageIcon = () => (
-  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-  </svg>
+  <Icon name="parcel" size={12} />
 );
 const BackIcon = () => (
-  <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <polyline points="15 18 9 12 15 6" />
-  </svg>
+  <Icon name="back" size={17} />
 );
 
 // Classic map pin shape for store markers, drawn with its tip at (0, 0) and the
@@ -84,8 +70,10 @@ export function GpsTrackingPage() {
   const markersRef     = useRef([]);
   const driverDotRef   = useRef(null);
   const watchIdRef     = useRef(null);
-  const infoWindowRef  = useRef(null);
   const echoChannelRef = useRef(null);
+  // Latest delivery list for the map code, which runs outside React renders
+  // (Leaflet marker clicks).
+  const storesRef      = useRef([]);
 
   const [driverPos, setDriverPos]         = useState(null);
   const [gpsStatus, setGpsStatus]         = useState("waiting");
@@ -110,6 +98,9 @@ export function GpsTrackingPage() {
     clearSession();
     navigate("/login");
   };
+  const [askLogout, logoutDialog] = useLogoutConfirm(handleLogout);
+
+  const live = useLiveTick(["deliveries"]);
 
   // ── Fetch real deliveries (same endpoint DeliveriesPage.jsx uses) ─────────
   useEffect(() => {
@@ -126,19 +117,14 @@ export function GpsTrackingPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [token]);
-
-  // Re-plot markers whenever the delivery list changes (initial load or a
-  // Pusher update below).
-  useEffect(() => {
-    if (mapInstanceRef.current) plotStoreMarkers(mapInstanceRef.current);
-  }, [stores]);
+    // live: reloads on a delivery change and on pull-to-refresh
+  }, [token, live]);
 
   // ── Live status updates via Pusher/Echo (same channel/event as
   // DeliveriesPage.jsx: public "deliveries" channel, "delivery.status.updated") ──
   useEffect(() => {
     if (!window.Echo) return;
-    const channel = window.Echo.channel("deliveries");
+    const channel = window.Echo.private("deliveries");
     echoChannelRef.current = channel;
 
     channel.listen(".delivery.status.updated", (e) => {
@@ -150,100 +136,65 @@ export function GpsTrackingPage() {
     });
 
     return () => {
-      window.Echo.leaveChannel("deliveries");
+      window.Echo.leave("deliveries");
     };
   }, [user?.id]);
 
-  // Load Google Maps 
-  useEffect(() => {
-  if (window.google) { initMap(); return; }
-  const existing = document.getElementById("google-maps-script");
-  if (existing) {
-    existing.addEventListener("load", initMap, { once: true });
-    return;
-  }
-  window.initMap = initMap;
-  const script = document.createElement("script");
-  script.id = "google-maps-script";
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&callback=initMap`;
-  script.async = true;
-  script.defer = true;
-  document.head.appendChild(script);
-}, []);
 
+  // Map: Leaflet with OpenStreetMap tiles (free, no API key).
   function initMap() {
-    if (!mapRef.current) return;
-    const center = { lat: 14.6600, lng: 121.0000 };
-    const map = new window.google.maps.Map(mapRef.current, {
-      center,
-      zoom: 13,
-      disableDefaultUI: true,
-      zoomControl: true,
-      zoomControlOptions: { position: window.google.maps.ControlPosition.RIGHT_CENTER },
-      styles: [
-        { featureType: "poi",          elementType: "labels", stylers: [{ visibility: "off" }] },
-        { featureType: "transit",      elementType: "labels", stylers: [{ visibility: "off" }] },
-        { featureType: "water",        elementType: "geometry", stylers: [{ color: "#bfdbfe" }] },
-        { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#f1f5f9" }] },
-        { featureType: "landscape",    elementType: "geometry", stylers: [{ color: "#f8fafc" }] },
-      ],
-    });
+    if (!mapRef.current || mapInstanceRef.current) return;
+    const map = L.map(mapRef.current, { zoomControl: false }).setView([14.66, 121.0], 13);
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
     mapInstanceRef.current = map;
     plotStoreMarkers(map);
     startGpsTracking(map);
   }
 
   function plotStoreMarkers(map) {
-    markersRef.current.forEach((m) => m.setMap(null));
+    markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
-    if (infoWindowRef.current) infoWindowRef.current.close();
-    infoWindowRef.current = new window.google.maps.InfoWindow();
 
-    stores.forEach((store) => {
+    storesRef.current.forEach((store) => {
       if (store.customer?.latitude == null || store.customer?.longitude == null) return;
       const cfg = STATUS_CONFIG[store.status] ?? STATUS_CONFIG.pending;
 
-      const marker = new window.google.maps.Marker({
-        position: { lat: Number(store.customer.latitude), lng: Number(store.customer.longitude) },
-        map,
-        title: store.customer?.name,
-        // Classic map pin: round head with a point at the bottom. The anchor is the
-        // tip, so the pin points exactly at the store's coordinates. The status
-        // symbol sits in the head (labelOrigin).
-        icon: {
-          path: STORE_PIN_PATH,
-          scale: 1,
-          fillColor: cfg.markerFill,
-          fillOpacity: 1,
-          strokeColor: cfg.markerStroke,
-          strokeWeight: 2,
-          anchor: new window.google.maps.Point(0, 0),
-          labelOrigin: new window.google.maps.Point(0, -29),
-        },
-        label: {
-          text: cfg.markerLabel,
-          color: "#ffffff",
-          fontSize: "11px",
-          fontWeight: "bold",
-        },
+      // Classic map pin: round head with a point at the bottom. The icon
+      // anchor is the tip, so the pin points exactly at the store's
+      // coordinates. The status symbol sits in the head.
+      const icon = L.divIcon({
+        className: "",
+        iconSize: [26, 44],
+        iconAnchor: [13, 43],
+        popupAnchor: [0, -38],
+        html: `<svg width="26" height="44" viewBox="-13 -43 26 44" aria-hidden="true">
+          <path d="${STORE_PIN_PATH}" fill="${cfg.markerFill}" stroke="${cfg.markerStroke}" stroke-width="2"/>
+          <text x="0" y="-25" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff" font-family="system-ui,sans-serif">${cfg.markerLabel}</text>
+        </svg>`,
       });
 
-      marker.addListener("click", () => {
-        // All customer text is escaped before it goes into the popup HTML
-        infoWindowRef.current.setContent(`
-          <div style="font-family:'Inter','Segoe UI',sans-serif;font-size:12px;padding:4px 2px;min-width:160px;">
-            <div style="font-weight:600;color:#1e293b;margin-bottom:4px;">${escapeHtml(store.customer?.name ?? "Customer")}</div>
-            <div style="color:#64748b;margin-bottom:2px;">${escapeHtml(store.customer?.address ?? "")}</div>
-            <div style="color:#64748b;">${escapeHtml(itemsSummary(store))}</div>
-            <div style="margin-top:6px;display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;
-              background:${cfg.bg === "bg-green-50" ? "#dcfce7" : "#fef3c7"};
-              color:${cfg.markerStroke};">
-              ${cfg.label}
-            </div>
-          </div>`);
-        infoWindowRef.current.open(map, marker);
-        setSelectedStore(store);
-      });
+      const marker = L.marker([Number(store.customer.latitude), Number(store.customer.longitude)], {
+        icon,
+        title: store.customer?.name,
+      }).addTo(map);
+
+      // All customer text is escaped before it goes into the popup HTML
+      marker.bindPopup(`
+        <div style="font-family:'Inter','Segoe UI',sans-serif;font-size:12px;padding:2px;min-width:160px;">
+          <div style="font-weight:600;color:#1e293b;margin-bottom:4px;">${escapeHtml(store.customer?.name ?? "Customer")}</div>
+          <div style="color:#64748b;margin-bottom:2px;">${escapeHtml(store.customer?.address ?? "")}</div>
+          <div style="color:#64748b;">${escapeHtml(itemsSummary(store))}</div>
+          <div style="margin-top:6px;display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;
+            background:${cfg.bg === "bg-green-50" ? "#dcfce7" : "#fef3c7"};
+            color:${cfg.markerStroke};">
+            ${cfg.label}
+          </div>
+        </div>`);
+      marker.on("click", () => setSelectedStore(store));
 
       markersRef.current.push(marker);
     });
@@ -257,23 +208,17 @@ export function GpsTrackingPage() {
         setDriverPos({ lat, lng });
         setGpsStatus("active");
         if (driverDotRef.current) {
-          driverDotRef.current.setPosition({ lat, lng });
+          driverDotRef.current.setLatLng([lat, lng]);
         } else {
-          driverDotRef.current = new window.google.maps.Marker({
-            position: { lat, lng },
-            map,
-            title: "Your Location",
-            icon: {
-              path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 9,
-              fillColor: "#06b6d4",
-              fillOpacity: 1,
-              strokeColor: "#0e7490",
-              strokeWeight: 2,
-            },
-            zIndex: 999,
-          });
-          map.panTo({ lat, lng });
+          driverDotRef.current = L.circleMarker([lat, lng], {
+            radius: 9,
+            fillColor: "#06b6d4",
+            fillOpacity: 1,
+            color: "#0e7490",
+            weight: 2,
+          }).addTo(map).bindTooltip("Your Location");
+          driverDotRef.current.bringToFront();
+          map.panTo([lat, lng]);
         }
       },
       () => setGpsStatus("error"),
@@ -281,10 +226,33 @@ export function GpsTrackingPage() {
     );
   }
 
+  // Keep the map pins in step with the delivery list. The map may be ready
+  // before or after the deliveries arrive; either order ends with the pins
+  // drawn, because initMap also plots from storesRef.
+  useEffect(() => {
+    storesRef.current = stores;
+    if (mapInstanceRef.current) plotStoreMarkers(mapInstanceRef.current);
+  }, [stores]);
+
+  // Create the map once, keep it sized to its box, and remove it on leave
+  useEffect(() => {
+    initMap();
+    const ro = new ResizeObserver(() => mapInstanceRef.current?.invalidateSize());
+    if (mapRef.current) ro.observe(mapRef.current);
+    return () => {
+      ro.disconnect();
+      mapInstanceRef.current?.remove();
+      mapInstanceRef.current = null;
+      driverDotRef.current = null;
+      markersRef.current = [];
+    };
+    // initMap only reads refs and state setters; this runs once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function centerOnDriver() {
     if (driverPos && mapInstanceRef.current) {
-      mapInstanceRef.current.panTo(driverPos);
-      mapInstanceRef.current.setZoom(15);
+      mapInstanceRef.current.setView([driverPos.lat, driverPos.lng], 15);
     }
   }
 
@@ -300,9 +268,10 @@ export function GpsTrackingPage() {
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50">
+      {logoutDialog}
 
       {/* ── Top Bar ── */}
-      <header className="bg-white border-b border-black/[0.08] px-5 pt-10 pb-4 flex-shrink-0 sticky top-0 z-20">
+      <header className="bg-white border-b border-black/[0.08] px-5 pt-4 pb-4 flex-shrink-0 sticky top-0 z-20">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <button
@@ -311,12 +280,12 @@ export function GpsTrackingPage() {
             >
               <BackIcon />
             </button>
-            <div className="w-7 h-7 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center overflow-hidden">
-              <img src={logo} alt="Bella Erin logo" className="w-full h-full object-contain p-1" />
+            <div className="brand-logo w-11 h-11 flex-shrink-0 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center overflow-hidden">
+              <img src={logo} alt="AT-ICE logo" className="w-full h-full object-contain p-1" />
             </div>
             <div>
-              <div className="text-[13px] font-semibold text-slate-800 leading-none">{user?.name || "Driver"}</div>
-              <div className="text-[10px] text-slate-400 tracking-wide">Driver</div>
+              <div className="text-[15px] font-semibold text-slate-800 leading-tight">{user?.name || "Driver"}</div>
+              <div className="text-[11px] text-slate-400 tracking-wide">Driver</div>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -331,18 +300,13 @@ export function GpsTrackingPage() {
               }`} />
               {gpsStatus === "active" ? "GPS Active" : gpsStatus === "error" ? "GPS Error" : "Acquiring..."}
             </div>
-            <button
-              onClick={handleLogout}
-              title="Sign out"
-              className="text-slate-400 active:text-red-500 transition-colors cursor-pointer p-1"
-            >
-              <LogOutIcon />
-            </button>
+            <HeaderAvatar initials={initialsOf(user?.name, "DR")} name={user?.name || "Driver"} subtitle={user?.email || "Driver"} onSignOut={askLogout} mobileSignOut />
           </div>
         </div>
 
+        <ScopeStatusRow />
         <div className="mt-3">
-          <div className="text-[18px] font-semibold text-slate-800 leading-tight">GPS Tracking</div>
+          <div className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">GPS Tracking</div>
           <div className="text-[12px] text-slate-400 mt-0.5">{todayLabel}</div>
         </div>
 
@@ -363,7 +327,7 @@ export function GpsTrackingPage() {
 
       {/* ── Map ── */}
       <div className="relative flex-1" style={{ minHeight: "320px" }}>
-        <div ref={mapRef} className="absolute inset-0 w-full h-full" />
+        <div ref={mapRef} className="absolute inset-0 w-full h-full z-0" />
 
         <button
           onClick={centerOnDriver}
@@ -388,7 +352,7 @@ export function GpsTrackingPage() {
         </div>
 
         {selectedStore && (
-          <div className="absolute bottom-0 left-0 right-0 z-20 bg-white border-t border-black/[0.08] rounded-t-2xl shadow-lg px-5 py-4">
+          <div className="absolute bottom-0 left-0 right-0 z-20 bg-white rounded-t-2xl shadow-[0_-8px_20px_-6px_var(--neu-lo)] px-5 py-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
@@ -435,10 +399,10 @@ export function GpsTrackingPage() {
 
         <div className="overflow-y-auto px-4 pb-6 flex flex-col gap-2" style={{ maxHeight: "220px" }}>
           {loading && (
-            <div className="text-[12px] text-slate-400 text-center py-4">Loading deliveries...</div>
+            <SkeletonList />
           )}
           {!loading && stores.length === 0 && (
-            <div className="text-[12px] text-slate-400 text-center py-4">No deliveries scheduled today.</div>
+            <EmptyState icon="truck" compact>No deliveries scheduled today.</EmptyState>
           )}
           {stores.map((store) => {
             const cfg = STATUS_CONFIG[store.status] ?? STATUS_CONFIG.pending;
@@ -449,8 +413,7 @@ export function GpsTrackingPage() {
                 onClick={() => {
                   setSelectedStore(store);
                   if (mapInstanceRef.current && store.customer?.latitude != null) {
-                    mapInstanceRef.current.panTo({ lat: Number(store.customer.latitude), lng: Number(store.customer.longitude) });
-                    mapInstanceRef.current.setZoom(15);
+                    mapInstanceRef.current.setView([Number(store.customer.latitude), Number(store.customer.longitude)], 15);
                   }
                 }}
               >

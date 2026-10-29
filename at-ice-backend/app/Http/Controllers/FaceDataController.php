@@ -6,58 +6,96 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\FaceData;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class FaceDataController extends Controller
 {
-    // Guards and Baggers have no system account, so they are enrolled
-    // without an employee record. Every other role must be linked to one.
-    private const NO_ACCOUNT_ROLES = ['guard', 'bagger'];
+    // Guards and Baggers have no system account. They are linked to their
+    // employee record (HRIS > Employees); older enrollments may have none.
+    // Every other role must be linked to an employee.
+
+    // The face picture comes from the webcam as a JPEG data URL (up to ~1.5 MB).
+    private const PHOTO_RULE = ['nullable', 'string', 'max:2000000', 'starts_with:data:image/jpeg;base64,'];
+
+    // Face pictures are personal data. They are kept on the PRIVATE disk
+    // (storage/app/private), which nginx does not serve, and are sent only to
+    // HR and Admin by photo() below. Never put them on the public disk.
+    private const PHOTO_DISK = 'local';
+
+    // Saves the picture on the private disk under a random name and returns its path.
+    private function storePhoto(?string $dataUrl): ?string
+    {
+        if (! $dataUrl) {
+            return null;
+        }
+        $bytes = base64_decode(substr($dataUrl, strlen('data:image/jpeg;base64,')), true);
+        if ($bytes === false || @getimagesizefromstring($bytes) === false) {
+            throw ValidationException::withMessages(['photo' => 'The face picture could not be read. Capture it again.']);
+        }
+        $path = 'face-photos/'.Str::uuid().'.jpg';
+        Storage::disk(self::PHOTO_DISK)->put($path, $bytes);
+
+        return $path;
+    }
+
+    private function deletePhoto(?string $path): void
+    {
+        if ($path) {
+            Storage::disk(self::PHOTO_DISK)->delete($path);
+            Storage::disk('public')->delete($path); // a picture saved before they moved to the private disk
+        }
+    }
 
     // HR enrolls a worker's face
     // POST /api/face-enroll
     public function enroll(Request $request)
     {
         $validated = $request->validate([
-            'worker_name'  => 'required|string|max:255',
-            'role'         => 'required|in:driver,salesman,checker,maintenance,guard,bagger',
-            'employee_id'  => [
+            'worker_name' => 'required|string|max:255',
+            'role' => 'required|in:driver,salesman,checker,maintenance,guard,bagger',
+            'employee_id' => [
                 'nullable',
                 'required_unless:role,guard,bagger',
-                'prohibited_if:role,guard,bagger',
                 'exists:employees,id',
                 // One face per employee: stops a second enrollment that
                 // would mix two people's attendance under one employee.
                 Rule::unique('face_data', 'employee_id'),
             ],
-            'descriptor'   => 'required|array|size:128',
+            'descriptor' => 'required|array|size:128',
             'descriptor.*' => 'numeric',
+            'photo' => self::PHOTO_RULE,
         ], [
-            'employee_id.unique'          => 'This employee already has an enrolled face. Delete the existing enrollment first if it needs to be redone.',
+            'employee_id.unique' => 'This employee already has an enrolled face. Delete the existing enrollment first if it needs to be redone.',
             'employee_id.required_unless' => 'Select the employee for this worker.',
-            'employee_id.prohibited_if'   => 'Guards and Baggers are enrolled without an employee account.',
-            'employee_id.exists'          => 'The selected employee was not found.',
+            'employee_id.exists' => 'The selected employee was not found.',
         ]);
 
         // The role must match the employee's actual role in the system
-        if (!empty($validated['employee_id'])) {
+        if (! empty($validated['employee_id'])) {
             $employee = Employee::with('user')->find($validated['employee_id']);
-            $actual   = $employee?->user?->role === 'driver'
-                ? 'driver'
-                : $employee?->user?->sub_role;
+            $actual = match (true) {
+                $employee?->user === null => strtolower((string) $employee?->position), // guard, bagger
+                $employee->user->role === 'driver' => 'driver',
+                default => $employee->user->sub_role,
+            };
 
             if ($actual && $actual !== $validated['role']) {
                 return response()->json([
-                    'message' => "Role does not match this employee. {$employee->first_name} {$employee->last_name} is registered as " . ucfirst($actual) . '.',
-                    'errors'  => ['role' => ['Role does not match the selected employee.']],
+                    'message' => "Role does not match this employee. {$employee->first_name} {$employee->last_name} is registered as ".ucfirst($actual).'.',
+                    'errors' => ['role' => ['Role does not match the selected employee.']],
                 ], 422);
             }
         }
 
-        $faceData = FaceData::create($validated);
+        $photo = $validated['photo'] ?? null;
+        unset($validated['photo']);
+        $faceData = FaceData::create($validated + ['photo_path' => $this->storePhoto($photo)]);
 
         return response()->json([
-            'message'   => 'Face enrolled successfully.',
+            'message' => 'Face enrolled successfully.',
             'face_data' => $faceData,
         ], 201);
     }
@@ -76,14 +114,22 @@ class FaceDataController extends Controller
         $faceData = FaceData::findOrFail($id);
 
         $validated = $request->validate([
-            'descriptor'   => 'required|array|size:128',
+            'descriptor' => 'required|array|size:128',
             'descriptor.*' => 'numeric',
+            'photo' => self::PHOTO_RULE,
         ]);
 
-        $faceData->update($validated);
+        $data = ['descriptor' => $validated['descriptor']];
+        if (! empty($validated['photo'])) {
+            // A new picture replaces the old one
+            $old = $faceData->photo_path;
+            $data['photo_path'] = $this->storePhoto($validated['photo']);
+            $this->deletePhoto($old);
+        }
+        $faceData->update($data);
 
         return response()->json([
-            'message'   => 'Face data updated.',
+            'message' => 'Face data updated.',
             'face_data' => $faceData,
         ]);
     }
@@ -102,16 +148,43 @@ class FaceDataController extends Controller
             ], 422);
         }
 
+        $this->deletePhoto($faceData->photo_path);
         $faceData->delete();
+
         return response()->json(['message' => 'Face data deleted.']);
     }
 
-    // Serve all descriptors to AttendanceStation for matching
+    // The enrolled face picture of one worker.
+    // GET /api/face-data/{id}/photo (HR and Admin only, see routes/api.php)
+    // The browser cannot send the login token from an <img> tag, so the HR page
+    // fetches this with the token and shows the result.
+    public function photo($id)
+    {
+        $path = FaceData::findOrFail($id)->photo_path;
+        $disk = Storage::disk(self::PHOTO_DISK);
+
+        if (! $path || ! $disk->exists($path)) {
+            return response()->json(['message' => 'No picture was saved with this enrollment.'], 404);
+        }
+
+        return $disk->response($path, null, [
+            'Content-Type' => 'image/jpeg',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    // Serve the descriptors to AttendanceStation for matching
     // GET /api/face-descriptors
+    // A deactivated employee's face is left out, so they can no longer time in.
+    // Older enrollments with no employee link are still served.
     public function descriptors()
     {
         return response()->json(
-            FaceData::select('id', 'worker_name', 'role', 'employee_id', 'descriptor')->get()
+            FaceData::select('id', 'worker_name', 'role', 'employee_id', 'descriptor')
+                ->where(fn ($q) => $q->whereNull('employee_id')
+                    ->orWhereHas('employee', fn ($e) => $e->where('is_active', true)))
+                ->get()
         );
     }
 }

@@ -1,10 +1,15 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import laravel from 'laravel-vite-plugin'
 import tailwindcss from '@tailwindcss/vite'
 
+// Only builds the assets of Laravel's own welcome page. The real app is
+// at-ice-frontend; the backend is a JSON API.
 export default defineConfig({
   plugins: [
-    react(),
+    laravel({
+      input: ['resources/css/app.css', 'resources/js/app.js'],
+      refresh: true,
+    }),
     tailwindcss(),
   ],
 })

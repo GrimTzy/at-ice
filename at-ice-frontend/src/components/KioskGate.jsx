@@ -20,6 +20,10 @@ import {
 // still unlocked, so a PIN change locks it again within about a minute.
 const RECHECK_MS = 60 * 1000;
 
+// How many KioskGates are mounted. Used to lock the kiosk when the station is
+// left, without locking it on React StrictMode's dev-only unmount and remount.
+let mountedGates = 0;
+
 export default function KioskGate({ children }) {
   const navigate = useNavigate();
   const goToLogin = () => navigate(LOGIN_PATH);
@@ -30,6 +34,17 @@ export default function KioskGate({ children }) {
   // checking | locked | open | offline. With no saved token it starts as "locked".
   const [lock, setLock] = useState(() => (getKioskToken() ? "checking" : "locked"));
   const [lockRun, setLockRun] = useState(0);
+
+  // Leaving the Attendance Station locks it: the next visit asks for the PIN.
+  useEffect(() => {
+    mountedGates += 1;
+    return () => {
+      mountedGates -= 1;
+      setTimeout(() => {
+        if (mountedGates === 0) clearKioskToken();
+      }, 0);
+    };
+  }, []);
 
   // 1. Device: checked again when the window is resized.
   useEffect(() => {

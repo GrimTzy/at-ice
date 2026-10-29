@@ -8,9 +8,9 @@ class DeliveryItem extends Model
 {
     // Ice product types (same keys as Customer Prices and receipt items)
     public const PRODUCT_TYPES = [
-        'bags'       => 'Bags (5kg)',
+        'bags' => 'Bags (5kg)',
         'small_sack' => 'Small Sack (30kg)',
-        'big_sack'   => 'Big Sack (50kg)',
+        'big_sack' => 'Big Sack (50kg)',
     ];
 
     protected $fillable = [

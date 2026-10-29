@@ -10,17 +10,17 @@ return new class extends Migration
      * Run the migrations.
      */
     public function up(): void
-{
-    Schema::create('inventory_alerts', function (Blueprint $table) {
-        $table->id();
-        $table->foreignId('product_id')->constrained()->onDelete('cascade');
-        $table->enum('alert_type', ['low_stock', 'overstock', 'out_of_stock']);
-        $table->string('message');
-        $table->boolean('is_resolved')->default(false);
-        $table->timestamp('resolved_at')->nullable();
-        $table->timestamps();
-    });
-}
+    {
+        Schema::create('inventory_alerts', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('product_id')->constrained()->onDelete('cascade');
+            $table->enum('alert_type', ['low_stock', 'overstock', 'out_of_stock']);
+            $table->string('message');
+            $table->boolean('is_resolved')->default(false);
+            $table->timestamp('resolved_at')->nullable();
+            $table->timestamps();
+        });
+    }
 
     /**
      * Reverse the migrations.

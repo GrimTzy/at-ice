@@ -40,8 +40,8 @@ class RoleMiddleware
         $knownSubRoles = ['checker', 'salesman', 'maintenance'];
 
         if (count($roles) >= 2 && in_array($roles[1], $knownSubRoles)) {
-            $requiredRole     = $roles[0]; // 'employee'
-            $allowedSubRoles  = array_slice($roles, 1); // ['checker'] or ['checker', 'maintenance'], etc.
+            $requiredRole = $roles[0]; // 'employee'
+            $allowedSubRoles = array_slice($roles, 1); // ['checker'] or ['checker', 'maintenance'], etc.
 
             if ($user->role === $requiredRole && in_array($user->sub_role, $allowedSubRoles)) {
                 return $next($request);

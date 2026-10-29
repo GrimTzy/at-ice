@@ -19,6 +19,7 @@ class InventoryAlertController extends Controller
         }
 
         $alerts = $query->get();
+
         return response()->json($alerts);
     }
 
@@ -27,8 +28,9 @@ class InventoryAlertController extends Controller
         $alert = InventoryAlert::findOrFail($id);
         $alert->update([
             'is_resolved' => true,
-            'resolved_at' => now()
+            'resolved_at' => now(),
         ]);
+
         return response()->json(['message' => 'Alert resolved.']);
     }
 }

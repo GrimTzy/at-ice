@@ -16,22 +16,23 @@ class HrAccountSeeder extends Seeder
      */
     public function run(): void
     {
-        $email    = 'hr@atice.cloud';
-        $password = $this->command->secret('Enter password for ' . $email . ' (min. 8 characters)');
+        $email = 'hr@atice.cloud';
+        $password = $this->command->secret('Enter password for '.$email.' (min. 8 characters)');
 
-        if (!$password || strlen($password) < 8) {
+        if (! $password || strlen($password) < 8) {
             $this->command->error('Password must be at least 8 characters. Nothing was changed.');
+
             return;
         }
 
         $user = User::firstOrNew(['email' => $email]);
         $user->forceFill([
-            'name'     => 'HR Staff',
-            'email'    => $email,
+            'name' => 'HR Staff',
+            'email' => $email,
             'password' => Hash::make($password),
-            'role'     => 'hr',
+            'role' => 'hr',
         ])->save();
 
-        $this->command->info('HR account ready: ' . $email);
+        $this->command->info('HR account ready: '.$email);
     }
 }

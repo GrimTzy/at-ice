@@ -24,7 +24,7 @@ return new class extends Migration
                 'pending',
                 'interviewed',
                 'hired',
-                'rejected'
+                'rejected',
             ])->default('pending');
 
             $table->text('notes')->nullable(); // HR notes about applicant

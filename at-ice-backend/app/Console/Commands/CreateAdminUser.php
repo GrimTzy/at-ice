@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 class CreateAdminUser extends Command
 {
     protected $signature = 'admin:create {email} {--name=Administrator : Display name}';
+
     protected $description = 'Create an admin login (or reset an existing one) and print a one-time password.';
 
     public function handle()
@@ -17,6 +18,7 @@ class CreateAdminUser extends Command
 
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->error("Not a valid email: {$email}");
+
             return self::FAILURE;
         }
 
@@ -28,7 +30,7 @@ class CreateAdminUser extends Command
         );
         $user->forceFill(['is_active' => true])->save();
 
-        $this->info(($user->wasRecentlyCreated ? 'Created' : 'Reset') . " admin {$email}");
+        $this->info(($user->wasRecentlyCreated ? 'Created' : 'Reset')." admin {$email}");
         $this->line("Password: {$password}");
         $this->warn('Change it after first login (Account Settings).');
 

@@ -18,15 +18,18 @@ Internet ─▶ reverse proxy (TLS) ─▶ frontend (nginx :80)
 |------------|----------------------------|-------|
 | `frontend` | `at-ice-frontend/Dockerfile` | Only public service. Domains: `https://www.atice.cloud` (canonical) and `https://atice.cloud` (301 to www). |
 | `backend`  | `at-ice-backend/Dockerfile`  | Runs `migrate --force` and caches config/routes on every start. |
-| `worker`   | same as backend              | Required: broadcast events (attendance, deliveries, low stock, overdue) are queued. |
+| `worker`   | same as backend              | Required: broadcast events and every email are queued. |
+| `scheduler` | same as backend             | Required: `php artisan schedule:work` runs the time-based jobs every minute (driver reassignment and delay notices, missed-Time-Out memos, payroll cut-off notice, archive expiry). |
 | `mysql`    | `mysql:8.4`                  | Must be MySQL; BI queries use `MONTH()`. Data in the `mysql-data` volume. |
 
 ## Environment
 
 All variables are listed in `.env.production.example`. Set them in the hosting
-panel's environment variables for the stack. `VITE_GOOGLE_MAPS_API_KEY` and
-`PUSHER_APP_KEY` are compiled into the frontend, so **redeploy** after changing them.
+panel's environment variables for the stack. `PUSHER_APP_KEY` is compiled into
+the frontend, so **redeploy** after changing it. The maps use OpenStreetMap and
+need no key.
 
+Realtime channels are private: the browser signs each subscription at `POST /api/broadcasting/auth` with its login token (roles in `routes/channels.php`).
 Realtime stays on `BROADCAST_CONNECTION=log` until `PUSHER_APP_ID` and
 `PUSHER_APP_SECRET` are set; then switch it to `pusher`.
 
@@ -53,8 +56,9 @@ mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --trig
 ```
 
 These dumps live on the same server. To survive losing the server, add an S3
-destination in the hosting panel and a storage backup of the `mysql-backups` and
-`public-storage` (delivery photos) volumes.
+destination in the hosting panel and a storage backup of the `mysql-backups`,
+`public-storage` (delivery photos) and `private-storage` (face pictures of
+workers and applicants' resumes, never served by nginx) volumes.
 
 **Restore** (mysql container terminal; overwrites current data):
 

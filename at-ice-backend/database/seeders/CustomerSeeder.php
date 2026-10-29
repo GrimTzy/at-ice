@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Customer;
+use Illuminate\Database\Seeder;
 
 class CustomerSeeder extends Seeder
 {
@@ -44,18 +44,18 @@ class CustomerSeeder extends Seeder
             Customer::updateOrCreate(
                 ['branch_code' => $branch['branch_code']],
                 [
-                    'customer_code'   => 'CUST-ALF-' . str_pad($counter, 3, '0', STR_PAD_LEFT),
-                    'name'            => $branch['name'],
-                    'branch_code'     => $branch['branch_code'],
-                    'address'         => $branch['address'],
-                    'city'            => $branch['city'],
-                    'province'        => $branch['province'],
-                    'contact_person'  => null,
-                    'contact_number'  => null,
-                    'email'           => null,
-                    'mop'             => 'bank_transfer',
-                    'is_active'       => true,
-                    'notes'           => 'Seeded sample — Alfamart branch (J-Maxine downstream network).',
+                    'customer_code' => 'CUST-ALF-'.str_pad($counter, 3, '0', STR_PAD_LEFT),
+                    'name' => $branch['name'],
+                    'branch_code' => $branch['branch_code'],
+                    'address' => $branch['address'],
+                    'city' => $branch['city'],
+                    'province' => $branch['province'],
+                    'contact_person' => null,
+                    'contact_number' => null,
+                    'email' => null,
+                    'mop' => 'bank_transfer',
+                    'is_active' => true,
+                    'notes' => 'Seeded sample — Alfamart branch (J-Maxine downstream network).',
                 ]
             );
             $counter++;
@@ -67,18 +67,18 @@ class CustomerSeeder extends Seeder
             Customer::updateOrCreate(
                 ['branch_code' => $stall['branch_code']],
                 [
-                    'customer_code'   => 'CUST-SM-' . str_pad($counter, 3, '0', STR_PAD_LEFT),
-                    'name'            => $stall['name'],
-                    'branch_code'     => $stall['branch_code'],
-                    'address'         => $stall['address'],
-                    'city'            => 'San Jose del Monte',
-                    'province'        => 'Bulacan',
-                    'contact_person'  => null,
-                    'contact_number'  => null,
-                    'email'           => null,
-                    'mop'             => 'cash',
-                    'is_active'       => true,
-                    'notes'           => 'Seeded sample — SM Mall food stall (Alexandra downstream network).',
+                    'customer_code' => 'CUST-SM-'.str_pad($counter, 3, '0', STR_PAD_LEFT),
+                    'name' => $stall['name'],
+                    'branch_code' => $stall['branch_code'],
+                    'address' => $stall['address'],
+                    'city' => 'San Jose del Monte',
+                    'province' => 'Bulacan',
+                    'contact_person' => null,
+                    'contact_number' => null,
+                    'email' => null,
+                    'mop' => 'cash',
+                    'is_active' => true,
+                    'notes' => 'Seeded sample — SM Mall food stall (Alexandra downstream network).',
                 ]
             );
             $counter++;

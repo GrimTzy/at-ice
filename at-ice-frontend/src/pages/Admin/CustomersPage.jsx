@@ -1,21 +1,45 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { CUSTOMER_TYPES, typeForChain } from "../../lib/customerTypes";
+import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import PhoneInput from "../../components/PhoneInput";
 import { ANY_REGEX, ANY_MESSAGE, localDigits, toStoredPhone } from "../../lib/phone";
+import { SkeletonTableRows } from "../../components/Skeleton";
+import { toast } from "../../lib/toast";
+import { useLiveTick } from "../../lib/live";
+import PinPickerMap from "../../components/PinPickerMap";
+import AddressFields from "../../components/AddressFields";
+import LoginEmailChip from "../../components/LoginEmailChip";
+import DraftHint from "../../components/DraftHint";
+import { useDraft } from "../../lib/useDraft";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import { formatDateShort } from "../../lib/time";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, ProgressRing, StatusBreakdown } from "../../components/Insight";
+import { Icon } from "../../components/icons";
 
 const API_BASE = "/api";
 
 // Icons
-const SearchIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
-const PlusIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
-const KeyIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5" /><path d="M21 2l-9.6 9.6" /><path d="M15.5 7.5l3 3L22 7l-3-3" /></svg>;
-const EditIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>;
-const TrashIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" /></svg>;
-const CopyIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>;
-const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
-const CheckIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>;
+const SearchIcon = () => <Icon name="search" size={14} />;
+const PlusIcon = () => <Icon name="plus" size={14} />;
+const KeyIcon = () => <Icon name="key" size={13} />;
+const EditIcon = () => <Icon name="edit" size={13} />;
+const TrashIcon = () => <Icon name="trash" size={13} />;
+const CopyIcon = () => <Icon name="copy" size={13} />;
+const XIcon = () => <Icon name="x" size={16} />;
+const CheckIcon = () => <Icon name="check" size={14} />;
 
-const MOP_LABELS = { cash: "Cash", gcash: "GCash", check: "Cheque", bank_transfer: "Bank Transfer" };
+// Customer type (filter on the list, sets the reference prices). Keys match
+// Customer::TYPES; lib/customerTypes.js has the same list. There is no chain
+// field (owner, 2026-10-20): the type is filled in from the name (a known
+// chain's group, else Dealers) and Admin may change it.
+
+// Create Login needs what Add Customer requires (CustomerController::LOGIN_REQUIRED).
+// The login is the customer's own email, checked on the server to be an existing account.
+const LOGIN_REQUIRED = { email: "email", contact_person: "contact person", contact_number: "contact number", street: "street", barangay: "barangay", city: "city", province: "province" };
+const missingForLogin = (c) => Object.entries(LOGIN_REQUIRED).filter(([k]) => !String(c[k] ?? "").trim()).map(([, label]) => label);
 
 const POSTAL_REGEX = /^\d{4}$/;
 
@@ -23,11 +47,35 @@ const POSTAL_REGEX = /^\d{4}$/;
 // _legacyAddress is display-only: the old one-line address of an older customer.
 const EMPTY_FORM = {
   name: "", block_lot: "", street: "", subdivision: "", barangay: "",
-  city: "", province: "", postal_code: "", contact_person: "",
-  contact_number: "", email: "", mop: "cash", notes: "",
+  city: "", province: "", region: "", barangay_code: "", postal_code: "", contact_person: "",
+  contact_number: "", email: "", notes: "",
+  customer_type: "",
+  invoice_code: "", // starts every invoice number, e.g. PG-20261013-001 (blank: made from the name)
   latitude: "", longitude: "",
-  _customerCode: "", _branchCode: "", _legacy: false, _legacyAddress: "",
+  _customerCode: "", _branchCode: "", _legacy: false, _legacyAddress: "", _mapLink: "",
 };
+
+// Google Maps link for a pin, shown in Map Link when the pin is dragged.
+const mapLinkFor = (lat, lng) => (lat !== "" && lng !== "" && lat != null && lng != null ? `https://www.google.com/maps?q=${lat},${lng}` : "");
+
+// The address follows the pin or the map link; blanks clear the old spot's
+// values, except city/province, which the map should always know.
+function withAddress(f, a) {
+  if (!a) return f;
+  return {
+    ...f,
+    street: a.street ?? "",
+    subdivision: a.subdivision ?? "",
+    barangay: a.barangay ?? "",
+    // The address dropdowns match these names to the official lists and
+    // fill the region and barangay code back in.
+    barangay_code: "",
+    region: a.province ? "" : f.region,
+    city: a.city || f.city,
+    province: a.province || f.province,
+    postal_code: a.postal_code ?? "",
+  };
+}
 
 // Latitude/longitude place the store's marker on the Driver GPS map.
 // Stores without coordinates are not shown on the map.
@@ -42,16 +90,20 @@ function authHeaders() {
 }
 
 export default function CustomersPage() {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
   const [search, setSearch]       = useState("");
+  const [typeFilter, setTypeFilter]   = useState("");
 
-  const [showForm, setShowForm]   = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm]           = useState(EMPTY_FORM);
+  // Add/Edit modal: kept as a draft while open, so a refresh reopens it as it was.
+  const formDraft = useDraft("customers:form", { showForm: false, editingId: null, form: EMPTY_FORM }, { when: (v) => v.showForm });
+  const { showForm, editingId, form } = formDraft.values;
+  const { showForm: setShowForm, editingId: setEditingId, form: setForm } = formDraft.set;
   const [saving, setSaving]       = useState(false);
   const [formError, setFormError] = useState("");
+  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), [setForm]);
 
   const [deactivateTarget, setDeactivateTarget] = useState(null);
 
@@ -59,6 +111,8 @@ export default function CustomersPage() {
   // once, never re-fetchable afterward (password is hashed server-side).
   const [newAccount, setNewAccount] = useState(null);
   const [creatingAccountFor, setCreatingAccountFor] = useState(null);
+  // Why Create Login failed, shown under that customer's button: { id, message }
+  const [accountError, setAccountError] = useState(null);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -76,7 +130,9 @@ export default function CustomersPage() {
     }
   }, []);
 
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+  // reload when a live notice for this page arrives (lib/live.js)
+  const live = useLiveTick(["customers"]);
+  useEffect(() => { fetchCustomers(); }, [fetchCustomers, live]);
 
   function openAddForm() {
     setEditingId(null);
@@ -95,7 +151,10 @@ export default function CustomersPage() {
       barangay: customer.barangay || "",
       city: customer.city || "",
       province: customer.province || "",
+      region: customer.region || "",
+      barangay_code: customer.barangay_code || "",
       postal_code: customer.postal_code || "",
+      invoice_code: customer.invoice_code || "",
       _customerCode: customer.customer_code || "",
       _branchCode: customer.branch_code || "",
       // Older customers have only the one-line address. Show it as a reference.
@@ -104,10 +163,11 @@ export default function CustomersPage() {
       contact_person: customer.contact_person || "",
       contact_number: localDigits(customer.contact_number),
       email: customer.email || "",
-      mop: customer.mop || "cash",
+      customer_type: customer.customer_type || "",
       notes: customer.notes || "",
       latitude: customer.latitude ?? "",
       longitude: customer.longitude ?? "",
+      _mapLink: mapLinkFor(customer.latitude, customer.longitude),
     });
     setFormError("");
     setShowForm(true);
@@ -120,6 +180,13 @@ export default function CustomersPage() {
     .some((f) => String(form[f] || "").trim() !== "");
   const addressRequired = !form._legacy || addressInUse;
 
+  // Contact Person, Contact Number and Contact Email are required when adding a
+  // customer. When editing, a field is required only if the customer already has a
+  // value in it (so it cannot be emptied). An older customer that never had one can
+  // be saved without it. Whatever is typed into such a field must still be valid.
+  const savedCustomer = editingId ? customers.find((c) => c.id === editingId) : null;
+  const need = (field) => !savedCustomer || !!savedCustomer[field];
+
   async function submitForm(e) {
     e.preventDefault();
     setFormError("");
@@ -128,16 +195,26 @@ export default function CustomersPage() {
     // old number in an odd format stays editable. A changed number must be 9 to 10 digits.
     const savedContact = customers.find((c) => c.id === editingId)?.contact_number ?? "";
     const contactUnchanged = !!savedContact && form.contact_number === localDigits(savedContact);
+    const missingContact = [
+      ["contact_person", "Contact Person", form.contact_person.trim()],
+      ["contact_number", "Contact Number", form.contact_number],
+      ["email", "Contact Email", form.email.trim()],
+    ].filter(([field, , value]) => need(field) && !value).map(([, label]) => label);
+    if (missingContact.length) {
+      setFormError(`${missingContact.join(", ")} ${missingContact.length === 1 ? "is" : "are"} required.`);
+      return;
+    }
     if (form.contact_number && !contactUnchanged && !ANY_REGEX.test(form.contact_number)) {
       setFormError(ANY_MESSAGE);
       return;
     }
-    if (addressRequired) {
+    // City and Province are always required, even on an old customer
+    {
       const missing = [["street", "Street"], ["barangay", "Barangay"], ["city", "City"], ["province", "Province"]]
-        .filter(([f]) => !String(form[f] || "").trim())
+        .filter(([f]) => (addressRequired || f === "city" || f === "province") && !String(form[f] || "").trim())
         .map(([, label]) => label);
       if (missing.length) {
-        setFormError(`${missing.join(", ")} required when an address is filled in.`);
+        setFormError(`${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} required.`);
         return;
       }
     }
@@ -171,15 +248,18 @@ export default function CustomersPage() {
         throw new Error(data?.message || "Failed to save customer.");
       }
       setShowForm(false);
+      toast.success(editingId ? `${form.name || "The customer"}'s details were saved.` : `${data?.name || form.name || "The customer"} was added.`);
       // A new customer gets a portal login with a one-time password. Show it once.
       if (!editingId && data?.login) {
         setNewAccount({
+          customerId: data.id,
           customerName: data.name,
           email: data.login.email,
           password: data.login.password,
           customerCode: data.customer_code,
           branchCode: data.branch_code,
           pinFound: data.pin_found,
+          emailed: data.login.emailed,
         });
       }
       fetchCustomers();
@@ -197,27 +277,29 @@ export default function CustomersPage() {
         method: "DELETE", headers: authHeaders(),
       });
       if (!res.ok) throw new Error("Failed to deactivate customer.");
+      toast.success(`${deactivateTarget.name} was deactivated.`);
       setDeactivateTarget(null);
       fetchCustomers();
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
       setDeactivateTarget(null);
     }
   }
 
   async function createAccount(customer) {
     setCreatingAccountFor(customer.id);
-    setError("");
+    setAccountError(null);
     try {
       const res = await fetch(`${API_BASE}/customers/${customer.id}/create-account`, {
         method: "POST", headers: authHeaders(),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || "Failed to create login account.");
-      setNewAccount({ customerName: customer.name, email: data.email, password: data.password });
+      setNewAccount({ customerName: customer.name, email: data.email, password: data.password, emailed: data.emailed });
+      toast.success(`Login account created for ${customer.name}.`);
       fetchCustomers();
     } catch (err) {
-      setError(err.message);
+      setAccountError({ id: customer.id, message: err.message });
     } finally {
       setCreatingAccountFor(null);
     }
@@ -228,14 +310,59 @@ export default function CustomersPage() {
   }
 
   const filtered = customers.filter((c) => {
+    if (typeFilter && (c.customer_type || "dealer") !== typeFilter) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    const haystack = `${c.name} ${c.customer_code} ${c.branch_code ?? ""} ${c.city ?? ""}`.toLowerCase();
+    const haystack = `${c.name} ${c.invoice_code ?? ""} ${c.customer_code} ${c.branch_code ?? ""} ${c.city ?? ""}`.toLowerCase();
     return haystack.includes(q);
   });
+  const filtering = !!(search || typeFilter);
+  const filterCls = "bg-slate-50 border border-black/[0.09] rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500";
+
+  const pager = usePagination(filtered);
+
+  // Summary for the KPI cards and insight panels
+  const typeCount = (t) => customers.filter((c) => (c.customer_type || "dealer") === t).length;
+  const withLogin = customers.filter((c) => c.user).length;
+  const noPin = customers.filter((c) => c.latitude == null || c.longitude == null);
+  const noContact = customers.filter((c) => !c.contact_person || !c.contact_number);
+  const share = (n) => (customers.length ? n / customers.length : 0);
+  const attention = customers
+    .filter((c) => !c.user || c.latitude == null || c.longitude == null || !c.contact_person)
+    .map((c) => ({
+      id: c.id,
+      title: c.name,
+      meta: [!c.user && "no portal login", (c.latitude == null || c.longitude == null) && "no map pin", !c.contact_person && "no contact person"].filter(Boolean).join(" · "),
+      tone: "amber",
+      icon: "alert",
+    }));
+  const newest = [...customers]
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    .map((c) => ({ id: c.id, title: c.name, meta: `${CUSTOMER_TYPES[c.customer_type || "dealer"]?.label} · ${[c.city, c.province].filter(Boolean).join(", ") || "no address"}`, when: c.created_at ? formatDateShort(c.created_at) : "", tone: "cyan", icon: "store" }));
 
   return (
     <AdminLayout pageTitle="Customers" breadcrumb="CRM / Customers">
+      <KpiGrid cols={5}>
+        <KpiCard label="Customers" icon="store" tone="cyan" value={customers.length} sub={`${withLogin} with a portal login`} bar={share(withLogin)} />
+        {Object.entries(CUSTOMER_TYPES).map(([val, t], i) => (
+          <KpiCard key={val} label={t.label} icon={i === 0 ? "users" : i === 1 ? "store" : "box"} tone={["emerald", "violet", "amber"][i] || "slate"} value={typeCount(val)} sub={`${Math.round(share(typeCount(val)) * 100)}% of customers`} bar={share(typeCount(val))} onClick={() => setTypeFilter(typeFilter === val ? "" : val)} active={typeFilter === val} />
+        ))}
+        <KpiCard label="Needs setup" icon="alert" tone={attention.length ? "rose" : "emerald"} value={attention.length} sub={`${noPin.length} without a map pin · ${noContact.length} without a contact`} bar={share(attention.length)} />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+        <StatusBreakdown
+          title="Customers by type"
+          items={Object.entries(CUSTOMER_TYPES).map(([val, t], i) => ({ key: val, label: t.label, count: typeCount(val), tone: ["emerald", "violet", "amber"][i] || "slate" }))}
+          onPick={(i) => setTypeFilter(typeFilter === i.key ? "" : i.key)}
+          active={typeFilter}
+          empty="No customers yet."
+          footer={<ProgressRing value={share(withLogin)} label="Portal logins" caption={`${withLogin} of ${customers.length} customers can sign in to the portal`} />}
+        />
+        <ActivityFeed title="Needs setup" subtitle="Missing a login, map pin or contact" items={attention} empty="Every customer has a login, a map pin and a contact." max={5} />
+        <ActivityFeed title="Newest customers" items={newest} empty="Customers you add show up here." max={5} />
+      </div>
+
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
           <div>
@@ -244,7 +371,11 @@ export default function CustomersPage() {
               Store branches and their contract details. A portal login is created automatically when you add a customer.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterCls} aria-label="Filter by customer type">
+              <option value="">All types ({customers.length})</option>
+              {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label} ({typeCount(val)})</option>)}
+            </select>
             <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
               <SearchIcon />
               <input
@@ -252,7 +383,7 @@ export default function CustomersPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search customer..."
-                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-44"
+                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
               />
             </div>
             <button
@@ -277,25 +408,25 @@ export default function CustomersPage() {
                 <th className="px-[18px] py-2.5 font-medium">Customer</th>
                 <th className="px-[18px] py-2.5 font-medium">Location</th>
                 <th className="px-[18px] py-2.5 font-medium">Contact</th>
-                <th className="px-[18px] py-2.5 font-medium">MOP</th>
+                <th className="px-[18px] py-2.5 font-medium">Type</th>
                 <th className="px-[18px] py-2.5 font-medium">Portal Login</th>
                 <th className="px-[18px] py-2.5 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={6} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">Loading customers…</td></tr>
+                <SkeletonTableRows cols={6} />
               )}
               {!loading && filtered.length === 0 && (
                 <tr><td colSpan={6} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
-                  {search ? "No customers match your search." : "No customers found."}
+                  {filtering ? "No customers match your search or filters." : "No customers found."}
                 </td></tr>
               )}
-              {!loading && filtered.map((c) => (
+              {!loading && pager.pageItems.map((c) => (
                 <tr key={c.id} className="border-t border-black/[0.06]">
                   <td className="px-[18px] py-2.5">
                     <div className="font-medium text-slate-800">{c.name}</div>
-                    <div className="text-[11px] text-slate-400">{c.customer_code}{c.branch_code ? ` · ${c.branch_code}` : ""}</div>
+                    <div className="text-[11px] text-slate-400">{c.invoice_code && <span className="mr-1 px-1.5 py-px rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-semibold">{c.invoice_code}</span>}{c.customer_code}{c.branch_code ? ` · ${c.branch_code}` : ""}</div>
                   </td>
                   <td className="px-[18px] py-2.5 text-slate-600">
                     {[c.city, c.province].filter(Boolean).join(", ") || <span className="text-slate-300">—</span>}
@@ -311,22 +442,32 @@ export default function CustomersPage() {
                       </>
                     ) : <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="px-[18px] py-2.5 text-slate-600">{MOP_LABELS[c.mop] || c.mop}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600">
+                    {CUSTOMER_TYPES[c.customer_type || "dealer"]?.label}
+                  </td>
                   <td className="px-[18px] py-2.5">
                     {c.user ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-cyan-50 text-cyan-700">
-                        {c.user.email}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => createAccount(c)}
-                        disabled={creatingAccountFor === c.id}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px] disabled:opacity-50"
-                      >
-                        <KeyIcon />
-                        {creatingAccountFor === c.id ? "Creating…" : "Create Login"}
-                      </button>
-                    )}
+                      <LoginEmailChip userId={c.user.id} email={c.user.email} onSaved={fetchCustomers} />
+                    ) : (() => {
+                      const missing = missingForLogin(c);
+                      return (
+                        <div className="create-login mx-auto flex w-full max-w-[190px] flex-col items-center gap-1">
+                          <button
+                            onClick={() => createAccount(c)}
+                            disabled={missing.length > 0 || creatingAccountFor === c.id}
+                            title={missing.length ? `Fill in the ${missing.join(", ")} on Edit first.` : "Create the portal login with this customer's email"}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                          >
+                            <KeyIcon />
+                            {creatingAccountFor === c.id ? "Creating…" : "Create Login"}
+                          </button>
+                          {missing.length > 0 && <MissingBadge missing={missing} />}
+                          {accountError?.id === c.id && (
+                            <div role="alert" className="w-full text-center text-[11px] leading-snug text-red-600">{accountError.message}</div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-[18px] py-2.5">
                     <div className="flex items-center gap-1.5 justify-end">
@@ -337,7 +478,7 @@ export default function CustomersPage() {
                       >
                         <EditIcon />
                       </button>
-                      <button
+                      <button data-no-confirm
                         onClick={() => setDeactivateTarget(c)}
                         className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50"
                         title="Deactivate"
@@ -351,13 +492,15 @@ export default function CustomersPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pager={pager} />
       </div>
 
       {/* Add / Edit Customer modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[85vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          {/* Header and buttons stay put; only the fields scroll. */}
+          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-slate-800">
                 {editingId ? "Edit Customer" : "Add Customer"}
               </h3>
@@ -365,14 +508,56 @@ export default function CustomersPage() {
                 <XIcon />
               </button>
             </div>
-            <form onSubmit={submitForm} className="p-5 flex flex-col gap-3">
+            <form onSubmit={submitForm} className="flex flex-col min-h-0 flex-1">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 flex flex-col gap-3">
+              <DraftHint draft={formDraft} />
               {formError && (
                 <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">
                   {formError}
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Branch / Business Name *" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="e.g. Alfamart Muzon" required />
+                <div className="col-span-2">
+                  <Field
+                    label="Branch / Business Name"
+                    value={form.name}
+                    onChange={(v) => setForm((f) => {
+                      // The type follows the name while it is blank or still
+                      // what was filled in from it (_autoType); one picked by
+                      // hand is kept.
+                      const typeIsAuto = !f.customer_type || f.customer_type === f._autoType;
+                      const type = typeIsAuto ? typeForChain("", v) : f.customer_type;
+                      return { ...f, name: v, customer_type: type, _autoType: typeIsAuto ? type : f._autoType };
+                    })}
+                    placeholder="e.g. Alfamart Muzon"
+                    required
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
+                  <select
+                    value={form.customer_type || "dealer"}
+                    onChange={(e) => setForm((f) => ({ ...f, customer_type: e.target.value }))}
+                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                  >
+                    {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label}</option>)}
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-400 leading-snug">
+                    Filled in from the name. Prices come from this type's reference prices (CRM › Customer Prices) unless the customer has its own.
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <Field
+                    label="Invoice Code"
+                    value={form.invoice_code}
+                    onChange={(v) => setForm((f) => ({ ...f, invoice_code: v.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5) }))}
+                    placeholder={editingId ? "e.g. PG" : "Leave blank to make it from the name"}
+                    required={!!editingId}
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    2 to 5 letters for the company, e.g. PG. Invoices are numbered {(form.invoice_code || "PG")}-{new Date().toISOString().slice(0, 10).replace(/-/g, "")}-001.
+                  </p>
+                </div>
                 {editingId ? (
                   <div className="col-span-2 grid grid-cols-2 gap-3">
                     <Field label="Customer Code" value={form._customerCode} onChange={() => {}} disabled />
@@ -383,23 +568,25 @@ export default function CustomersPage() {
                     Customer Code and Branch Code are generated when you save.
                   </p>
                 )}
-                <Field label="Contact Person" value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" />
+                <Field label="Contact Person" value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required={need("contact_person")} />
                 <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Contact Number</label>
+                  <label className="text-[11px] text-slate-500 mb-1 block">Contact Number{need("contact_number") && <Req />}</label>
                   <PhoneInput
                     value={form.contact_number}
                     onChange={(v) => setForm({ ...form, contact_number: v })}
                     placeholder="9171234567"
+                    required={need("contact_number")}
+                    invalid={form.contact_number.length > 10}
                     className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                   />
                 </div>
                 <div className="col-span-2">
-                  <Field
-                    label={editingId ? "Contact Email" : "Contact Email * (also the portal login)"}
-                    type="email"
+                  <EmailDomainField
+                    label={editingId ? "Contact Email" : "Contact Email (also the portal login)"}
                     value={form.email}
                     onChange={(v) => setForm({ ...form, email: v })}
-                    required={!editingId}
+                    required={need("email")}
+                    savedEmail={editingId ? customers.find((c) => c.id === editingId)?.email || "" : ""}
                   />
                 </div>
 
@@ -409,45 +596,48 @@ export default function CustomersPage() {
                     Saved address (old format): {form._legacyAddress}. Fill in the fields below to replace it.
                   </p>
                 )}
-                <Field label="Block and Lot" value={form.block_lot} onChange={(v) => setForm({ ...form, block_lot: v })} placeholder="e.g. Blk 5 Lot 12" />
-                <Field label={addressRequired ? "Street *" : "Street"} value={form.street} onChange={(v) => setForm({ ...form, street: v })} placeholder="e.g. Quirino Highway" required={addressRequired} />
-                <Field label="Subdivision" value={form.subdivision} onChange={(v) => setForm({ ...form, subdivision: v })} placeholder="e.g. Citrus Subdivision" />
-                <Field label={addressRequired ? "Barangay *" : "Barangay"} value={form.barangay} onChange={(v) => setForm({ ...form, barangay: v })} placeholder="e.g. Muzon" required={addressRequired} />
-                <Field label={addressRequired ? "City *" : "City"} value={form.city} onChange={(v) => setForm({ ...form, city: v })} placeholder="e.g. San Jose del Monte" required={addressRequired} />
-                <Field label={addressRequired ? "Province *" : "Province"} value={form.province} onChange={(v) => setForm({ ...form, province: v })} placeholder="e.g. Bulacan" required={addressRequired} />
-                <Field label="Postal Code" value={form.postal_code} onChange={(v) => setForm({ ...form, postal_code: v.replace(/\D/g, "").slice(0, 4) })} placeholder="e.g. 3023" inputMode="numeric" />
-                <p className="col-span-2 -mt-1 text-[11px] text-slate-400">
-                  The map pin for the Driver GPS map is found automatically from this address.
-                </p>
-                <details className="col-span-2 rounded-md border border-black/[0.09] px-3 py-2">
-                  <summary className="text-[12px] text-slate-600 cursor-pointer">
-                    Adjust map pin (optional){form.latitude !== "" && form.longitude !== "" ? "" : " - no pin saved yet"}
-                  </summary>
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <Field label="Latitude" value={form.latitude} onChange={(v) => setForm({ ...form, latitude: v })} placeholder="e.g. 14.8139" />
-                    <Field label="Longitude" value={form.longitude} onChange={(v) => setForm({ ...form, longitude: v })} placeholder="e.g. 121.0453" />
-                    <p className="col-span-2 text-[11px] text-slate-400">
-                      Only use this if the pin is wrong. In Google Maps, right-click the store and click the coordinates to copy them.
-                    </p>
-                  </div>
-                </details>
-                <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Mode of Payment *</label>
-                  <select
-                    value={form.mop}
-                    onChange={(e) => setForm({ ...form, mop: e.target.value })}
-                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                  >
-                    {Object.entries(MOP_LABELS).map(([val, label]) => (
-                      <option key={val} value={val}>{label}</option>
-                    ))}
-                  </select>
+                <div className="col-span-2">
+                  <MapLinkField
+                    value={form._mapLink}
+                    onChange={(v) => setForm((f) => ({ ...f, _mapLink: v }))}
+                    onPlace={(p) => setForm((f) => ({
+                      ...withAddress(f, p.address),
+                      name: p.name || f.name,
+                      latitude: String(p.latitude),
+                      longitude: String(p.longitude),
+                    }))}
+                    onName={(name) => setForm((f) => ({ ...f, name }))}
+                  />
                 </div>
+                <div className="col-span-2">
+                  <label className="text-[11px] text-slate-500 mb-1 block">Store location on the map</label>
+                  <PinPickerMap
+                    latitude={form.latitude}
+                    longitude={form.longitude}
+                    onChange={(lat, lng) => setForm((f) => ({ ...f, latitude: lat, longitude: lng, _mapLink: mapLinkFor(lat, lng) }))}
+                    onAddress={(a) => setForm((f) => withAddress(f, a))}
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Paste the Google Maps link or drag the map until the pin is on the store; the address fills in by itself. Then click Lock pin. With no pin, it is found from the address when you save.
+                    {form.latitude !== "" && form.longitude !== "" && (
+                      <span className="block mt-0.5 text-slate-500">Pin: {Number(form.latitude).toFixed(6)}, {Number(form.longitude).toFixed(6)}</span>
+                    )}
+                  </p>
+                </div>
+                <AddressFields
+                  value={form}
+                  onChange={handleAddress}
+                  required={addressRequired}
+                  requiredPlaces={["province", "city"]}
+                  inputClassName="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
+                />
                 <div className="col-span-2">
                   <Field label="Notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
                 </div>
               </div>
-              <div className="flex justify-end gap-2 mt-2">
+              </div>
+              <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] bg-white flex items-center justify-end gap-2">
+                <span className="mr-auto text-[11px] text-slate-400"><span className="text-red-500">*</span> Required</span>
                 <button type="button" onClick={() => setShowForm(false)} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 text-[12px]">
                   Cancel
                 </button>
@@ -462,7 +652,7 @@ export default function CustomersPage() {
 
       {/* Deactivate confirmation */}
       {deactivateTarget && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-sm p-5">
             <h3 className="text-[14px] font-semibold text-slate-800 mb-1.5">Deactivate customer?</h3>
             <p className="text-[12px] text-slate-500 mb-4">
@@ -482,11 +672,25 @@ export default function CustomersPage() {
 
       {/* New account credentials — shown once */}
       {newAccount && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-sm p-5">
             <h3 className="text-[14px] font-semibold text-slate-800 mb-1">Login account created</h3>
+            {newAccount.emailed === "sent" ? (
+              <p className="text-[12px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1.5 mb-3">
+                The login details were emailed to <span className="font-medium">{newAccount.email}</span>.
+              </p>
+            ) : (
+              <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5 mb-3">
+                {newAccount.emailed === "off"
+                  ? "Nothing was emailed: email sending is not set up on the server yet (MAIL settings)."
+                  : newAccount.emailed === "no_mailbox"
+                    ? "Nothing was emailed: this login is not a real mailbox."
+                    : "The email could not be sent."}
+                {" "}Copy the details below and give them to the customer directly.
+              </p>
+            )}
             <p className="text-[12px] text-slate-500 mb-4">
-              For <span className="font-medium text-slate-700">{newAccount.customerName}</span>. Copy these credentials now — the password won't be shown again. Give them to the customer directly.
+              For <span className="font-medium text-slate-700">{newAccount.customerName}</span>. The password won't be shown again. If they forget it later, they can use "Forgot password?" on the sign-in page.
             </p>
             {newAccount.customerCode && (
               <p className="text-[11px] text-slate-500 mb-3">
@@ -498,18 +702,26 @@ export default function CustomersPage() {
             </p>
             {newAccount.pinFound === false && (
               <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5 mb-3">
-                No map pin was found for this address. Open the customer and use "Adjust map pin" to set it.
+                No map pin was found for this address. Open the customer and set the pin on the map or paste its Map Link.
               </p>
             )}
             <div className="flex flex-col gap-2 mb-4">
               <CredentialRow label="Email" value={newAccount.email} onCopy={copyToClipboard} />
               <CredentialRow label="Password" value={newAccount.password} onCopy={copyToClipboard} />
             </div>
+            <p className="text-[11px] text-slate-500 mb-3">
+              Next, set this customer's prices. Deliveries need them.
+            </p>
+            {/* Done goes straight to this customer's prices */}
             <button
-              onClick={() => setNewAccount(null)}
+              onClick={() => {
+                const id = newAccount.customerId;
+                setNewAccount(null);
+                if (id) navigate(`/admin/customer-prices?customer=${id}`);
+              }}
               className="w-full px-3.5 py-2 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium flex items-center justify-center gap-1.5"
             >
-              <CheckIcon /> Done
+              <CheckIcon /> Done, set prices
             </button>
           </div>
         </div>
@@ -521,7 +733,7 @@ export default function CustomersPage() {
 function Field({ label, value, onChange, required, disabled, placeholder, inputMode, type = "text" }) {
   return (
     <div>
-      <label className="text-[11px] text-slate-500 mb-1 block">{label}</label>
+      <label className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
       <input
         type={type}
         value={value}
@@ -536,6 +748,153 @@ function Field({ label, value, onChange, required, disabled, placeholder, inputM
   );
 }
 
+// "(14.7772, 121.0750)", "14.7772,121.0750" or "14.7772 121.0750" as a pin.
+const parseCoords = (text) => {
+  const m = text.match(/^\(?\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*\)?$/);
+  if (!m) return null;
+  const lat = Number(m[1]), lng = Number(m[2]);
+  return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 ? { lat, lng } : null;
+};
+
+// Map Link: paste a Google Maps link (e.g. https://maps.app.goo.gl/...) and
+// GET /api/places/from-link reads its pin, place name and address; or paste
+// plain coordinates and GET /api/places/reverse reads the address and the
+// nearest store's name there. onPlace moves the map pin and fills the form;
+// when other stores are at the pin, clicking one sets it as the name (onName).
+// Only typing or pasting here looks it up; the link the map writes back after
+// a drag is not looked up again.
+function MapLinkField({ value, onChange, onPlace, onName }) {
+  const [status, setStatus] = useState({ kind: "", text: "" });
+  const [nearby, setNearby] = useState([]);
+  const timer = useRef(null);
+  const seq = useRef(0);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const resolve = async (url, coords) => {
+    const id = ++seq.current;
+    setNearby([]);
+    setStatus({ kind: "loading", text: coords ? "Reading the coordinates…" : "Reading the link…" });
+    try {
+      const query = coords ? `reverse?lat=${coords.lat}&lng=${coords.lng}&with_name=1` : `from-link?url=${encodeURIComponent(url)}`;
+      const res = await fetch(`${API_BASE}/places/${query}`, { headers: authHeaders() });
+      let data = await res.json().catch(() => null);
+      if (id !== seq.current) return;
+      if (!res.ok) { setStatus({ kind: "error", text: data?.message || "Couldn't read that link." }); return; }
+      if (coords) data = { ...data, latitude: coords.lat, longitude: coords.lng };
+      onPlace(data);
+      setNearby(data.nearby?.length > 1 ? data.nearby : []);
+      setStatus({ kind: "ok", text: `Pin set${data.name ? `: ${data.name}` : data.label ? `: ${data.label}` : ""}` });
+    } catch {
+      if (id === seq.current) setStatus({ kind: "error", text: "Couldn't read that link. Check the connection." });
+    }
+  };
+
+  const typed = (v) => {
+    onChange(v);
+    clearTimeout(timer.current);
+    const url = v.trim();
+    setNearby([]);
+    if (!url) { seq.current++; setStatus({ kind: "", text: "" }); return; }
+    const coords = parseCoords(url);
+    if (!coords && !/goo\.gl|google\./i.test(url)) { setStatus({ kind: "error", text: "Paste a Google Maps link or coordinates, e.g. 14.7772, 121.0750" }); return; }
+    timer.current = setTimeout(() => resolve(url, coords), 500);
+  };
+
+  return (
+    <div>
+      <label className="text-[11px] text-slate-500 mb-1 block">Map Link</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => typed(e.target.value)}
+        placeholder="Google Maps link or coordinates"
+        autoComplete="off"
+        className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+      />
+      <div className={`mt-1 text-[11px] ${status.kind === "error" ? "text-red-600" : status.kind === "ok" ? "text-emerald-600" : "text-slate-400"}`}>
+        {status.text || "In Google Maps, open the store, click Share, then copy the link here. Or paste the coordinates (right-click the spot in Google Maps)."}
+      </div>
+      {nearby.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+          <span>Not this store? Also at this pin:</span>
+          {nearby.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => { onName(n); setStatus({ kind: "ok", text: `Pin set: ${n}` }); }}
+              className="px-2 py-0.5 rounded-full border border-black/[0.09] bg-white hover:border-cyan-500 hover:text-cyan-700"
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A company address is never the customer's own mailbox (the server refuses
+// it too, see App\Rules\ExistingMailbox).
+const COMPANY_DOMAINS = ["atice.cloud", "atice.com"];
+const isCompanyEmail = (value) =>
+  COMPANY_DOMAINS.includes(value.trim().toLowerCase().split("@")[1] || "");
+
+// Contact email input: the customer's own existing email (e.g. Gmail). When
+// the field loses focus, GET /customers/check-email says whether the email
+// account exists, so a typo shows before saving (the server refuses a
+// non-existing account when saving too). `savedEmail` is not checked again.
+function EmailDomainField({ label, value, onChange, required, savedEmail = "" }) {
+  const [check, setCheck] = useState({ email: "", result: "" });
+  const seq = useRef(0);
+
+  const verify = async (email) => {
+    const v = email.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) || v === savedEmail.trim().toLowerCase() || isCompanyEmail(v)) { setCheck({ email: "", result: "" }); return; }
+    const id = ++seq.current;
+    setCheck({ email: v, result: "checking" });
+    try {
+      const res = await fetch(`${API_BASE}/customers/check-email?email=${encodeURIComponent(v)}`, { headers: authHeaders() });
+      const data = await res.json().catch(() => null);
+      if (id === seq.current) setCheck({ email: v, result: res.ok ? data?.result || "unknown" : "unknown" });
+    } catch {
+      if (id === seq.current) setCheck({ email: v, result: "unknown" });
+    }
+  };
+  // An unchanged saved email (an older customer) is left as it is.
+  const companyEmail = isCompanyEmail(value) && value.trim().toLowerCase() !== savedEmail.trim().toLowerCase();
+  const shown = check.email && check.email === value.trim().toLowerCase() ? check.result : "";
+
+  return (
+    <div>
+      <label className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
+      <input
+        type="email"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => verify(value)}
+        required={required}
+        placeholder="name@gmail.com"
+        autoComplete="off"
+        className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+      />
+      {companyEmail && (
+        <div className="mt-1 text-[11px] text-red-600">
+          ✗ Use the customer's own email (e.g. Gmail), not an @atice.cloud address.
+        </div>
+      )}
+      {shown && !companyEmail && (
+        <div className={`mt-1 text-[11px] ${shown === "valid" ? "text-emerald-600" : shown === "invalid" ? "text-red-600" : shown === "checking" ? "text-slate-400" : "text-amber-600"}`}>
+          {shown === "checking" && "Checking that this email account exists…"}
+          {shown === "valid" && "✓ This email account exists."}
+          {shown === "invalid" && "✗ This email account does not exist. Check the spelling. The customer can't be saved with it."}
+          {shown === "unknown" && "This email's provider doesn't say whether the account exists. Double-check the spelling with the customer."}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CredentialRow({ label, value, onCopy }) {
   return (
     <div className="flex items-center justify-between bg-slate-50 border border-black/[0.09] rounded-md px-3 py-2">
@@ -546,6 +905,21 @@ function CredentialRow({ label, value, onCopy }) {
       <button onClick={() => onCopy(value)} className="text-slate-400 hover:text-cyan-600 p-1">
         <CopyIcon />
       </button>
+    </div>
+  );
+}
+
+// Red asterisk on every required field.
+function Req() {
+  return <span className="text-red-500"> *</span>;
+}
+
+// What Create Login still needs, listed under the button.
+function MissingBadge({ missing }) {
+  // Shown right under Create Login (no floating tooltip, so nothing is covered).
+  return (
+    <div role="status" className="w-full text-center text-[11px] leading-snug text-amber-700">
+      Fill in on Edit first: <span className="font-medium">{missing.join(", ")}</span>
     </div>
   );
 }

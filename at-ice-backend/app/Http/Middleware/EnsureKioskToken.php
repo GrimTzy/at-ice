@@ -26,7 +26,7 @@ class EnsureKioskToken
             || $token->pin_version !== $setting->pin_version) {
             return response()->json([
                 'message' => 'This kiosk is locked. An HR security PIN is required.',
-                'code'    => 'kiosk_locked',
+                'code' => 'kiosk_locked',
             ], 403);
         }
 
@@ -34,7 +34,7 @@ class EnsureKioskToken
         if ($token->last_used_at === null || $token->last_used_at->lt(now()->subMinutes(5))) {
             $token->update([
                 'last_used_at' => now(),
-                'expires_at'   => now()->addDays(KioskToken::LIFETIME_DAYS),
+                'expires_at' => now()->addDays(KioskToken::LIFETIME_DAYS),
             ]);
         }
 

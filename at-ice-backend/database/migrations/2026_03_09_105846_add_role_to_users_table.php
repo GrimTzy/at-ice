@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             $table->enum('role', ['admin', 'employee', 'driver', 'customer'])
-                  ->default('customer')
-                  ->after('email');
+                ->default('customer')
+                ->after('email');
             $table->boolean('is_active')->default(true)->after('role');
         });
     }
@@ -22,4 +22,4 @@ return new class extends Migration
             $table->dropColumn(['role', 'is_active']);
         });
     }
-};  
+};

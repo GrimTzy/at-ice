@@ -1,31 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
+import { PinEntry } from "../components/KioskScreens";
+import { RevealButton } from "../components/PasswordInput";
+import { useReveal } from "../lib/useReveal";
 import { clearSession, postLoginPath, saveSession } from "../lib/auth";
+import { isBlockedDevice } from "../lib/kiosk";
 import { takeSessionExpiredNotice } from "../lib/sessionExpiry";
+import { playSplash } from "../lib/splash";
+import { Icon } from "../components/icons";
 
 const MailIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-    <rect x="2" y="4" width="20" height="16" rx="2" /><polyline points="2,4 12,13 22,4" />
-  </svg>
+  <Icon name="mail" size={18} strokeWidth={1.8} />
 );
 const LockIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
+  <Icon name="lockWide" size={18} strokeWidth={1.8} />
 );
-const EyeIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
-  </svg>
-);
-const EyeOffIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-    <line x1="1" y1="1" x2="23" y2="23" />
-  </svg>
-);
+
+const fieldBox =
+  "neu-inset flex items-center gap-3 pl-4 min-h-[48px] rounded-xl focus-within:shadow-[inset_4px_4px_8px_var(--neu-lo),inset_-4px_-4px_8px_var(--neu-hi)] transition-shadow";
+// 16px text stops iOS from zooming the page when the field is focused
+const fieldInput = "flex-1 bg-transparent text-[16px] text-slate-800 placeholder:text-[var(--neu-faint)] outline-none min-w-0 py-3 pr-4";
+
+// Sliding card geometry (px): the least card height (it grows with the
+// sign-in form, e.g. when an error shows, so the peeking Attendance Station
+// panel never covers the form), how far the panel stops from the top when
+// open, and how much of it peeks when closed.
+const CARD_H = 560;
+const KIOSK_TOP = 64;
+const PEEK = 72;
 
 // The one login page for every role. After login the user goes to their own
 // dashboard, chosen by the role and sub_role the API returns.
@@ -33,11 +37,34 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  // the eye button shows or hides the password
+  const [showPassword, revealProps] = useReveal();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   // "Your session expired..." after an API call came back 401 (see lib/sessionExpiry.js)
   const [notice, setNotice] = useState(() => takeSessionExpiredNotice());
+
+  // Sliding card: "login" shows the sign-in form, "kiosk" the Attendance Station PIN.
+  const [mode, setMode] = useState("login");
+  const kiosk = mode === "kiosk";
+  const [kioskBlocked, setKioskBlocked] = useState(false);
+
+  // Bumped on every open so the PIN boxes start empty and take the focus.
+  const [pinRun, setPinRun] = useState(0);
+  const showKiosk = () => {
+    if (kiosk) return;
+    setKioskBlocked(isBlockedDevice());
+    setPinRun((n) => n + 1);
+    setMode("kiosk");
+  };
+  const showLogin = () => setMode("login");
+
+  useEffect(() => {
+    if (!kiosk) return;
+    const onKey = (e) => e.key === "Escape" && setMode("login");
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [kiosk]);
 
   // A user who is already signed in goes straight to their dashboard. The saved
   // token is checked first, so an expired one does not leave them stuck.
@@ -109,6 +136,7 @@ export default function LoginPage() {
       }
 
       saveSession({ ...data, role });
+      playSplash();
       navigate(path, { replace: true });
     } catch {
       setError("Network error. Please check your connection.");
@@ -116,6 +144,19 @@ export default function LoginPage() {
       setLoading(false);
     }
   }
+
+  // The card grows with the sign-in form (an error or notice adds a line)
+  const formLayer = useRef(null);
+  const [cardH, setCardH] = useState(CARD_H);
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = formLayer.current;
+      if (el) setCardH(Math.max(CARD_H, el.scrollHeight + PEEK + 12));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [error, notice, existing]);
 
   if (typeof existing === "string") return <Navigate to={existing} replace />;
   if (existing === null) {
@@ -134,28 +175,48 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-md px-4 py-8 sm:py-10">
         {/* Brand */}
         <div className="flex flex-col items-center mb-6 sm:mb-8 text-center">
-          <div className="w-16 h-16 bg-white/10 border border-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center overflow-hidden shadow-lg">
-            <img src={logo} alt="Bella Erin logo" className="w-full h-full object-contain p-2" />
+          <div className="brand-logo w-20 h-20 bg-white/10 border border-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center overflow-hidden shadow-lg">
+            <img src={logo} alt="AT-ICE logo" className="w-full h-full object-contain p-2" />
           </div>
           <div className="text-[26px] font-semibold text-white tracking-wide leading-none mt-3">Bella Erin</div>
           <div className="text-[11px] text-cyan-400/80 tracking-[0.2em] uppercase mt-1.5">AT-ICE ERP</div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl shadow-black/30 overflow-hidden">
-          <div className="px-5 sm:px-8 pt-6 sm:pt-7 pb-4 sm:pb-5 border-b border-black/[0.06]">
-            <h1 className="text-[18px] font-semibold text-slate-800 leading-tight">Sign in to your account</h1>
-            <p className="text-[13px] text-slate-400 mt-1">Use the email and password given to you.</p>
-          </div>
+        {/* Sliding card (idea from Nazia-99/Sliding-Login-Form). The sign-in form
+            is the base layer; the Attendance Station panel lies over it and
+            peeks from the bottom. Clicking its title slides it up over the form
+            and shows the HR PIN; clicking "Login" (or Esc, or Cancel) slides it
+            back down. Only transform and opacity animate. */}
+        <div className="relative rounded-[28px] overflow-clip shadow-2xl shadow-black/40 bg-[var(--neu-bg)]"
+          style={{ height: cardH }}>
+          {/* Base layer: sign in */}
+          <div ref={formLayer} className="absolute inset-x-0 top-0 flex flex-col px-5 sm:px-8">
+            <button
+              type="button"
+              onClick={showLogin}
+              tabIndex={kiosk ? 0 : -1}
+              aria-label={kiosk ? "Back to Login" : undefined}
+              className={`slide-title self-center mt-6 text-[34px] font-bold text-[var(--neu-accent)] tracking-wide cursor-pointer transition-transform duration-500 ease-in-out ${kiosk ? "scale-[0.6] hover:text-cyan-600" : "scale-100 cursor-default"}`}
+            >
+              Login
+            </button>
 
-          <div className="px-5 sm:px-8 py-5 sm:py-6">
+            <div
+              inert={kiosk}
+              className={`transition-opacity duration-500 ${kiosk ? "opacity-0" : "opacity-100 delay-200"}`}
+            >
+              <div className="text-center mt-1 mb-5">
+                <h1 className="text-[16px] font-semibold text-slate-800 leading-tight">Sign in to your account</h1>
+                <p className="text-[13px] text-[var(--neu-muted)] mt-1">Use the email and password given to you.</p>
+              </div>
+
             <form onSubmit={handleLogin} className="flex flex-col gap-4" noValidate>
               <div className="flex flex-col gap-2">
-                <label htmlFor="login-email" className="text-[11px] font-medium text-slate-500 tracking-widest uppercase">
+                <label htmlFor="login-email" className="text-[11px] font-semibold text-[var(--neu-muted)] tracking-widest uppercase">
                   Email Address
                 </label>
-                <div className="flex items-center gap-3 px-4 min-h-[48px] border border-black/[0.12] rounded-xl bg-slate-50 focus-within:border-cyan-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-cyan-500/10 transition-all">
-                  <span className="text-slate-400 flex-shrink-0"><MailIcon /></span>
-                  {/* 16px text stops iOS from zooming the page when the field is focused */}
+                <div className={fieldBox}>
+                  <span className="text-[var(--neu-faint)] flex-shrink-0"><MailIcon /></span>
                   <input
                     id="login-email"
                     type="email"
@@ -168,17 +229,17 @@ export default function LoginPage() {
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
-                    className="flex-1 bg-transparent text-[16px] text-slate-800 placeholder-slate-400 outline-none min-w-0 py-3"
+                    className={fieldInput}
                   />
                 </div>
               </div>
 
               <div className="flex flex-col gap-2">
-                <label htmlFor="login-password" className="text-[11px] font-medium text-slate-500 tracking-widest uppercase">
+                <label htmlFor="login-password" className="text-[11px] font-semibold text-[var(--neu-muted)] tracking-widest uppercase">
                   Password
                 </label>
-                <div className="flex items-center gap-3 pl-4 pr-1 min-h-[48px] border border-black/[0.12] rounded-xl bg-slate-50 focus-within:border-cyan-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-cyan-500/10 transition-all">
-                  <span className="text-slate-400 flex-shrink-0"><LockIcon /></span>
+                <div className={`${fieldBox} pr-1`}>
+                  <span className="text-[var(--neu-faint)] flex-shrink-0"><LockIcon /></span>
                   <input
                     id="login-password"
                     type={showPassword ? "text" : "password"}
@@ -190,27 +251,23 @@ export default function LoginPage() {
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
-                    className="flex-1 bg-transparent text-[16px] text-slate-800 placeholder-slate-400 outline-none min-w-0 py-3"
+                    className={fieldInput}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    className="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0 w-11 h-11 flex items-center justify-center cursor-pointer"
-                  >
-                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                  </button>
+                  <RevealButton revealed={showPassword} buttonProps={revealProps} className="w-11 h-11 !text-[var(--neu-faint)] hover:!text-slate-700" />
                 </div>
+                <Link to="/forgot-password" className="self-end text-[13px] font-medium text-[var(--neu-accent)] hover:underline">
+                  Forgot password?
+                </Link>
               </div>
 
               {notice && !error && (
-                <div role="status" className="text-[13px] text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-center">
+                <div role="status" className="text-[13px] text-amber-800 bg-amber-100/70 border border-amber-300/60 rounded-xl px-4 py-3 text-center">
                   {notice}
                 </div>
               )}
 
               {error && (
-                <div role="alert" className="text-[13px] text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center">
+                <div role="alert" className="text-[13px] text-red-700 bg-red-100/70 border border-red-300/60 rounded-xl px-4 py-3 text-center">
                   {error}
                 </div>
               )}
@@ -218,11 +275,11 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-1 w-full min-h-[48px] py-3 bg-cyan-500 hover:bg-cyan-600 active:bg-cyan-700 text-white text-[16px] font-semibold rounded-xl transition-colors duration-150 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-cyan-500/25"
+                className="mt-1 w-full min-h-[48px] py-3 bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-slate-900 text-[16px] font-semibold rounded-xl transition-[background-color,box-shadow] duration-150 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-[5px_5px_12px_var(--neu-lo),-5px_-5px_12px_var(--neu-hi)] active:shadow-[inset_3px_3px_6px_rgba(8,51,68,0.45),inset_-3px_-3px_6px_rgba(255,255,255,0.2)]"
               >
                 {loading ? (
                   <>
-                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    <span className="w-4 h-4 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin" />
                     Signing in…
                   </>
                 ) : (
@@ -231,14 +288,61 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <p className="text-center text-[12px] text-slate-400 mt-5">
+            <p className="text-center text-[12px] text-[var(--neu-muted)] mt-5">
               Having trouble signing in? Contact the Admin or HR.
             </p>
+            </div>
+          </div>
 
-            <div className="mt-4 pt-4 border-t border-black/[0.06] text-center">
-              <Link to="/attendance-station" className="text-[12px] text-cyan-600 hover:text-cyan-700 underline-offset-2 hover:underline">
-                Open Attendance Station (Kiosk Terminal)
-              </Link>
+          {/* Sliding layer: Attendance Station */}
+          <div
+            className="neu-dark absolute inset-x-0 top-0 bg-[var(--neu-bg)] shadow-[0_-10px_24px_rgba(163,177,198,0.55)] transition-transform duration-[800ms] ease-in-out"
+            style={{
+              height: cardH - KIOSK_TOP,
+              // Curved top only, so no light corners show at the bottom of the card
+              borderRadius: "60% 60% 0 0 / 56px 56px 0 0",
+              transform: `translateY(${kiosk ? KIOSK_TOP : cardH - PEEK}px)`,
+            }}
+          >
+            <button
+              type="button"
+              onClick={showKiosk}
+              tabIndex={kiosk ? -1 : 0}
+              className={`slide-title block mx-auto mt-3.5 text-[32px] font-bold text-white tracking-wide transition-transform duration-500 ease-in-out ${kiosk ? "scale-100 cursor-default" : "scale-[0.6] cursor-pointer hover:text-cyan-200"}`}
+            >
+              Attendance Station
+            </button>
+
+            <div
+              inert={!kiosk}
+              className={`px-6 sm:px-10 pt-3 pb-5 text-center transition-opacity duration-500 ${kiosk ? "opacity-100 delay-300" : "opacity-0"}`}
+            >
+              <div className={`neu-raised-sm mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ${kioskBlocked ? "text-amber-300" : "text-cyan-300"}`}>
+                <LockIcon />
+              </div>
+              {kioskBlocked ? (
+                <>
+                  <h2 className="mt-4 text-[19px] font-semibold text-white">Access Restricted</h2>
+                  <p className="mt-2 text-[13px] leading-relaxed text-[var(--neu-muted)]">
+                    The Attendance Station can only be opened on a dedicated desktop terminal or kiosk station.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="mt-4 text-[19px] font-semibold text-white">HR Authorization Required</h2>
+                  <p className="mt-2 mb-6 text-[13px] leading-relaxed text-[var(--neu-muted)]">
+                    Enter the 4-digit HR security PIN to unlock and launch the Attendance Station.
+                  </p>
+                  <PinEntry key={pinRun} onUnlocked={() => navigate("/attendance-station")} />
+                </>
+              )}
+              <button
+                type="button"
+                onClick={showLogin}
+                className="neu-raised-sm mt-5 w-full min-h-[44px] rounded-xl text-slate-200 hover:text-white active:shadow-[var(--neu-inset-sm)] text-[14px] font-medium cursor-pointer"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

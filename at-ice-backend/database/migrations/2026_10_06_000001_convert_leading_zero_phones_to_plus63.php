@@ -31,13 +31,13 @@ return new class extends Migration
                 ->chunkById(200, function ($rows) use ($table, $column) {
                     foreach ($rows as $row) {
                         $old = $row->{$column};
-                        $new = '+63' . substr($old, 1);
+                        $new = '+63'.substr($old, 1);
 
                         DB::table($table)->where('id', $row->id)->update([$column => $new]);
 
                         $saved = DB::table($table)->where('id', $row->id)->value($column);
                         if ($saved !== $new
-                            || preg_replace('/\D/', '', $saved) !== '63' . substr(preg_replace('/\D/', '', $old), 1)) {
+                            || preg_replace('/\D/', '', $saved) !== '63'.substr(preg_replace('/\D/', '', $old), 1)) {
                             throw new RuntimeException(
                                 "Phone conversion changed a digit in {$table}.{$column} id {$row->id}: '{$old}' became '{$saved}'."
                             );
@@ -59,7 +59,7 @@ return new class extends Migration
                     foreach ($rows as $row) {
                         DB::table($table)
                             ->where('id', $row->id)
-                            ->update([$column => '0' . substr($row->{$column}, 3)]);
+                            ->update([$column => '0'.substr($row->{$column}, 3)]);
                     }
                 });
         }

@@ -12,7 +12,6 @@ services:
       args:
         VITE_PUSHER_APP_KEY: ${PUSHER_APP_KEY}
         VITE_PUSHER_APP_CLUSTER: ${PUSHER_APP_CLUSTER:-ap1}
-        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
         VITE_BACKEND_URL: ${APP_URL:-https://www.atice.cloud}
     volumes:
       - public-storage:/srv/storage:ro
@@ -53,10 +52,21 @@ services:
       CORS_ALLOWED_ORIGINS: ${APP_URL:-https://www.atice.cloud}
       SANCTUM_EXPIRATION: "1440"
       GROQ_API_KEY: ${GROQ_API_KEY}
-      MAIL_MAILER: log
+      # Customer login emails and "Forgot password?" codes. "log" (default)
+      # only writes them to the log; set the SMTP values to really send.
+      MAIL_MAILER: ${MAIL_MAILER:-log}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@atice.cloud}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-AT Ice}
+      EMAIL_VERIFY_API_KEY: ${EMAIL_VERIFY_API_KEY:-}
       RUN_MIGRATIONS: "true"
     volumes:
       - public-storage:/var/www/html/storage/app/public
+      # Private files that nginx must never serve (face pictures, applicants' resumes). Back it up too.
+      - private-storage:/var/www/html/storage/app/private
     depends_on:
       mysql:
         condition: service_healthy
@@ -71,6 +81,19 @@ services:
   worker:
     build: ./at-ice-backend
     command: ["php", "artisan", "queue:work", "--tries=3", "--backoff=5", "--sleep=3", "--max-time=3600"]
+    environment:
+      <<: *laravel-env
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Time-based jobs every minute (routes/console.php): driver reassignment and
+  # delay notices, missed-Time-Out memos, payroll cut-off notice, archive expiry.
+  scheduler:
+    build: ./at-ice-backend
+    command: ["php", "artisan", "schedule:work"]
     environment:
       <<: *laravel-env
       RUN_MIGRATIONS: "false"
@@ -100,5 +123,6 @@ services:
 
 volumes:
   public-storage:
+  private-storage:
   mysql-data:
   mysql-backups:

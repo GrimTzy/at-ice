@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { LOGIN_PATH, homePathFor } from "../lib/auth";
+import { CHANGE_PASSWORD_PATH, LOGIN_PATH, homePathFor } from "../lib/auth";
 
 export default function ProtectedRoute({
   children,
@@ -16,14 +16,13 @@ export default function ProtectedRoute({
     return <Navigate to={LOGIN_PATH} replace state={{ from: location }} />;
   }
 
-  // New customer accounts must change their one-time password first.
+  // New accounts (any role) must change their one-time password first.
   // (The server blocks their API calls until they do.)
   if (
-    role === "customer" &&
     localStorage.getItem("must_change_password") === "1" &&
-    location.pathname !== "/customer/change-password"
+    location.pathname !== CHANGE_PASSWORD_PATH
   ) {
-    return <Navigate to="/customer/change-password" replace />;
+    return <Navigate to={CHANGE_PASSWORD_PATH} replace />;
   }
 
   // A signed-in user who opens another role's page goes back to their own dashboard.

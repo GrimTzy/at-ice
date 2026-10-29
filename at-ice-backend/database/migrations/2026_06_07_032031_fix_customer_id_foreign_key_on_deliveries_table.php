@@ -14,9 +14,9 @@ return new class extends Migration
 
             // Re-add pointing to customers table
             $table->foreign('customer_id')
-                  ->references('id')
-                  ->on('customers')
-                  ->nullOnDelete();
+                ->references('id')
+                ->on('customers')
+                ->nullOnDelete();
         });
     }
 
@@ -26,9 +26,9 @@ return new class extends Migration
             $table->dropForeign(['customer_id']);
 
             $table->foreign('customer_id')
-                  ->references('id')
-                  ->on('users')
-                  ->nullOnDelete();
+                ->references('id')
+                ->on('users')
+                ->nullOnDelete();
         });
     }
 };

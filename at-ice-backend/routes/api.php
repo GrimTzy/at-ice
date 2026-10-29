@@ -1,31 +1,50 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\EmployeeController;
-use App\Http\Controllers\EmployeePerformanceController;
+use App\Http\Controllers\AccountController;
+use App\Http\Controllers\ApplicantController;
 use App\Http\Controllers\AttendanceController;
-use App\Http\Controllers\LeaveRequestController;
-use App\Http\Controllers\PayrollController;
-use App\Http\Controllers\ProductController;
-use App\Http\Controllers\StockMovementController;
-use App\Http\Controllers\InventoryAlertController;
-use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BiController;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerPortalController;
+use App\Http\Controllers\CustomerPriceController;
+use App\Http\Controllers\DeliveryAdjustmentRequestController;
+use App\Http\Controllers\DeliveryContractController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DeliveryProofController;
-use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\OrderController;
-use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\ReceiptController;
-use App\Http\Controllers\ApplicantController;
-use App\Http\Controllers\BiController;
+use App\Http\Controllers\DeliveryRouteController;
+use App\Http\Controllers\DocumentScanController;
+use App\Http\Controllers\DriverAssignmentController;
+use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeDocumentController;
+use App\Http\Controllers\EmployeeMemoController;
 use App\Http\Controllers\FaceDataController;
-use App\Http\Controllers\CustomerPriceController;
-use App\Http\Controllers\PickupLogController;
+use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\IceLoadingController;
-use App\Http\Controllers\StockOutRequestController;
-use App\Http\Controllers\CustomerPortalController;
+use App\Http\Controllers\InventoryAlertController;
 use App\Http\Controllers\KioskController;
+use App\Http\Controllers\LeaveRequestController;
+use App\Http\Controllers\LiveFeedController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PaymentProofController;
+use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PerformanceController;
+use App\Http\Controllers\PickupLogController;
+use App\Http\Controllers\PlaceSearchController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\PublicApplicationController;
+use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\RetentionController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\StockMovementController;
+use App\Http\Controllers\StockOutRequestController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\SupportMessageController;
+use App\Http\Controllers\TimesheetController;
+use Illuminate\Support\Facades\Route;
 
 // RATE LIMITS
 // throttle:max,minutes,name. Each limit has its own name so the counters
@@ -35,87 +54,193 @@ use App\Http\Controllers\KioskController;
 //   api:   120 per minute per logged-in user (all protected routes)
 // A blocked request gets HTTP 429 "Too Many Attempts."
 
-//Public
+// Public
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1,login');
+
+// Forgot password: email a 6-digit code, then set a new password with it.
+// 3 code emails and 10 reset tries per minute per IP.
+Route::post('/forgot-password', [PasswordResetController::class, 'sendCode'])->middleware('throttle:3,1,forgot-password');
+Route::post('/verify-reset-code', [PasswordResetController::class, 'verifyCode'])->middleware('throttle:10,1,reset-password');
+Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:10,1,reset-password');
 
 // Attendance Station kiosk. It has no user login. A device is unlocked with the
 // HR security PIN (POST kiosk/unlock) and then sends the kiosk token it gets in
-// the X-Kiosk-Token header. The unlock route is public but has its own lockout
-// (see KioskLockout). The two data routes below need the kiosk token.
+// the X-Kiosk-Token header. The unlock route is public, but each kiosk (its own
+// device_id) is locked after too many wrong PINs until Admin types the override
+// PIN on it (App\Models\KioskDevice). The data routes below need the kiosk token.
 Route::post('kiosk/unlock', [KioskController::class, 'unlock'])->middleware('throttle:30,1,kiosk-unlock');
+Route::get('kiosk/lock-state', [KioskController::class, 'lockState'])->middleware('throttle:60,1,kiosk-unlock');
+Route::post('kiosk/override', [KioskController::class, 'override'])->middleware('throttle:10,1,kiosk-override');
 Route::get('kiosk/status', [KioskController::class, 'status'])->middleware(['kiosk', 'throttle:60,1,kiosk']);
 
 // Face Descriptors: kiosk token required
 Route::get('face-descriptors', [FaceDataController::class, 'descriptors'])->middleware(['kiosk', 'throttle:30,1,kiosk']);
 
+// Public job application form (/apply, from the QR code in HRIS > Interviews)
+Route::post('apply', [PublicApplicationController::class, 'store'])->middleware('throttle:20,10,apply');
+
 // Attendance recording: kiosk token required
 Route::post('attendances', [AttendanceController::class, 'store'])->middleware(['kiosk', 'throttle:30,1,kiosk']);
 
-//Protected
+// Protected
+// Live feed (realtime pop-up notices, polled every few seconds by every open
+// page; see App\Support\LiveFeed). Own limit so polling never eats the api one.
+Route::get('live-feed', [LiveFeedController::class, 'index'])
+    ->middleware(['auth:sanctum', 'password.changed', 'throttle:40,1,live']);
+
 Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/me',      [AuthController::class, 'me']);
+    Route::get('/me', [AuthController::class, 'me']);
+    // Whether the signed-in employee or Driver has timed in at the kiosk
+    // (Checker, Salesman, Maintenance and Driver pages).
+    Route::get('my-time-in', fn (\Illuminate\Http\Request $request) => response()->json([
+        'timed_in' => \App\Support\OnShift::isTimedIn($request->user()),
+    ]));
+
+    // Limits the forms share with the server (config/atice.php)
+    Route::get('/limits', fn () => response()->json(['max_product_quantity' => config('atice.max_product_quantity')]));
 
     // Change own password (all roles). Throttled: 5 attempts per minute.
     Route::put('/change-password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
-    Route::post('/logout-others',  [AuthController::class, 'logoutOthers'])->middleware('throttle:5,1');
+    Route::post('/logout-others', [AuthController::class, 'logoutOthers'])->middleware('throttle:5,1');
 
-     // The controller looks up the Employee row from employees.user_id.
-    Route::get('my-leave-requests',         [LeaveRequestController::class, 'myIndex']);
-    Route::post('my-leave-requests',        [LeaveRequestController::class, 'myStore']);
+    // The controller looks up the Employee row from employees.user_id.
+    Route::get('my-leave-requests', [LeaveRequestController::class, 'myIndex']);
+    Route::get('my-leave-credits', [LeaveRequestController::class, 'myCredits']);
+    Route::get('my-leave-requests/{id}/attachment', [LeaveRequestController::class, 'myAttachment']);
+    Route::post('my-leave-requests', [LeaveRequestController::class, 'myStore']);
     Route::delete('my-leave-requests/{id}', [LeaveRequestController::class, 'myDestroy']);
+
+    // Disciplinary memos HR sent to this employee (read, acknowledge, open files).
+    Route::get('my-memos', [EmployeeMemoController::class, 'myIndex']);
+    Route::post('my-memos/{memo}/acknowledge', [EmployeeMemoController::class, 'acknowledge']);
+    Route::get('my-memos/{memo}/files/{file}', [EmployeeMemoController::class, 'myFile']);
+
+    // Login fixes by a role higher up (Admin: HR/employee/driver/customer; HR:
+    // employee/driver): change a wrong login email. The controller checks the roles.
+    Route::put('accounts/{user}/email', [AccountController::class, 'updateEmail'])
+        ->middleware(['role:hr', 'throttle:20,1,account-email']);
 
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
+        // Performance appraisals: draft ratings from the records, Admin overrides and publishes
+        Route::get('performance', [PerformanceController::class, 'index']);
+        Route::put('performance/{employee}', [PerformanceController::class, 'update']);
+
+        // Rates and rules (AppSupportSettings) and the audit log
+        Route::get('settings', [SettingsController::class, 'index']);
+        Route::put('settings', [SettingsController::class, 'update']);
+        Route::get('audit-logs', [SettingsController::class, 'auditLogs']);
+        // Holiday and overtime pay rates (dated)
+        Route::get('pay-multipliers', [SettingsController::class, 'multipliers']);
+        Route::post('pay-multipliers', [SettingsController::class, 'setMultiplier']);
+
+        // Records past the retention period: Admin keeps or deletes each (never automatic)
+        Route::get('retention-review', [RetentionController::class, 'index']);
+        Route::post('retention-review/keep', [RetentionController::class, 'keep']);
+        Route::post('retention-review/delete', [RetentionController::class, 'delete']);
+        Route::post('retention-review/anonymize', [RetentionController::class, 'anonymize']);
+
+        // Kiosk: the Admin override PIN that unlocks a locked kiosk, and the attempt log
+        Route::put('admin/kiosk-override-pin', [KioskController::class, 'setAdminPin'])->middleware('throttle:5,1,kiosk-pin-change');
+        Route::get('admin/kiosk-attempts', [KioskController::class, 'attempts']);
+
+        // Add Customer: map pin lookups (OpenStreetMap) to fill the address
+        Route::get('places/from-link', [PlaceSearchController::class, 'fromLink'])->middleware('throttle:30,1');
+        Route::get('places/reverse', [PlaceSearchController::class, 'reverse'])->middleware('throttle:40,1,places-reverse');
 
         // Employees: READ ONLY overview for Admin (Name/Position/Role/Shift
         // only, per team decision). Reuses EmployeeController@index() so
         // both Admin's and HR's employee lists stay in sync automatically,
-        // same filtered dataset, different route/gate. Full CRUD, Payroll,
-        // and Performance are HR-only, see role:hr group below.
+        // same filtered dataset, different route/gate. Full CRUD and Payroll
+        // are HR-only, see role:hr group below.
         Route::get('employees-summary', [EmployeeController::class, 'index']);
 
         // Delivery Management (Admin assigns deliveries)
-        Route::get('deliveries',             [DeliveryController::class, 'index']);
-        Route::post('deliveries',            [DeliveryController::class, 'store']);
-        Route::get('deliveries/{id}',        [DeliveryController::class, 'show']);
+        Route::get('deliveries', [DeliveryController::class, 'index']);
+        Route::get('deliveries/driver-availability', [DeliveryController::class, 'driverAvailability']);
+        // Driver View / Store View for one day (?date=)
+        Route::get('deliveries/board', [DeliveryController::class, 'board']);
+        Route::post('deliveries', [DeliveryController::class, 'store']);
+        // Same-day changes (App\Support\DeliveryAdjust): top-up, add/reduce sacks on one delivery
+        // Stores' requests to change the sacks on one delivery: Admin applies or declines
+        Route::get('delivery-adjustment-requests', [DeliveryAdjustmentRequestController::class, 'index']);
+        Route::post('delivery-adjustment-requests/{id}/apply', [DeliveryAdjustmentRequestController::class, 'apply']);
+        Route::post('delivery-adjustment-requests/{id}/decline', [DeliveryAdjustmentRequestController::class, 'decline']);
+        Route::get('deliveries/{id}', [DeliveryController::class, 'show']);
+        Route::put('deliveries/{id}', [DeliveryController::class, 'update']);
         Route::put('deliveries/{id}/cancel', [DeliveryController::class, 'cancel']);
-        
+        Route::post('deliveries/{id}/top-up', [DeliveryController::class, 'topUp']);
+        Route::post('deliveries/{id}/adjust', [DeliveryController::class, 'adjust']);
+
+        // Delivery contracts: Admin approves, the daily deliveries are generated
+        Route::get('delivery-contracts', [DeliveryContractController::class, 'index']);
+        Route::post('delivery-contracts', [DeliveryContractController::class, 'store']);
+        Route::post('delivery-contracts/{id}/approve', [DeliveryContractController::class, 'approve']);
+        Route::post('delivery-contracts/{id}/cancel', [DeliveryContractController::class, 'cancel']);
+
+        // Which Driver handles which stores, and Drivers who are off (reassigned at random)
+        Route::get('driver-store-assignments', [DriverAssignmentController::class, 'index']);
+        Route::post('driver-store-assignments', [DriverAssignmentController::class, 'store']);
+        Route::delete('driver-store-assignments/{id}', [DriverAssignmentController::class, 'destroy']);
+
         Route::get('products-summary', [ProductController::class, 'index']);
 
         // Delivery Proofs (Admin views)
-        Route::get('delivery-proofs',        [DeliveryProofController::class, 'index']);
-        Route::get('delivery-proofs/{id}',   [DeliveryProofController::class, 'show']);
+        Route::get('delivery-proofs', [DeliveryProofController::class, 'index']);
+        Route::get('delivery-proofs/{id}', [DeliveryProofController::class, 'show']);
 
         // Receipts (Admin views + manages)
-        Route::get('receipts/overdue',       [ReceiptController::class, 'overdue']);
-        Route::get('receipts/summary',       [ReceiptController::class, 'summary']);
-        Route::get('receipts',               [ReceiptController::class, 'index']);
-        Route::get('receipts/{id}',          [ReceiptController::class, 'show']);
-        Route::patch('receipts/{id}/paid',   [ReceiptController::class, 'markAsPaid']);
+        Route::get('receipts/overdue', [ReceiptController::class, 'overdue']);
+        Route::get('receipts/summary', [ReceiptController::class, 'summary']);
+        Route::get('receipts', [ReceiptController::class, 'index']);
+        Route::get('receipts/{id}', [ReceiptController::class, 'show']);
+        Route::patch('receipts/{id}/paid', [ReceiptController::class, 'markAsPaid']);
+
+        // Customer payment proofs: Admin opens the file, then approves (invoice paid) or rejects
+        Route::get('payment-proofs', [PaymentProofController::class, 'index']);
+        Route::get('payment-proofs/{id}/file', [PaymentProofController::class, 'file']);
+        Route::patch('payment-proofs/{id}/approve', [PaymentProofController::class, 'approve']);
+        Route::patch('payment-proofs/{id}/reject', [PaymentProofController::class, 'reject']);
 
         // CRM
-        Route::get('customers',              [CustomerController::class, 'index']);
-        Route::post('customers',             [CustomerController::class, 'store']);
-        Route::get('customers/{id}',         [CustomerController::class, 'show']);
-        Route::put('customers/{id}',         [CustomerController::class, 'update']);
-        Route::delete('customers/{id}',      [CustomerController::class, 'destroy']);
+        Route::get('customers', [CustomerController::class, 'index']);
+        Route::get('customers/check-email', [CustomerController::class, 'checkEmail'])->middleware('throttle:30,1,check-email');
+        Route::get('customers/invoice-code', [CustomerController::class, 'suggestInvoiceCode']);
+        Route::post('customers', [CustomerController::class, 'store']);
+        Route::get('customers/{id}', [CustomerController::class, 'show']);
+        Route::put('customers/{id}', [CustomerController::class, 'update']);
+        Route::delete('customers/{id}', [CustomerController::class, 'destroy']);
         Route::post('customers/{id}/create-account', [CustomerController::class, 'createAccount']);
 
-        Route::get('orders',                 [OrderController::class, 'index']);
-        Route::post('orders',                [OrderController::class, 'store']);
-        Route::get('orders/{id}',            [OrderController::class, 'show']);
-        Route::put('orders/{id}/status',     [OrderController::class, 'updateStatus']);
-        Route::put('orders/{id}/cancel',     [OrderController::class, 'cancel']);
+        Route::get('orders', [OrderController::class, 'index']);
+        Route::post('orders', [OrderController::class, 'store']);
+        Route::get('orders/{id}', [OrderController::class, 'show']);
+        Route::put('orders/{id}/status', [OrderController::class, 'updateStatus']);
+        Route::put('orders/{id}/cancel', [OrderController::class, 'cancel']);
 
-        Route::get('payments',               [PaymentController::class, 'index']);
-        Route::post('payments',              [PaymentController::class, 'store']);
+        Route::get('payments', [PaymentController::class, 'index']);
+        Route::post('payments', [PaymentController::class, 'store']);
+
+        // Support Tickets: customer Contact Support messages (dispatch room)
+        Route::get('support-messages', [SupportMessageController::class, 'index']);
+        Route::get('support-messages/{supportMessage}', [SupportMessageController::class, 'show']);
+        Route::patch('support-messages/{supportMessage}', [SupportMessageController::class, 'update']);
+        Route::post('support-messages/{supportMessage}/replies', [SupportMessageController::class, 'reply']);
+        Route::patch('support-messages/{supportMessage}/resolve', [SupportMessageController::class, 'resolve']);
+        Route::patch('support-messages/{supportMessage}/close', [SupportMessageController::class, 'close']);
+        Route::patch('support-messages/{supportMessage}/reopen', [SupportMessageController::class, 'reopen']);
 
         // Customer Pricing (Admin sets per-customer unit prices for Bags/Small Sack/Big Sack)
-        Route::get('customer-prices',            [CustomerPriceController::class, 'index']);
+        Route::get('customer-prices', [CustomerPriceController::class, 'index']);
         Route::get('customer-prices/{customer}', [CustomerPriceController::class, 'show']);
         Route::put('customer-prices/{customer}', [CustomerPriceController::class, 'update']);
+        Route::delete('customer-prices/{customer}', [CustomerPriceController::class, 'reset']);
+        // Reference prices per customer type (what a customer pays with no price of its own)
+        Route::get('reference-prices', [CustomerPriceController::class, 'referenceIndex']);
+        Route::put('reference-prices/{type}', [CustomerPriceController::class, 'referenceUpdate']);
+        Route::post('reference-prices/{type}/apply', [CustomerPriceController::class, 'referenceApply']);
 
         // Pickup Logs (Admin full access: Alexandra/J-Maxine plant pickups, no price/receipt)
         Route::apiResource('pickup-logs', PickupLogController::class)->only(['update', 'destroy']);
@@ -124,18 +249,27 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // approved request. Release deducts the stock and records a confirmed
         // Stock Out. The Checker has no part in this flow.
         Route::put('stock-out-requests/{stockOutRequest}/approve', [StockOutRequestController::class, 'approve']);
-        Route::put('stock-out-requests/{stockOutRequest}/reject',  [StockOutRequestController::class, 'reject']);
+        Route::put('stock-out-requests/{stockOutRequest}/reject', [StockOutRequestController::class, 'reject']);
         Route::put('stock-out-requests/{stockOutRequest}/release', [StockOutRequestController::class, 'release']);
 
-        // BUSINESS INTELLIGENCE 
-        Route::get('bi/summary',            [BiController::class, 'summary']);
-        Route::get('bi/sales-overview',     [BiController::class, 'salesOverview']);
-        Route::get('bi/delivery-stats',     [BiController::class, 'deliveryStats']);
-        Route::get('bi/inventory-summary',  [BiController::class, 'inventorySummary']);
-        Route::get('bi/attendance-today',   [BiController::class, 'attendanceToday']);
-        Route::get('bi/overdue-receipts',   [BiController::class, 'overdueReceipts']);
-        Route::get('bi/expenses',           [BiController::class, 'getExpenses']);
-        Route::post('bi/expenses',          [BiController::class, 'storeExpense']);
+        // Projects board (monday.com style): maintenance and plant jobs and
+        // the supplies their stock-out requests used.
+        Route::get('projects', [ProjectController::class, 'index']);
+        Route::put('projects/{project}', [ProjectController::class, 'update']);
+        Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
+
+        // BUSINESS INTELLIGENCE
+        Route::get('bi/summary', [BiController::class, 'summary']);
+        Route::get('bi/sales-overview', [BiController::class, 'salesOverview']);
+        Route::get('bi/sales-chart', [BiController::class, 'salesChart']);
+        Route::get('bi/delivery-stats', [BiController::class, 'deliveryStats']);
+        Route::get('bi/inventory-summary', [BiController::class, 'inventorySummary']);
+        Route::get('bi/attendance-today', [BiController::class, 'attendanceToday']);
+        Route::get('bi/forecast', [BiController::class, 'forecast']);
+        Route::get('bi/overdue-receipts', [BiController::class, 'overdueReceipts']);
+        Route::get('bi/recent-activity', [BiController::class, 'recentActivity']);
+        Route::get('bi/expenses', [BiController::class, 'getExpenses']);
+        Route::post('bi/expenses', [BiController::class, 'storeExpense']);
         Route::get('bi/ai-summary', [BiController::class, 'aiSummary']);
 
         Route::get('/admin/dashboard', function () {
@@ -146,105 +280,169 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     // HR ROUTES
     Route::middleware('role:hr')->group(function () {
 
-        // Attendance Station kiosk PIN: HR sets or changes it, and can clear a lockout.
+        // Disciplinary memos (HR > Memos, EmployeeMemoController): drafts from
+        // missed Time Outs, memos issued by hand, files, signed copies.
+        Route::get('memos', [EmployeeMemoController::class, 'index']);
+        Route::get('memos/draft-text', [EmployeeMemoController::class, 'draftText']);
+        Route::post('memos', [EmployeeMemoController::class, 'store']);
+        Route::patch('memos/{memo}', [EmployeeMemoController::class, 'update']);
+        Route::post('memos/{memo}/send', [EmployeeMemoController::class, 'send']);
+        Route::post('memos/{memo}/cancel', [EmployeeMemoController::class, 'cancel']);
+        Route::post('memos/{memo}/files', [EmployeeMemoController::class, 'upload']);
+        Route::get('memos/{memo}/files/{file}', [EmployeeMemoController::class, 'file']);
+        Route::post('memos/{memo}/close-investigation', [EmployeeMemoController::class, 'closeInvestigation']);
+
+        // Attendance Station kiosk PIN: HR sets or changes it (only Admin can unlock a locked kiosk).
         // Both changes need the HR user's own account password.
-        Route::get('hr/kiosk-pin',                   [KioskController::class, 'show']);
-        Route::put('hr/kiosk-pin',                   [KioskController::class, 'update'])->middleware('throttle:5,1,kiosk-pin-change');
-        Route::post('hr/kiosk-pin/clear-lockout',    [KioskController::class, 'clearLockout'])->middleware('throttle:5,1,kiosk-pin-change');
+        Route::get('hr/kiosk-pin', [KioskController::class, 'show']);
+        Route::post('kiosk-devices/{id}/unlock', [KioskController::class, 'remoteUnlock']);
+        Route::put('hr/kiosk-pin', [KioskController::class, 'update'])->middleware('throttle:5,1,kiosk-pin-change');
 
         // Employee Management: full CRUD (create, edit, deactivate)
         Route::apiResource('employees', EmployeeController::class);
+        // A deactivated employee back for a rehire (same employee ID, history kept)
+        Route::post('employees/{id}/reactivate', [EmployeeController::class, 'reactivate']);
+        // Biodata documents (private disk)
+        Route::get('employees/{employee}/documents', [EmployeeDocumentController::class, 'index']);
+        Route::post('employees/{employee}/documents', [EmployeeDocumentController::class, 'store']);
+        Route::get('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'show']);
+        Route::delete('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'destroy']);
 
         // Payroll: full CRUD, computation happens on the frontend
         // (Sweldong Pinoy-style: SSS/PhilHealth/Pag-IBIG/withholding tax),
         // this endpoint just stores whatever computed values are sent.
-        Route::apiResource('payrolls', PayrollController::class);
+        // Payroll is HR only (owner decision): RoleMiddleware lets Admin pass every role
+        // check, so everything that reads, makes or pays payroll also passes EnsureHrOnly.
+        Route::middleware(\App\Http\Middleware\EnsureHrOnly::class)->group(function () {
+            Route::get('payroll-periods', [PayrollController::class, 'periods']);
+            // The cutoff containing a date (read-only start and end)
+            Route::get('pay-period', [SettingsController::class, 'payPeriod']);
+            // HR approves each employee's timesheet for a pay period, which makes their
+            // payroll, then HR processes it in Payroll Records. The Timesheets page
+            // itself shows no amounts.
+            Route::get('payrolls', [PayrollController::class, 'index']);
+            Route::get('timesheets', [TimesheetController::class, 'index']);
+            Route::post('timesheets/approve', [TimesheetController::class, 'approve']);
+            // Payroll Records: pay, adjustments, mark paid, payslip, 13th month
+            Route::get('payroll-records', [PayrollController::class, 'records']);
+            Route::get('payrolls/{id}/payslip', [PayrollController::class, 'payslip']);
+            Route::post('payrolls/{id}/adjustments', [PayrollController::class, 'addAdjustment']);
+            Route::delete('payroll-adjustments/{id}', [PayrollController::class, 'removeAdjustment']);
+            Route::post('payrolls/mark-paid', [PayrollController::class, 'markPaid']);
+            Route::get('thirteenth-month', [PayrollController::class, 'thirteenthMonth']);
+        });
 
-        // Employee Performance: new (v29.7), HR-only reviews per employee
-        Route::apiResource('employee-performance', EmployeePerformanceController::class);
+        // Holiday calendar (HR and Admin)
+        Route::get('holidays', [HolidayController::class, 'index']);
+        Route::post('holidays', [HolidayController::class, 'store']);
+        Route::put('holidays/{id}', [HolidayController::class, 'update']);
+        Route::delete('holidays/{id}', [HolidayController::class, 'destroy']);
 
-        Route::get('attendances',                        [AttendanceController::class, 'index']);
-        Route::put('attendances/{id}',                   [AttendanceController::class, 'update']);
+        Route::get('attendances', [AttendanceController::class, 'index']);
+        Route::get('attendances/summary', [AttendanceController::class, 'summary']);
+        Route::get('attendances/export', [AttendanceController::class, 'export']);
+        Route::get('attendances/roster', [AttendanceController::class, 'roster']);
+        Route::put('attendances/{id}', [AttendanceController::class, 'update']);
         Route::get('attendances/employee/{employee_id}', [AttendanceController::class, 'getByEmployee']);
 
-        Route::get('leave-requests',             [LeaveRequestController::class, 'index']);
-        Route::post('leave-requests',            [LeaveRequestController::class, 'store']);
-        Route::get('leave-requests/{id}',        [LeaveRequestController::class, 'show']);
+        Route::get('leave-requests', [LeaveRequestController::class, 'index']);
+        Route::get('leave-requests/{id}', [LeaveRequestController::class, 'show']);
+        Route::get('leave-requests/{id}/attachment', [LeaveRequestController::class, 'attachment']);
         Route::put('leave-requests/{id}/status', [LeaveRequestController::class, 'updateStatus']);
-        Route::delete('leave-requests/{id}',     [LeaveRequestController::class, 'destroy']);
+        Route::delete('leave-requests/{id}', [LeaveRequestController::class, 'destroy']);
 
-        Route::get('applicants/upcoming',        [ApplicantController::class, 'upcoming']);
-        Route::get('applicants',                 [ApplicantController::class, 'index']);
-        Route::post('applicants',                [ApplicantController::class, 'store']);
-        Route::get('applicants/{id}',            [ApplicantController::class, 'show']);
-        Route::put('applicants/{id}',            [ApplicantController::class, 'update']);
-        Route::patch('applicants/{id}/status',   [ApplicantController::class, 'updateStatus']);
-        Route::delete('applicants/{id}',         [ApplicantController::class, 'destroy']);
+        // Name, mobile, email and address from an uploaded resume, CV or driver's license (Groq vision)
+        Route::post('scan-document', [DocumentScanController::class, 'scan'])->middleware('throttle:20,1');
+
+        Route::get('applicants/upcoming', [ApplicantController::class, 'upcoming']);
+        Route::get('applicants', [ApplicantController::class, 'index']);
+        Route::post('applicants', [ApplicantController::class, 'store']);
+        Route::get('applicants/{id}', [ApplicantController::class, 'show']);
+        Route::get('applicants/{id}/resume', [ApplicantController::class, 'resume']);
+        Route::get('applicants/{id}/documents/{document}', [ApplicantController::class, 'document']);
+        Route::put('applicants/{id}', [ApplicantController::class, 'update']);
+        Route::patch('applicants/{id}/status', [ApplicantController::class, 'updateStatus']);
+        Route::delete('applicants/{id}', [ApplicantController::class, 'destroy']);
 
         // Face Enrollment (HR manages)
-        Route::post('face-enroll',        [FaceDataController::class, 'enroll']);
-        Route::get('face-data',           [FaceDataController::class, 'index']);
-        Route::put('face-data/{id}',      [FaceDataController::class, 'update']);
-        Route::delete('face-data/{id}',   [FaceDataController::class, 'destroy']);
+        Route::post('face-enroll', [FaceDataController::class, 'enroll']);
+        Route::get('face-data', [FaceDataController::class, 'index']);
+        // The enrolled face picture: private, HR and Admin only (Admin passes every role check)
+        Route::get('face-data/{id}/photo', [FaceDataController::class, 'photo']);
+        Route::put('face-data/{id}', [FaceDataController::class, 'update']);
+        Route::delete('face-data/{id}', [FaceDataController::class, 'destroy']);
     });
 
+    // timed.in (Checker, Salesman, Maintenance, Driver): nothing is saved
+    // until they have timed in at the kiosk today (reads still work; filing
+    // leave, the account and logout are outside these groups). Admin passes.
+
     // EMPLOYEE: CHECKER ROUTES
-    Route::middleware('role:employee,checker')->group(function () {
+    Route::middleware(['role:employee,checker', 'timed.in'])->group(function () {
 
         Route::apiResource('products', ProductController::class);
 
-        Route::get('stock-movements',               [StockMovementController::class, 'index']);
-        Route::post('stock-movements',              [StockMovementController::class, 'store']);
-        Route::get('stock-movements/{id}',          [StockMovementController::class, 'show']);
-        Route::put('stock-movements/{id}/confirm',  [StockMovementController::class, 'confirm']);
-        Route::put('stock-movements/{id}/cancel',   [StockMovementController::class, 'cancel']);
+        Route::get('stock-movements', [StockMovementController::class, 'index']);
+        Route::post('stock-movements', [StockMovementController::class, 'store']);
+        Route::get('stock-movements/{id}', [StockMovementController::class, 'show']);
+        Route::put('stock-movements/{id}/confirm', [StockMovementController::class, 'confirm']);
+        Route::put('stock-movements/{id}/cancel', [StockMovementController::class, 'cancel']);
 
-        Route::get('inventory-alerts',              [InventoryAlertController::class, 'index']);
+        Route::get('inventory-alerts', [InventoryAlertController::class, 'index']);
         Route::put('inventory-alerts/{id}/resolve', [InventoryAlertController::class, 'resolve']);
 
         Route::apiResource('suppliers', SupplierController::class);
 
         // Pickup Logs (Checker can log + view, cannot edit/delete: corrections go through Admin)
-        Route::get('pickup-logs',              [PickupLogController::class, 'index']);
-        Route::post('pickup-logs',             [PickupLogController::class, 'store']);
-        Route::get('pickup-logs/{pickupLog}',  [PickupLogController::class, 'show']);
+        Route::get('pickup-logs', [PickupLogController::class, 'index']);
+        Route::post('pickup-logs', [PickupLogController::class, 'store']);
+        Route::get('pickup-logs/{pickupLog}', [PickupLogController::class, 'show']);
 
         // Ice Loading Count (simple count log per delivery, NOT a stock deduction)
-        Route::get('ice-loadings',                  [IceLoadingController::class, 'index']);
-        Route::post('ice-loadings',                 [IceLoadingController::class, 'store']);
-        Route::get('ice-loadings/{iceLoading}',     [IceLoadingController::class, 'show']);
+        // One count per delivery: deliveries lists which are already counted.
+        Route::get('ice-loadings', [IceLoadingController::class, 'index']);
+        Route::get('ice-loadings/deliveries', [IceLoadingController::class, 'deliveries']);
+        Route::post('ice-loadings', [IceLoadingController::class, 'store']);
+        Route::get('ice-loadings/{iceLoading}', [IceLoadingController::class, 'show']);
 
         // Stock-Out Release is NOT here anymore: only the Admin releases
         // Maintenance stock-out requests (see the Admin group above).
     });
 
     // EMPLOYEE: SALESMAN ROUTES
-    Route::middleware('role:employee,salesman')->group(function () {
+    Route::middleware(['role:employee,salesman', 'timed.in'])->group(function () {
 
-        Route::get('my-deliveries',          [DeliveryProofController::class, 'myDeliveries']);
+        Route::get('my-deliveries', [DeliveryProofController::class, 'myDeliveries']);
+        // The Driver the Salesman rides with today and that Driver's route
+        Route::get('my-route', [DeliveryRouteController::class, 'salesmanRoute']);
+        Route::put('my-route/driver', [DeliveryRouteController::class, 'chooseDriver']);
+        Route::post('my-route/deliveries/{id}/arrive', [DeliveryRouteController::class, 'arrive']);
         Route::post('delivery-confirmation', [DeliveryProofController::class, 'confirm']);
         Route::get('customer-prices/{customer}/lookup', [CustomerPriceController::class, 'lookup']);
     });
 
     // EMPLOYEE: MAINTENANCE ROUTES
-    Route::middleware('role:employee,maintenance')->group(function () {
+    Route::middleware(['role:employee,maintenance', 'timed.in'])->group(function () {
 
         Route::post('stock-out-requests', [StockOutRequestController::class, 'store']);
-
-        // Inventory items Maintenance can request (read only: name, unit, stock)
         Route::get('stock-out-items', [StockOutRequestController::class, 'items']);
+        Route::get('project-options', [ProjectController::class, 'options']);
+        // Maintenance adds projects (name, description, location); Admin sets the rest
+        Route::get('my-projects', [ProjectController::class, 'mine']);
+        Route::post('my-projects', [ProjectController::class, 'store'])->middleware('throttle:20,1');
 
         // Maintenance views its own requests (the controller filters by
         // requester). The Admin reaches these same two endpoints through the
         // Admin override in RoleMiddleware and sees every request.
-        Route::get('stock-out-requests',                   [StockOutRequestController::class, 'index']);
-        Route::get('stock-out-requests/{stockOutRequest}',  [StockOutRequestController::class, 'show']);
+        Route::get('stock-out-requests', [StockOutRequestController::class, 'index']);
+        Route::get('stock-out-requests/{stockOutRequest}', [StockOutRequestController::class, 'show']);
     });
 
     // DRIVER ROUTES
-    Route::middleware('role:driver')->group(function () {
+    Route::middleware(['role:driver', 'timed.in'])->group(function () {
 
-        Route::get('driver/deliveries',               [DeliveryController::class, 'driverDeliveries']);
+        Route::get('driver/deliveries', [DeliveryRouteController::class, 'driverDeliveries']);
+        Route::post('driver/deliveries/{id}/arrive', [DeliveryRouteController::class, 'arrive']);
         Route::patch('driver/deliveries/{id}/status', [DeliveryController::class, 'updateStatus']);
         Route::get('/driver/dashboard', function () {
             return response()->json(['message' => 'Welcome Driver!']);
@@ -258,16 +456,31 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // code as of v29.9 (the real flow is Delivery -> DeliveryProof ->
         // Receipt). Left in place, unused by the portal below, no
         // functional risk in leaving them.
-        Route::get('my-orders',   [OrderController::class, 'myOrders']);
+        Route::get('my-orders', [OrderController::class, 'myOrders']);
         Route::get('my-payments', [PaymentController::class, 'myPayments']);
 
         // Customer Portal: real endpoints, scoped to the logged-in
         // customer via customers.user_id (see CustomerPortalController).
-        Route::get('my-profile',          [CustomerPortalController::class, 'myProfile']);
+        Route::get('my-profile', [CustomerPortalController::class, 'myProfile']);
         Route::get('my-delivery-history', [CustomerPortalController::class, 'myDeliveries']);
-        Route::get('my-receipts',        [CustomerPortalController::class, 'myReceipts']);
+        // Ran out after today's delivery: ask for an urgent top-up (5 a minute)
+        Route::post('my-deliveries/{id}/top-up', [CustomerPortalController::class, 'requestTopUp'])->middleware('throttle:5,1,top-up');
+        // Ask to change the sacks on a delivery not yet delivered (Admin answers)
+        Route::post('my-deliveries/{id}/adjustment-requests', [CustomerPortalController::class, 'requestAdjustment'])->middleware('throttle:5,1,adjust-request');
+        Route::post('my-adjustment-requests/{id}/withdraw', [CustomerPortalController::class, 'withdrawAdjustment']);
+        Route::get('my-delivery-notices', [CustomerPortalController::class, 'myDeliveryNotices']);
+        Route::get('my-receipts', [CustomerPortalController::class, 'myReceipts']);
+        // Proof of payment for an unpaid invoice (Admin reviews it; it does not mark it paid)
+        Route::post('my-receipts/{id}/payment-proofs', [PaymentProofController::class, 'myStore'])->middleware('throttle:10,1');
+        Route::get('my-payment-proofs/{id}/file', [PaymentProofController::class, 'myFile']);
         Route::get('my-delivery-proofs', [CustomerPortalController::class, 'myDeliveryProofs']);
-        Route::get('my-prices',          [CustomerPortalController::class, 'myPrices']);
+        Route::get('my-prices', [CustomerPortalController::class, 'myPrices']);
+
+        // Contact Support: tickets go to the Admin dispatch room only.
+        // New tickets: 3 per 10 minutes; replies to an open ticket: 10 a minute.
+        Route::get('my-support-messages', [SupportMessageController::class, 'myIndex']);
+        Route::post('my-support-messages', [SupportMessageController::class, 'myStore'])->middleware('throttle:3,10,support-ticket');
+        Route::post('my-support-messages/{supportMessage}/replies', [SupportMessageController::class, 'myReply'])->middleware('throttle:10,1,support-reply');
 
         Route::get('/customer/dashboard', function () {
             return response()->json(['message' => 'Welcome Customer!']);

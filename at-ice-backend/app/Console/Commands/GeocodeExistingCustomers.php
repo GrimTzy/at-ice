@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 class GeocodeExistingCustomers extends Command
 {
     protected $signature = 'customers:geocode {--force : Re-geocode customers that already have coordinates}';
+
     protected $description = 'One-time backfill: geocode existing customers that are missing latitude/longitude.';
 
     public function handle()
@@ -23,6 +24,7 @@ class GeocodeExistingCustomers extends Command
 
         if ($customers->isEmpty()) {
             $this->info('No customers need geocoding.');
+
             return self::SUCCESS;
         }
 
@@ -42,7 +44,7 @@ class GeocodeExistingCustomers extends Command
 
             if ($coords) {
                 $customer->update([
-                    'latitude'  => $coords['latitude'],
+                    'latitude' => $coords['latitude'],
                     'longitude' => $coords['longitude'],
                 ]);
                 $success++;
@@ -60,7 +62,7 @@ class GeocodeExistingCustomers extends Command
         $this->info("Done. Geocoded: {$success}/{$customers->count()}.");
 
         if (! empty($failed)) {
-            $this->warn('Failed to geocode: ' . implode(', ', $failed));
+            $this->warn('Failed to geocode: '.implode(', ', $failed));
         }
 
         return self::SUCCESS;

@@ -3,9 +3,45 @@
 
 const TOKEN_KEY = "kiosk_token";
 
-export const getKioskToken = () => localStorage.getItem(TOKEN_KEY) || "";
-export const setKioskToken = (token) => localStorage.setItem(TOKEN_KEY, token);
-export const clearKioskToken = () => localStorage.removeItem(TOKEN_KEY);
+// The token lives in sessionStorage: it survives a refresh of the running
+// kiosk, but closing the tab or browser forgets it, and KioskGate also clears
+// it when the station is left. So the HR PIN is asked every time the
+// Attendance Station is opened.
+const store = () => {
+  try { return window.sessionStorage; } catch { return null; }
+};
+
+// Tokens saved by older builds were kept in localStorage for 30 days.
+try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+
+// Only a refresh keeps the kiosk unlocked. Opening the page any other way
+// (typing the URL, a link, Back or Forward) starts locked.
+try {
+  const nav = performance.getEntriesByType("navigation")[0];
+  if (nav?.type !== "reload") store()?.removeItem(TOKEN_KEY);
+} catch { /* ignore */ }
+
+export const getKioskToken = () => store()?.getItem(TOKEN_KEY) || "";
+
+// This kiosk's own random ID, kept by the browser for good. The server counts
+// wrong PINs per kiosk ID and locks only this kiosk after too many.
+const DEVICE_KEY = "kiosk_device_id";
+export function getKioskDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      id = "kiosk-" + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    return "kiosk-unsaved-device-0000";
+  }
+}
+export const setKioskToken = (token) => store()?.setItem(TOKEN_KEY, token);
+export const clearKioskToken = () => store()?.removeItem(TOKEN_KEY);
 
 // Headers for the kiosk API routes (face descriptors, posting attendance, status).
 export const kioskHeaders = (extra = {}) => ({

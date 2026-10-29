@@ -16,6 +16,7 @@ class FaceData extends Model
         'role',
         'employee_id',
         'descriptor',
+        'photo_path',
     ];
 
     protected $casts = [

@@ -12,7 +12,7 @@ class Product extends Model
     protected $fillable = [
         'product_code', 'name', 'category', 'unit',
         'unit_price', 'current_stock', 'minimum_stock',
-        'maximum_stock', 'description', 'is_active'
+        'maximum_stock', 'description', 'is_active',
     ];
 
     protected $casts = ['is_active' => 'boolean'];

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -17,12 +16,12 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email'    => 'required|email',
+            'email' => 'required|email',
             'password' => 'required|string',
         ]);
 
         // Build a unique throttle key: email + IP
-        $throttleKey = Str::lower($request->email) . '|' . $request->ip();
+        $throttleKey = Str::lower($request->email).'|'.$request->ip();
 
         // Check if already locked out
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
@@ -45,7 +44,7 @@ class AuthController extends Controller
             $remaining = 5 - RateLimiter::attempts($throttleKey);
 
             return response()->json([
-                'message'           => 'Invalid credentials.',
+                'message' => 'Invalid credentials.',
                 'attempts_remaining' => max(0, $remaining),
             ], 401);
         }
@@ -66,13 +65,13 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'token'    => $token,
-            'role'     => $user->role,
+            'token' => $token,
+            'role' => $user->role,
             'sub_role' => $user->sub_role ?? null,
             'must_change_password' => (bool) $user->must_change_password,
-            'user'     => [
-                'id'    => $user->id,
-                'name'  => $user->name,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
                 'email' => $user->email,
             ],
         ]);
@@ -97,24 +96,35 @@ class AuthController extends Controller
     // so a leaked initial password stops working right after it is changed.
     public function changePassword(Request $request)
     {
-        $validated = $request->validate([
-            'current_password' => 'required|string',
-            // At least 8 characters with uppercase, lowercase, a number and a special character.
-            'password'         => ['required', 'string', 'max:100', 'confirmed', 'different:current_password',
-                                   Password::min(8)->mixedCase()->numbers()->symbols()],
-        ]);
-
         $user = $request->user();
 
-        if (! Hash::check($validated['current_password'], $user->password)) {
+        // On the forced first-login change the one-time password was already
+        // checked at login, so the form does not ask for it again.
+        $firstLogin = (bool) $user->must_change_password;
+
+        $validated = $request->validate([
+            'current_password' => $firstLogin ? 'nullable|string' : 'required|string',
+            // At least 8 characters with uppercase, lowercase, a number and a special character.
+            'password' => ['required', 'string', 'max:100', 'confirmed', 'different:current_password',
+                Password::min(8)->mixedCase()->numbers()->symbols()],
+        ]);
+
+        if ($firstLogin) {
+            if (Hash::check($validated['password'], $user->password)) {
+                return response()->json([
+                    'message' => 'Choose a password different from your one-time password.',
+                    'errors' => ['password' => ['Choose a password different from your one-time password.']],
+                ], 422);
+            }
+        } elseif (! Hash::check($validated['current_password'], $user->password)) {
             return response()->json([
                 'message' => 'Your current password is incorrect.',
-                'errors'  => ['current_password' => ['Your current password is incorrect.']],
+                'errors' => ['current_password' => ['Your current password is incorrect.']],
             ], 422);
         }
 
         $user->update([
-            'password'             => Hash::make($validated['password']),
+            'password' => Hash::make($validated['password']),
             'must_change_password' => false,
         ]);
 
@@ -133,10 +143,10 @@ class AuthController extends Controller
         $count = $request->user()->tokens()->where('id', '!=', $currentTokenId)->delete();
 
         return response()->json([
-            'message'     => $count > 0
+            'message' => $count > 0
                 ? "Signed out of {$count} other device(s)."
                 : 'No other devices were signed in.',
-            'signed_out'  => $count,
+            'signed_out' => $count,
         ]);
     }
 }

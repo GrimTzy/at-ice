@@ -1,0 +1,351 @@
+import { useCallback, useEffect, useState } from "react";
+import PasswordInput from "./PasswordInput";
+import TimeSelect from "./TimeSelect";
+import { formatDateTime } from "../lib/time";
+import { toast } from "../lib/toast";
+import { useDraft } from "../lib/useDraft";
+import { downloadProtectedFile } from "../lib/openFile";
+import { confirmAction } from "../lib/confirm";
+
+// Admin > Settings: the rates and rules the system uses (GET/PUT /api/settings,
+// App\Support\Settings) with the holiday and overtime pay rates on the same
+// card, and the Admin override PIN that unlocks a locked Attendance Station
+// kiosk. Every change is written to the audit log.
+
+const GROUPS = [
+  ["payroll.", "Payroll"],
+  ["attendance.", "Attendance"],
+  ["leave.", "Leave"],
+  ["kiosk.", "Kiosk"],
+  ["delivery.", "Deliveries"],
+  ["support.", "Support tickets"],
+  ["memo.", "Disciplinary memos"],
+  ["thirteenth.", "13th month"],
+  ["retention.", "Records"],
+];
+const PAY_RATES_ID = "settings-rates-pay";
+const groupId = (prefix) => `settings-rates-${prefix.replace(/\W/g, "")}`;
+const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+const inputCls = "w-full px-2.5 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20";
+
+async function api(url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.errors ? Object.values(data.errors)[0][0] : data?.message || `Request failed (${res.status})`);
+  return data;
+}
+
+function SettingRow({ s, onSaved }) {
+  // An unsaved change survives a refresh (the row shows Save until it is saved).
+  const draft = useDraft(`settings:${s.key}`, { value: String(s.value ?? "") });
+  const { value } = draft.values;
+  const setValue = draft.set.value;
+  const [busy, setBusy] = useState(false);
+  const changed = value !== String(s.value ?? "");
+  const id = `setting-${s.key}`;
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api("/api/settings", { method: "PUT", body: JSON.stringify({ key: s.key, value }) });
+      toast.success(`${s.label} saved.`);
+      draft.clear();
+      onSaved();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  let field;
+  if (s.type === "bool") {
+    field = (
+      <select id={id} value={value} onChange={(e) => setValue(e.target.value)} className={inputCls}>
+        <option value="false">No</option>
+        <option value="true">Yes</option>
+      </select>
+    );
+  } else if (s.type.startsWith("enum:")) {
+    field = (
+      <select id={id} value={value} onChange={(e) => setValue(e.target.value)} className={inputCls}>
+        {s.type.slice(5).split(",").map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
+      </select>
+    );
+  } else if (s.type === "time") {
+    field = <TimeSelect id={id} value={value} onChange={(e) => setValue(e.target.value)} selectClassName="px-1.5 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50" />;
+  } else {
+    const type = { int: "number", number: "number", date: "date" }[s.type] || "text";
+    field = (
+      <input
+        id={id}
+        type={type}
+        step={s.type === "number" ? "0.01" : undefined}
+        min={s.type === "int" || s.type === "number" ? 0 : undefined}
+        placeholder={s.type === "month-day" ? "MM-DD" : undefined}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className={inputCls}
+      />
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_180px_auto] gap-2 sm:items-center py-2.5 border-b border-black/[0.06] last:border-b-0">
+      <label htmlFor={id} className="min-w-0">
+        <span className="block text-[12px] text-slate-700">{s.label}</span>
+        <span className="block text-[10px] text-slate-400 font-mono">
+          {s.key}{String(s.value) !== String(s.default) ? ` · default ${s.default}` : ""}
+        </span>
+      </label>
+      {field}
+      <button
+        type="button"
+        onClick={save}
+        disabled={!changed || busy}
+        className="px-3 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {busy ? "Saving…" : "Save"}
+      </button>
+    </div>
+  );
+}
+
+const PIN_LENGTH = 4;
+const flagCls = "text-[11px] text-red-600";
+
+function OverridePinForm() {
+  const empty = { current_password: "", admin_pin: "", admin_pin_confirmation: "" };
+  const [form, setForm] = useState(empty);
+  const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [serverError, setServerError] = useState("");
+  const digits = (v) => v.replace(/\D/g, "").slice(0, PIN_LENGTH);
+
+  // Client-side checks. The error flags only show after the first submit attempt.
+  const errors = {
+    current_password: form.current_password ? "" : "Enter your account password.",
+    admin_pin: form.admin_pin.length === PIN_LENGTH ? "" : `The PIN must be exactly ${PIN_LENGTH} digits.`,
+    admin_pin_confirmation: form.admin_pin_confirmation !== form.admin_pin ? "The PINs do not match." : "",
+  };
+  const valid = !Object.values(errors).some(Boolean);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSubmitted(true);
+    setServerError("");
+    if (!valid || busy) return;
+    setBusy(true);
+    try {
+      const data = await api("/api/admin/kiosk-override-pin", { method: "PUT", body: JSON.stringify(form) });
+      toast.success(data.message);
+      setForm(empty);
+      setSubmitted(false);
+    } catch (err) {
+      setServerError(err.message);
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const show = (key) => submitted && errors[key];
+
+  return (
+    <form onSubmit={submit} noValidate className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-3">
+      <div>
+        <h2 className="text-[15px] font-semibold text-slate-800">Kiosk Admin override PIN</h2>
+        <p className="text-[12px] text-slate-500 mt-0.5">
+          A kiosk locked after too many wrong HR PINs stays locked until an Admin types this 4-digit PIN on it. Keep it private.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] text-slate-500">Your account password</span>
+          <PasswordInput autoComplete="current-password" value={form.current_password} onChange={(e) => setForm({ ...form, current_password: e.target.value })} className={`${inputCls} ${show("current_password") ? "border-red-400" : ""}`} />
+          {show("current_password") && <span className={flagCls}>{errors.current_password}</span>}
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] text-slate-500">New Admin PIN (4 digits)</span>
+          <PasswordInput inputMode="numeric" autoComplete="off" maxLength={PIN_LENGTH} placeholder="4 digits" value={form.admin_pin} onChange={(e) => setForm({ ...form, admin_pin: digits(e.target.value) })} className={`${inputCls} ${show("admin_pin") ? "border-red-400" : ""}`} />
+          {show("admin_pin") && <span className={flagCls}>{errors.admin_pin}</span>}
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] text-slate-500">Confirm Admin PIN</span>
+          <PasswordInput inputMode="numeric" autoComplete="off" maxLength={PIN_LENGTH} placeholder="Repeat the 4 digits" value={form.admin_pin_confirmation} onChange={(e) => setForm({ ...form, admin_pin_confirmation: digits(e.target.value) })} className={`${inputCls} ${show("admin_pin_confirmation") ? "border-red-400" : ""}`} />
+          {show("admin_pin_confirmation") && <span className={flagCls}>{errors.admin_pin_confirmation}</span>}
+        </label>
+      </div>
+      {serverError && <div role="alert" className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{serverError}</div>}
+      <p className="text-[11px] leading-relaxed text-slate-500 mt-3">Reminder: the override PIN is exactly 4 numeric digits (0 to 9).</p>
+      <button type="submit" disabled={busy} className="self-start px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-50">
+        {busy ? "Saving…" : "Save Admin PIN"}
+      </button>
+    </form>
+  );
+}
+
+// Holiday and overtime pay rates (pay_multipliers, R3). A change is a new rate
+// from a date; older payrolls keep the rate of their day.
+const RATE_LABELS = {
+  REGULAR_HOLIDAY_WORKED: "Regular holiday, worked",
+  REGULAR_HOLIDAY_UNWORKED: "Regular holiday, not worked",
+  SPECIAL_HOLIDAY_WORKED: "Special (non-working) holiday, worked",
+  SPECIAL_HOLIDAY_UNWORKED: "Special (non-working) holiday, not worked",
+  SPECIAL_WORKING_DAY_WORKED: "Special working day, worked",
+  OT_ORDINARY: "Overtime, ordinary day",
+  OT_SPECIAL_HOLIDAY: "Overtime, special holiday",
+  OT_REGULAR_HOLIDAY: "Overtime, regular holiday",
+  REGULAR_HOLIDAY_REST_DAY: "Regular holiday on a rest day",
+  DOUBLE_HOLIDAY: "Double holiday",
+};
+function PayRates() {
+  const [rows, setRows] = useState(null);
+  // Typed rates (and the date they apply from) survive a refresh until saved.
+  const ratesDraft = useDraft("settings:pay-rates", { draft: {}, from: new Date().toLocaleDateString("en-CA") });
+  const { draft, from } = ratesDraft.values;
+  const { draft: setDraft, from: setFrom } = ratesDraft.set;
+  const load = useCallback(() => { api("/api/pay-multipliers").then(setRows).catch((e) => toast.error(e.message)); }, []);
+  useEffect(() => { load(); }, [load]);
+  const save = async (key) => {
+    try {
+      const res = await api("/api/pay-multipliers", { method: "POST", body: JSON.stringify({ key, value: Number(draft[key]), effective_date: from }) });
+      toast.success(res.message);
+      setDraft((d) => ({ ...d, [key]: undefined }));
+      load();
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+  return (
+    <section id={PAY_RATES_ID} className="mt-4 scroll-mt-20">
+      <h3 className="text-[11px] font-semibold tracking-wider uppercase text-slate-400">Holiday and overtime pay rates</h3>
+      <p className="text-[12px] text-slate-500 mt-0.5">x the hourly rate. Client defaults; the DOLE rate is in each note. A change applies from the date below.</p>
+      <label className="mt-2 flex items-center gap-2 text-[12px] text-slate-600">New rates apply from
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${inputCls} w-auto`} />
+      </label>
+      {(rows || []).map((r) => (
+        <div key={r.key} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_110px_auto] gap-2 sm:items-center py-2.5 border-b border-black/[0.06] last:border-b-0">
+          <div className="min-w-0">
+            <span className="block text-[12px] text-slate-700">{RATE_LABELS[r.key] || r.key} <span className="font-mono text-slate-400">({r.value.toFixed(2)})</span></span>
+            <span className="block text-[10px] text-slate-400">{r.history[r.history.length - 1]?.note}</span>
+          </div>
+          <input type="number" step="0.01" min="0" max="10" aria-label={RATE_LABELS[r.key]} value={draft[r.key] ?? r.value} onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))} className={inputCls} />
+          <button type="button" onClick={() => save(r.key)} disabled={draft[r.key] === undefined || Number(draft[r.key]) === r.value}
+            className="px-3 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-40">Save</button>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+// Records past the retention period (retention.years). Nothing is deleted on
+// its own: for each record Admin downloads the CSV, keeps it, or deletes it.
+function RetentionReview() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const load = useCallback(() => { api("/api/retention-review").then(setData).catch((e) => setError(e.message)); }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const act = async (action, kind, ref, label) => {
+    if (action === "delete" && !(await confirmAction({ title: `Delete ${label}?`, message: "It is deleted for good. Download the CSV first if you need it.", confirmLabel: "Delete", danger: true }))) return;
+    if (action === "anonymize" && !(await confirmAction({ title: `Anonymize ${label}?`, message: "Name, contact details, address, face and documents are removed. The employee ID and pay history stay.", confirmLabel: "Anonymize", danger: true }))) return;
+    try {
+      const res = await api(`/api/retention-review/${action}`, { method: "POST", body: JSON.stringify({ kind, ref }) });
+      toast.success(res.message);
+      load();
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+  const today = new Date().toLocaleDateString("en-CA");
+  const btn = "px-2.5 py-1 rounded-md border border-black/[0.09] text-[11px] text-slate-600 hover:bg-slate-50 cursor-pointer";
+
+  const rows = [
+    ...(data?.employees || []).map((e) => ({
+      key: `e${e.id}`, kind: "employee", ref: e.id, label: `${e.employee_id} ${e.name}`,
+      note: `Inactive since ${formatDateTime(e.deactivated_at)} · ${e.attendance_count} attendance record(s)`,
+      csv: `/api/attendances/export?from=2000-01-01&to=${today}&employee_id=${e.id}`, file: `attendance-${e.employee_id}.csv`,
+    })),
+    ...(data?.attendance_years || []).map((y) => ({
+      key: `y${y.year}`, kind: "attendance_year", ref: y.year, label: `Attendance from ${y.year}`, note: `${y.count} record(s)`,
+      csv: `/api/attendances/export?from=${y.year}-01-01&to=${y.year}-12-31`, file: `attendance-${y.year}.csv`,
+    })),
+  ];
+
+  return (
+    <div className="bg-white border border-black/[0.09] rounded-xl p-[18px]">
+      <h2 className="text-[15px] font-semibold text-slate-800">Records past {data?.retention_years ?? 2} years</h2>
+      <p className="text-[12px] text-slate-500 mt-0.5">
+        {data?.expiry_action && data.expiry_action !== "REVIEW"
+          ? `Inactive employees past this period are ${data.expiry_action === "PURGE" ? "deleted" : "anonymized"} each day (Archive expiry action). Attendance years are only removed by Admin.`
+          : "Nothing is deleted on its own. For each record: download the CSV, keep it for another period, anonymize it, or delete it."}
+      </p>
+      {error && <p role="alert" className="mt-3 text-[12px] text-red-600">{error}</p>}
+      {data && rows.length === 0 && <p className="mt-3 text-[12px] text-slate-400">No records are past the retention period.</p>}
+      <ul className="mt-3 flex flex-col gap-1.5">
+        {rows.map((r) => (
+          <li key={r.key} className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-black/[0.06] text-[12px]">
+            <span className="font-medium text-slate-800">{r.label}</span>
+            <span className="text-slate-400">{r.note}</span>
+            <span className="flex-1" />
+            <button type="button" className={btn} onClick={() => downloadProtectedFile(r.csv, r.file)}>Download CSV</button>
+            <button type="button" className={btn} onClick={() => act("keep", r.kind, r.ref, r.label)}>Keep</button>
+            {r.kind === "employee" && <button type="button" data-no-confirm className={btn} onClick={() => act("anonymize", r.kind, r.ref, r.label)}>Anonymize</button>}
+            <button type="button" data-no-confirm className="px-2.5 py-1 rounded-md border border-red-200 text-[11px] text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => act("delete", r.kind, r.ref, r.label)}>Delete</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// One Settings page at a time (Admin > Settings > Rates and rules, Admin PIN,
+// Old records); "section" is the page.
+export default function SystemSettings({ section = "rates" }) {
+  if (section === "admin-pin") return <div className="max-w-4xl"><OverridePinForm /></div>;
+  if (section === "old-records") return <div className="max-w-4xl"><RetentionReview /></div>;
+  return <RatesAndRules />;
+}
+
+function RatesAndRules() {
+  const [settings, setSettings] = useState(null);
+  const [error, setError] = useState("");
+
+  const load = useCallback(() => {
+    api("/api/settings").then(setSettings).catch((e) => setError(e.message));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div className="flex flex-col gap-4 max-w-4xl">
+      <div id="settings-rates" className="bg-white border border-black/[0.09] rounded-xl p-[18px] scroll-mt-20">
+        <h2 className="text-[15px] font-semibold text-slate-800">Rates and rules</h2>
+        <p className="text-[12px] text-slate-500 mt-0.5">Used by attendance, leave and payroll, including holiday and overtime pay. Each change is recorded in the audit log.</p>
+        {settings && (
+          <nav aria-label="Rates and rules sections" className="mt-3 flex flex-wrap gap-1.5">
+            {[...GROUPS.filter(([prefix]) => settings.some((s) => s.key.startsWith(prefix))).map(([prefix, title]) => [groupId(prefix), title]), [PAY_RATES_ID, "Holiday and overtime pay"]].map(([id, title]) => (
+              <button key={id} type="button" onClick={() => scrollTo(id)} className="px-2.5 py-1 rounded-full border border-black/[0.09] bg-slate-50 text-[11px] text-slate-600 hover:bg-white hover:border-cyan-500/40 hover:text-cyan-700 cursor-pointer">{title}</button>
+            ))}
+          </nav>
+        )}
+        {error && <p role="alert" className="mt-3 text-[12px] text-red-600">{error}</p>}
+        {!settings && !error && <p className="mt-3 text-[12px] text-slate-400">Loading…</p>}
+        {settings && GROUPS.map(([prefix, title]) => {
+          const rows = settings.filter((s) => s.key.startsWith(prefix));
+          return rows.length ? (
+            <section key={prefix} id={groupId(prefix)} className="mt-4 scroll-mt-20">
+              <h3 className="text-[11px] font-semibold tracking-wider uppercase text-slate-400">{title}</h3>
+              {rows.map((s) => <SettingRow key={`${s.key}:${s.value}`} s={s} onSaved={load} />)}
+            </section>
+          ) : null;
+        })}
+        <PayRates />
+      </div>
+    </div>
+  );
+}

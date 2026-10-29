@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import PasswordRules from "./PasswordRules";
+import PasswordInput from "./PasswordInput";
 import { isStrongPassword } from "../lib/password";
 
 const ROLE_LABELS = {
@@ -83,7 +84,6 @@ export default function AccountSettings() {
 
   // ---- Change password (inline) ----
   const [form, setForm] = useState(EMPTY_FORM);
-  const [showPasswords, setShowPasswords] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState("");
@@ -110,7 +110,6 @@ export default function AccountSettings() {
         throw new Error(firstFieldError || data.message || "Could not change the password.");
       }
       setForm(EMPTY_FORM);
-      setShowPasswords(false);
       setPwSuccess("Your password was changed. Other devices signed in to this account were signed out.");
     } catch (err) {
       setPwError(err.message);
@@ -142,8 +141,6 @@ export default function AccountSettings() {
     }
   };
 
-  const type = showPasswords ? "text" : "password";
-
   return (
     <div className="flex max-w-2xl flex-col gap-4">
       <Card title="Profile" description="Your account details. Ask the system administrator if something needs to change.">
@@ -164,8 +161,7 @@ export default function AccountSettings() {
         <form onSubmit={submitPassword} className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Current password</label>
-            <input
-              type={type}
+            <PasswordInput
               value={form.current_password}
               onChange={(e) => setForm({ ...form, current_password: e.target.value })}
               autoComplete="current-password"
@@ -174,8 +170,7 @@ export default function AccountSettings() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">New password</label>
-            <input
-              type={type}
+            <PasswordInput
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               autoComplete="new-password"
@@ -185,8 +180,7 @@ export default function AccountSettings() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Confirm new password</label>
-            <input
-              type={type}
+            <PasswordInput
               value={form.password_confirmation}
               onChange={(e) => setForm({ ...form, password_confirmation: e.target.value })}
               autoComplete="new-password"
@@ -195,14 +189,6 @@ export default function AccountSettings() {
             {mismatch && <p className="mt-1 text-xs text-red-600">Passwords do not match.</p>}
           </div>
 
-          <label className="flex items-center gap-2 text-xs text-slate-600">
-            <input
-              type="checkbox"
-              checked={showPasswords}
-              onChange={(e) => setShowPasswords(e.target.checked)}
-            />
-            Show passwords
-          </label>
 
           {pwError && <p className="text-sm text-red-600">{pwError}</p>}
           {pwSuccess && <p className="text-sm text-emerald-700">{pwSuccess}</p>}
@@ -224,7 +210,7 @@ export default function AccountSettings() {
         description="Use this if you forgot to sign out somewhere else. You stay signed in on this device."
       >
         {!confirming ? (
-          <button
+          <button data-no-confirm
             onClick={() => {
               setConfirming(true);
               setOtherResult("");

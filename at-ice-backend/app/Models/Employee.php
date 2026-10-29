@@ -2,18 +2,25 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Employee extends Model
 {
     use HasFactory;
 
     protected $fillable = [
+        // Biodata (App\Support\Biodata)
+        'birth_date', 'sex', 'civil_status', 'nationality', 'place_of_birth', 'personal_email',
+        'emergency_name', 'emergency_relationship', 'emergency_phone',
+        'education_level', 'school', 'course', 'year_graduated', 'work_history', 'license_restrictions',
+        'sss_no', 'tin_no', 'philhealth_no', 'pagibig_no',
         'user_id',
         'employee_id',
         'first_name',
+        'middle_initial',
         'last_name',
+        'suffix',
         'phone',
         'address',
         'block_lot',
@@ -22,6 +29,8 @@ class Employee extends Model
         'barangay',
         'city',
         'province',
+        'region',
+        'barangay_code',
         'postal_code',
         'position',
         'department',
@@ -30,19 +39,57 @@ class Employee extends Model
         'employment_type',
         'shift',
         'vehicle_plate',
+        'license_number',
+        'license_expiry',
         'is_active',
+        'deactivated_at',
+        'deactivated_by',
+        // disciplinary memos (App\Support\MemoEngine, EmployeeMemoController)
+        'no_timeout_count',
+        'investigation_status',
+        'investigation_since',
+        'employment_status',
+        'regularized_at',
+        'pay_basis',
+        'monthly_rate',
+        'shift_start',
+        'shift_end',
     ];
 
     protected $casts = [
         'date_hired' => 'date',
+        'license_expiry' => 'date:Y-m-d',
+        'birth_date' => 'date:Y-m-d',
+        'work_history' => 'array',
         'is_active' => 'boolean',
+        'deactivated_at' => 'datetime',
+        'anonymized_at' => 'datetime',
+        'regularized_at' => 'date:Y-m-d',
+        'monthly_rate' => 'decimal:2',
         'daily_rate' => 'decimal:2',
     ];
+
+    // Files attached to the biodata (private disk)
+    public function documents()
+    {
+        return $this->hasMany(EmployeeDocument::class)->latest();
+    }
 
     // Relationship - Employee belongs to User
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    // Relationship - Employee has one enrolled face (Attendance Station)
+    public function deactivatedBy()
+    {
+        return $this->belongsTo(User::class, 'deactivated_by');
+    }
+
+    public function faceData()
+    {
+        return $this->hasOne(FaceData::class);
     }
 
     // Relationship - Employee has many Attendances
@@ -63,9 +110,34 @@ class Employee extends Model
         return $this->hasMany(Payroll::class);
     }
 
+    // Name suffixes HR can pick.
+    public const SUFFIXES = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V'];
+
+    // Sent with every employee in API responses.
+    protected $appends = ['full_name', 'status'];
+
+    // "active" or "inactive" (deactivated; kept on file, can be reactivated)
+    public function getStatusAttribute(): string
+    {
+        return $this->is_active ? 'active' : 'inactive';
+    }
+
+    public function isProbationary(): bool
+    {
+        return $this->employment_status === 'probationary';
+    }
+
+    // "Juan D. Dela Cruz Jr." (middle initial and suffix only when set)
+    public static function composeName(?string $first, ?string $middleInitial, ?string $last, ?string $suffix): string
+    {
+        $mi = $middleInitial ? strtoupper($middleInitial).'.' : null;
+
+        return trim(implode(' ', array_filter([$first, $mi, $last, $suffix], fn ($p) => $p !== null && $p !== '')));
+    }
+
     // Full name accessor
     public function getFullNameAttribute()
     {
-        return $this->first_name . ' ' . $this->last_name;
+        return self::composeName($this->first_name, $this->middle_initial, $this->last_name, $this->suffix);
     }
 }

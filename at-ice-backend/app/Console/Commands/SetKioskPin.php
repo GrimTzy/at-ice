@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\KioskSetting;
-use App\Services\KioskLockout;
 use Illuminate\Console\Command;
 
 class SetKioskPin extends Command
@@ -18,11 +17,11 @@ class SetKioskPin extends Command
 
         if (! is_string($pin) || ! preg_match('/^\d{4}$/', $pin)) {
             $this->error('The PIN must be exactly 4 digits.');
+
             return self::FAILURE;
         }
 
         KioskSetting::current()->setPin($pin, null);
-        KioskLockout::clearAll();
 
         $this->info('Kiosk PIN saved. Every kiosk must be unlocked again with the new PIN.');
 

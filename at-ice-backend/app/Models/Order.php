@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -11,22 +12,26 @@ class Order extends Model
     protected $fillable = [
         'order_no', 'customer_id', 'prepared_by', 'status',
         'order_date', 'delivery_date', 'total_amount',
-        'amount_paid', 'balance', 'payment_status', 'notes'
+        'amount_paid', 'balance', 'payment_status', 'notes',
     ];
 
-    public function customer() {
+    public function customer()
+    {
         return $this->belongsTo(Customer::class);
     }
 
-    public function items() {
+    public function items()
+    {
         return $this->hasMany(OrderItem::class);
     }
 
-    public function payments() {
+    public function payments()
+    {
         return $this->hasMany(Payment::class);
     }
 
-    public function preparedBy() {
+    public function preparedBy()
+    {
         return $this->belongsTo(User::class, 'prepared_by');
     }
 

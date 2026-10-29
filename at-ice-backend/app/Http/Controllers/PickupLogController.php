@@ -7,7 +7,6 @@ use Illuminate\Http\Request;
 
 class PickupLogController extends Controller
 {
-
     // GET /api/pickup-logs
     public function index(Request $request)
     {
@@ -15,7 +14,7 @@ class PickupLogController extends Controller
             ->orderBy('pickup_date', 'desc');
 
         if ($request->filled('company_name')) {
-            $query->where('company_name', 'like', '%' . $request->company_name . '%');
+            $query->where('company_name', 'like', '%'.$request->company_name.'%');
         }
 
         if ($request->filled('product_type')) {
@@ -25,16 +24,15 @@ class PickupLogController extends Controller
         return response()->json($query->paginate(20));
     }
 
-
     // POST /api/pickup-logs
     public function store(Request $request)
     {
         $validated = $request->validate([
             'company_name' => 'required|string|max:255',
             'product_type' => 'required|in:bags,small_sack,big_sack',
-            'quantity'     => 'required|integer|min:1',
-            'notes'        => 'nullable|string',
-            'pickup_date'  => 'required|date',
+            'quantity' => 'required|integer|min:1',
+            'notes' => 'nullable|string',
+            'pickup_date' => 'required|date',
         ]);
 
         $log = PickupLog::create([
@@ -44,7 +42,7 @@ class PickupLogController extends Controller
 
         return response()->json([
             'message' => 'Pickup logged successfully.',
-            'log'     => $log->load('recordedBy:id,name'),
+            'log' => $log->load('recordedBy:id,name'),
         ], 201);
     }
 
@@ -58,16 +56,16 @@ class PickupLogController extends Controller
         $validated = $request->validate([
             'company_name' => 'sometimes|required|string|max:255',
             'product_type' => 'sometimes|required|in:bags,small_sack,big_sack',
-            'quantity'     => 'sometimes|required|integer|min:1',
-            'notes'        => 'nullable|string',
-            'pickup_date'  => 'sometimes|required|date',
+            'quantity' => 'sometimes|required|integer|min:1',
+            'notes' => 'nullable|string',
+            'pickup_date' => 'sometimes|required|date',
         ]);
 
         $pickupLog->update($validated);
 
         return response()->json([
             'message' => 'Pickup log updated.',
-            'log'     => $pickupLog->fresh()->load('recordedBy:id,name'),
+            'log' => $pickupLog->fresh()->load('recordedBy:id,name'),
         ]);
     }
 
