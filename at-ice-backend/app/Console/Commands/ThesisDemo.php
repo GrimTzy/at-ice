@@ -11,6 +11,7 @@ use App\Support\ThesisDemo\AttendanceBuilder;
 use App\Support\ThesisDemo\Cleanup;
 use App\Support\ThesisDemo\CommerceBuilder;
 use App\Support\ThesisDemo\Context;
+use App\Support\ThesisDemo\Docs;
 use App\Support\ThesisDemo\LeaveBuilder;
 use App\Support\ThesisDemo\Manifest;
 use App\Support\ThesisDemo\MemoBuilder;
@@ -36,7 +37,8 @@ use Throwable;
 //   verify     consistency checks + payroll reconciliation CSV
 //   cleanup    removes only manifest rows (refuses if real records depend on them)
 //   refresh    cleanup + install for a new as-of date
-//   export     rewrites the accounts and payroll CSVs
+//   export     rewrites the accounts and payroll CSVs and the walkthrough and
+//              coverage docs with the record numbers of this database
 class ThesisDemo extends Command
 {
     protected $signature = 'thesis-demo
@@ -411,6 +413,7 @@ class ThesisDemo extends Command
         $this->info('REAL RECORDS TIED TO DATASET RECORDS (dispatcher checklist)');
         $this->line($scan['blockers'] ? collect($scan['blockers'])->map(fn ($ids, $t) => "  {$t}: ids ".implode(',', array_slice($ids, 0, 30)))->implode("\n") : '  none');
         $this->writeManifest($c);
+        (new Docs($c, $this->outDir()))->write($this->target());
         file_put_contents($this->outDir().DIRECTORY_SEPARATOR.'verify-report.txt', implode("\n", array_merge(['verified '.now()->toIso8601String()], $lines,
             ['', "payroll rows {$n}"], $mismatch, ['', 'derived: '.json_encode(array_map('count', $scan['derived'])), 'blockers: '.json_encode(array_map('count', $scan['blockers']))])));
 
@@ -441,10 +444,12 @@ class ThesisDemo extends Command
         if (! $this->option('as-of')) {
             throw new \RuntimeException('refresh needs the new --as-of date.');
         }
-        $old = $this->accountsBackup();
         $m = new Manifest(Context::DATASET);
         $this->info('Removing the current dataset');
-        (new Cleanup($m))->run((bool) $this->option('include-derived'), (bool) $this->option('keep-existing-attendance'));
+        $done = (new Cleanup($m))->run((bool) $this->option('include-derived'), (bool) $this->option('keep-existing-attendance'));
+        Audit::log('thesis_demo.removed', null, null, ['dataset' => Context::DATASET, 'deleted' => $done, 'by' => 'refresh']);
+        // only now: a refused cleanup leaves the current accounts CSV in place
+        $old = $this->accountsBackup();
         $this->info('Installing for '.$this->option('as-of'));
         $code = $this->install();
         if ($old) {
@@ -474,6 +479,9 @@ class ThesisDemo extends Command
         [$file, $n] = $rep->payroll();
         $this->line("Payroll: {$file} ({$n} rows)");
         $this->writeManifest($c);
+        foreach ((new Docs($c, $this->outDir()))->write($this->target()) as $doc) {
+            $this->line("Doc: {$doc}");
+        }
 
         return self::SUCCESS;
     }

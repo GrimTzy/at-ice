@@ -3,6 +3,7 @@
 namespace App\Support\ThesisDemo;
 
 use App\Models\Employee;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 // Supplies (never ice products), suppliers, stock movements with consistent
@@ -127,22 +128,31 @@ class OperationsBuilder
             $list = $moves[$k];
             foreach ($sor as $s) {
                 if ($s[0] === 'released' && $s[1] === $k) {
-                    $list[] = ['stock_out', $s[2], $s[5] - 2, 'confirmed', 'Stock-out request (released by Admin)', 'sor'];
+                    // released by Admin at 15:00, two days after the request
+                    $list[] = ['stock_out', $s[2], $s[5] - 2, 'confirmed', $s[4], 'sor'];
                 }
             }
             usort($list, fn ($a, $b) => $b[2] <=> $a[2]);
             foreach ($list as $i => $mv) {
                 [$type, $qty, $ago, $status, $why] = $mv;
+                $release = ($mv[5] ?? null) === 'sor';
                 $delta = $type === 'stock_in' ? $qty : ($type === 'stock_out' ? -$qty : $qty);
                 $after = $status === 'confirmed' ? $stock + $delta : $stock;
+                // An adjustment's quantity is the counted stock: confirming it
+                // sets the stock to that number (StockMovementController@confirm).
+                $quantity = $type === 'adjustment' ? $stock + $delta : abs($qty);
+                // A release is written the way StockOutRequestController@release
+                // writes it: entered by the Maintenance requester, source
+                // "maintenance", reason = purpose, at the release time. Its
+                // SOR-#### reference is set below, once the request has an id.
                 $mid = $c->m->insert("move:{$k}:{$i}", 'stock_movements', [
-                    'product_id' => $pid, 'type' => $type, 'quantity' => abs($qty), 'stock_before' => $stock, 'stock_after' => $status === 'confirmed' ? $after : $stock + $delta,
+                    'product_id' => $pid, 'type' => $type, 'quantity' => $quantity, 'stock_before' => $stock, 'stock_after' => $status === 'confirmed' ? $after : $stock + $delta,
                     'reference_no' => $type === 'stock_in' ? 'DR-'.(40000 + Context::pick("{$k}{$i}", 100, 999)) : null,
-                    'source' => $type === 'stock_in' ? $why : null, 'reason' => $type === 'stock_in' ? null : $why,
-                    'status' => $status, 'entered_by' => $c->user['E01'],
+                    'source' => $type === 'stock_in' ? $why : ($release ? 'maintenance' : null), 'reason' => $type === 'stock_in' ? null : $why,
+                    'status' => $status, 'entered_by' => $release ? $c->user['E23'] : $c->user['E01'],
                     'confirmed_by' => $status === 'confirmed' ? $c->adminUserId : null,
                     'confirmed_at' => $status === 'confirmed' ? $tm($ago, '15:00:00') : null,
-                    'created_at' => $tm($ago, '09:30:00'), 'updated_at' => $tm($ago, '15:00:00'),
+                    'created_at' => $tm($ago, $release ? '15:00:00' : '09:30:00'), 'updated_at' => $tm($ago, '15:00:00'),
                 ]);
                 if (($mv[5] ?? null) === 'sor') {
                     $releasedMove = $mid;
@@ -162,7 +172,7 @@ class OperationsBuilder
                     continue;
                 }
                 [$st, , $qty, $pj, $purpose, $ago] = $s;
-                $c->m->insert("sor:{$j}", 'stock_out_requests', [
+                $sorId = $c->m->insert("sor:{$j}", 'stock_out_requests', [
                     'requested_by' => $c->user['E23'], 'product_id' => $pid, 'project_id' => $projects[$pj],
                     'item_name' => $products[$k][0], 'quantity' => $qty, 'purpose' => $purpose, 'status' => $st,
                     'approved_by' => in_array($st, ['approved', 'released'], true) ? $c->adminUserId : null,
@@ -173,6 +183,10 @@ class OperationsBuilder
                     'stock_movement_id' => $st === 'released' ? ($releasedMove ?? null) : null,
                     'created_at' => $tm($ago, '08:30:00'), 'updated_at' => $tm(max(0, $ago - 2), '15:00:00'),
                 ]);
+                if ($st === 'released' && isset($releasedMove)) {
+                    DB::table('stock_movements')->where('id', $releasedMove)
+                        ->update(['reference_no' => 'SOR-'.str_pad((string) $sorId, 4, '0', STR_PAD_LEFT)]);
+                }
             }
             unset($releasedMove);
         }
@@ -220,13 +234,27 @@ class OperationsBuilder
     {
         $c = $this->c;
         $a = $c->asOf;
+        // Interviews fall on work days that are not holidays: future ones move
+        // forward to the next such day, past ones back to the previous one.
+        $workday = function (CarbonImmutable $d, int $step) use ($c): CarbonImmutable {
+            while (! $c->isWorkDay($d->toDateString()) || $c->isHoliday($d->toDateString())) {
+                $d = $d->addDays($step);
+            }
+
+            return $d;
+        };
+        // A5 is the hire of E20 Joanna Castillo: interviewed, hired, then HR
+        // made her employee record (start date after the as-of date).
+        $e20 = DB::table('employees')->where('id', $c->emp['E20'] ?? 0)->first(['employee_id', 'date_hired']);
+        $a5Note = 'Hired. Employee record '.($e20->employee_id ?? 'E20').', starts '.($e20 ? substr((string) $e20->date_hired, 0, 10) : 'after the as-of date')
+            .'; must change the one-time password at first login.';
         $rows = [
-            ['A1', 'Jomar P. Bernardo', 'Driver', 'pending', $a->addDays(3)->setTime(10, 0), 'hr', null, 'Has a professional license with restriction code B, B1, B2 (as stated by the applicant).'],
-            ['A2', 'Shiela M. Romero', 'Checker', 'pending', $a->addDays(4)->setTime(14, 0), 'qr', null, 'Applied through the QR form at the gate.'],
-            ['A3', 'Ariel T. Domingo', 'Salesman', 'interviewed', $a->subDays(5)->setTime(9, 0), 'hr', 'E12', 'Good communication; for second interview with Admin. Referred by Angelica Rivera.'],
-            ['A4', 'Rhea L. Santiago', 'Bagger', 'rejected', $a->subDays(15)->setTime(13, 30), 'hr', null, 'Did not report for the scheduled interview.'],
-            ['A5', 'Christian D. Flores', 'Checker', 'hired', $a->subDays(12)->setTime(10, 30), 'hr', null, 'Hired; starts after the as-of date (see Joanna Castillo record for the start-date rule).'],
-            ['A6', 'Melvin A. Cruz', 'Guard', 'pending', $a->addDays(5)->setTime(9, 30), 'qr', null, 'Security guard license holder (as stated).'],
+            ['A1', 'Jomar P. Bernardo', 'Driver', 'pending', $workday($a->addDays(3), 1)->setTime(10, 0), 'hr', null, 'Has a professional license with restriction code B, B1, B2 (as stated by the applicant).'],
+            ['A2', 'Shiela M. Romero', 'Checker', 'pending', $workday($a->addDays(4), 1)->setTime(14, 0), 'qr', null, 'Applied through the QR form at the gate.'],
+            ['A3', 'Ariel T. Domingo', 'Salesman', 'interviewed', $workday($a->subDays(5), -1)->setTime(9, 0), 'hr', 'E12', 'Good communication; for second interview with Admin. Referred by Angelica Rivera.'],
+            ['A4', 'Rhea L. Santiago', 'Bagger', 'rejected', $workday($a->subDays(15), -1)->setTime(13, 30), 'hr', null, 'Did not report for the scheduled interview.'],
+            ['A5', 'Joanna R. Castillo', 'Checker', 'hired', $workday($a->subDays(12), -1)->setTime(10, 30), 'hr', null, $a5Note],
+            ['A6', 'Melvin A. Cruz', 'Guard', 'pending', $workday($a->addDays(5), 1)->setTime(9, 30), 'qr', null, 'Security guard license holder (as stated).'],
         ];
         foreach ($rows as [$k, $name, $pos, $status, $when, $source, $ref, $notes]) {
             $created = $c->stamp($when->subDays(6)->toDateString(), '11:00:00');
@@ -237,7 +265,12 @@ class OperationsBuilder
                 'position_applied' => $pos, 'interview_date' => $when->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s'), 'interview_minutes' => 30,
                 'status' => $status, 'source' => $source, 'referred_by_employee_id' => $ref ? $c->emp[$ref] : null, 'notes' => $notes,
                 'consented_at' => $source === 'qr' ? $created : null,
-                'created_at' => $created, 'updated_at' => $created,
+                // last status change: the interview day, or the next work day for a hire
+                'created_at' => $created, 'updated_at' => match ($status) {
+                    'pending' => $created,
+                    'hired' => $c->stamp($workday($when->addDay(), 1)->toDateString(), '09:00:00'),
+                    default => $c->stamp($when->toDateString(), '17:00:00'),
+                },
             ]);
         }
     }

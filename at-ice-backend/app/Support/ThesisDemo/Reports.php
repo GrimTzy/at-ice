@@ -118,12 +118,19 @@ class Reports
                 if ($code !== 'existing' && ! $pb->eligible($code, $p)) {
                     continue;
                 }
+                // existing employees: only periods that end on or after the hire
+                // date (TimesheetController lists no one before that)
+                if ($code === 'existing' && substr((string) $e->date_hired, 0, 10) > $p['end']) {
+                    continue;
+                }
                 $actual = DB::table('payrolls')->where('employee_id', $empId)->where('period_start', $p['start'])->first();
                 // existing employees and the awaiting period: whatever HR added live
                 $adj = ($code === 'existing' || $p === $c->awaiting)
                     ? ($actual ? DB::table('payroll_adjustments')->where('payroll_id', $actual->id)->get()->map(fn ($a) => [$a->label, (float) $a->amount, (bool) $a->taxable])->all() : [])
                     : $pb->adjustments($code, $p);
-                if ($code === 'existing' && $actual) {
+                if ($code === 'existing') {
+                    // as PayrollCalculator does: the shortfall of the latest stored
+                    // payroll before this period, none when there is no payroll
                     $carry = (float) DB::table('payrolls')->where('employee_id', $empId)->where('period_start', '<', $p['start'])->orderByDesc('period_start')->value('carry_over_out');
                 }
                 $exp = $x->compute($e, $p, $adj, $carry);
@@ -143,8 +150,10 @@ class Reports
                 if (! $seeded) {
                     $diffs = [];
                 }
+                // a paid period of an existing employee gets a seeded payroll (PayrollBuilder::buildExisting)
+                $isPaidPeriod = in_array($p, $c->paid, true);
                 $state = ! $seeded ? 'NOT SEEDED (payroll existed before the dataset; not compared)'
-                    : (! $actual ? ($p === $c->awaiting || $code === 'existing' ? 'NOT YET APPROVED (HR approves live)' : 'MISSING') : ($diffs ? 'MISMATCH' : 'MATCH'));
+                    : (! $actual ? ($p === $c->awaiting || ($code === 'existing' && ! $isPaidPeriod) ? 'NOT YET APPROVED (HR approves live)' : 'MISSING') : ($diffs ? 'MISMATCH' : 'MATCH'));
                 if ($diffs || $state === 'MISSING') {
                     $mismatch[] = "{$e->employee_id} {$p['start']}: {$state} ".implode('; ', $diffs);
                 }
@@ -263,6 +272,75 @@ class Reports
                 ->selectRaw("COALESCE(SUM(CASE WHEN type='stock_in' THEN quantity WHEN type='stock_out' THEN -quantity ELSE stock_after - stock_before END),0) s")->value('s');
             $ok($sum === (int) $p->current_stock, "{$p->product_code} stock {$p->current_stock} = confirmed movements {$sum}");
         }
+
+        // an adjustment's quantity is the counted stock (StockMovementController@confirm)
+        $bad = DB::table('stock_movements')->whereIn('id', $m->ids('stock_movements') ?: [0])->where('type', 'adjustment')
+            ->where('status', 'confirmed')->whereColumn('quantity', '!=', 'stock_after')->pluck('id')->all();
+        $ok(! $bad, 'every stock adjustment quantity = the counted stock after it'.($bad ? ' (bad ids '.implode(',', $bad).')' : ''));
+
+        // a released stock-out is recorded the way StockOutRequestController@release records it
+        $bad = [];
+        foreach (DB::table('stock_out_requests')->whereIn('id', $m->ids('stock_out_requests') ?: [0])->where('status', 'released')->get() as $r) {
+            $mv = DB::table('stock_movements')->where('id', $r->stock_movement_id)->first();
+            if (! $mv || $mv->reference_no !== 'SOR-'.str_pad((string) $r->id, 4, '0', STR_PAD_LEFT) || (int) $mv->entered_by !== (int) $r->requested_by
+                || $mv->source !== 'maintenance' || $mv->created_at !== $r->released_at || (int) $mv->quantity !== (int) $r->quantity) {
+                $bad[] = $r->id;
+            }
+        }
+        $ok(! $bad, 'every released stock-out has its SOR stock out, entered by the requester at the release time'.($bad ? ' (bad request ids '.implode(',', $bad).')' : ''));
+
+        // a hired applicant has an employee record (first and last name)
+        $bad = [];
+        foreach (DB::table('applicants')->whereIn('id', $m->ids('applicants') ?: [0])->where('status', 'hired')->get(['id', 'name']) as $a) {
+            $parts = explode(' ', $a->name);
+            if (! DB::table('employees')->where('first_name', $parts[0])->where('last_name', end($parts))->exists()) {
+                $bad[] = $a->name;
+            }
+        }
+        $ok(! $bad, 'every hired applicant has an employee record'.($bad ? ' (missing: '.implode(', ', $bad).')' : ''));
+
+        // leave ranges hold only work days, except L-16 (weekend counted: defect D3)
+        $bad = [];
+        $leaveKeys = $m->keys('leave_requests');
+        foreach (DB::table('leave_requests')->whereIn('id', array_keys($leaveKeys) ?: [0])->get(['id', 'start_date', 'end_date']) as $l) {
+            if ($leaveKeys[$l->id] === 'leave:L-16') {
+                continue;
+            }
+            for ($d = $c->date($l->start_date); $d->toDateString() <= substr((string) $l->end_date, 0, 10); $d = $d->addDay()) {
+                if (! $c->isWorkDay($d->toDateString()) || $c->isHoliday($d->toDateString())) {
+                    $bad[] = $leaveKeys[$l->id];
+                    break;
+                }
+            }
+        }
+        $ok(! $bad, 'no leave range holds a rest day or holiday, except L-16 on purpose'.($bad ? ' (bad: '.implode(', ', $bad).')' : ''));
+
+        // interviews on work days that are not holidays
+        $bad = DB::table('applicants')->whereIn('id', $m->ids('applicants') ?: [0])->whereNotNull('interview_date')->get(['name', 'interview_date'])
+            ->filter(function ($a) use ($c) {
+                $d = CarbonImmutable::parse($a->interview_date, config('app.timezone'))->setTimezone(Context::TZ)->toDateString();
+
+                return ! $c->isWorkDay($d) || $c->isHoliday($d);
+            })->pluck('name')->all();
+        $ok(! $bad, 'every interview is on a work day that is not a holiday'.($bad ? ' (bad: '.implode(', ', $bad).')' : ''));
+
+        // a reviewed change request was reviewed after it was filed
+        $bad = DB::table('delivery_adjustment_requests')->whereIn('id', $m->ids('delivery_adjustment_requests') ?: [0])
+            ->whereNotNull('reviewed_at')->whereColumn('reviewed_at', '<=', 'created_at')->pluck('id')->all();
+        $ok(! $bad, 'every reviewed change request was reviewed after it was filed'.($bad ? ' (bad ids '.implode(',', $bad).')' : ''));
+
+        // existing employees: each paid period with seeded attendance has a payroll
+        $bad = [];
+        foreach ($c->existingEmployeeIds as $id) {
+            $hired = substr((string) DB::table('employees')->where('id', $id)->value('date_hired'), 0, 10);
+            foreach ($c->paid as $p) {
+                if ($hired <= $p['end'] && PayrollBuilder::hasSeededAttendance($c, $id, $p)
+                    && ! DB::table('payrolls')->where('employee_id', $id)->where('period_start', $p['start'])->exists()) {
+                    $bad[] = DB::table('employees')->where('id', $id)->value('employee_id')." {$p['start']}";
+                }
+            }
+        }
+        $ok(! $bad, 'existing employees: every paid period with seeded attendance has a payroll (the awaiting one stays for HR)'.($bad ? ' (missing: '.implode(', ', $bad).')' : ''));
 
         // leave credits: independent count vs the app
         foreach (['E12', 'E13'] as $code) {

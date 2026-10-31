@@ -615,12 +615,17 @@ class CommerceBuilder
                 continue;
             }
             $at = $status === 'pending' ? $c->stamp($c->asOf->toDateString(), '07:05:00') : DB::table('deliveries')->where('id', $deliveryId)->value('ordered_at');
+            // declined after the truck had left (as the review note says), never at the same second it was filed
+            $dispatched = DB::table('deliveries')->where('id', $deliveryId)->value('dispatched_at');
+            $reviewed = $status === 'declined'
+                ? CarbonImmutable::parse($dispatched && $dispatched > $at ? $dispatched : $at)->addMinutes(10)->format('Y-m-d H:i:s')
+                : null;
             $c->m->insert("adjreq:{$status}", 'delivery_adjustment_requests', [
                 'delivery_id' => $deliveryId, 'customer_id' => $c->cust[$k], 'items' => json_encode(self::requestItems($deliveryId, $wanted)), 'reason' => $reason,
                 'status' => $status, 'review_note' => $note, 'reviewed_by' => $status === 'declined' ? $c->adminUserId : null,
-                'reviewed_at' => $status === 'declined' ? $at : null, 'adjustment_id' => null,
+                'reviewed_at' => $reviewed, 'adjustment_id' => null,
                 'requested_by' => DB::table('customers')->where('id', $c->cust[$k])->value('user_id'),
-                'created_at' => $at, 'updated_at' => $at,
+                'created_at' => $at, 'updated_at' => $reviewed ?? $at,
             ]);
         }
     }

@@ -99,14 +99,16 @@ class Cleanup
                 ->whereNotIn('support_message_id', $in($this->ids('support_messages')))),
         ];
 
-        // Existing employees: a payroll for a period that holds seeded attendance
+        // Existing employees: a payroll HR made for a period that holds seeded
+        // attendance (the dataset's own seeded payrolls are removed with it)
         if (! $keepExistingAttendance) {
+            $seededPayrolls = $this->ids('payrolls');
             $seeded = DB::table('attendances')->whereIn('id', $in($this->ids('attendances')))->whereNotIn('employee_id', $in($E))
                 ->get(['employee_id', 'date']);
             $hits = [];
             foreach ($seeded->groupBy('employee_id') as $emp => $rows) {
                 $dates = $rows->pluck('date')->map(fn ($d) => substr($d, 0, 10));
-                $hits = array_merge($hits, DB::table('payrolls')->where('employee_id', $emp)
+                $hits = array_merge($hits, DB::table('payrolls')->where('employee_id', $emp)->whereNotIn('id', $in($seededPayrolls))
                     ->where(fn ($q) => $dates->each(fn ($d) => $q->orWhere(fn ($w) => $w->where('period_start', '<=', $d)->where('period_end', '>=', $d))))
                     ->pluck('id')->all());
             }

@@ -52,11 +52,11 @@ class AuthController extends Controller
         // Success — clear throttle
         RateLimiter::clear($throttleKey);
 
-        // Block deactivated accounts (e.g. an employee deactivated by HR).
-        // Checked only after the password is correct, so this message does
-        // not reveal which emails exist. A NULL is_active (older seeded
-        // accounts) is treated as active.
-        if ($user->is_active !== null && ! (bool) $user->is_active) {
+        // Block deactivated accounts (a disabled login, or an employee
+        // deactivated by HR; see User::isDeactivated). Checked only after the
+        // password is correct, so this message does not reveal which emails
+        // exist.
+        if ($user->isDeactivated()) {
             return response()->json([
                 'message' => 'This account has been deactivated. Please contact HR or the Admin.',
             ], 403);

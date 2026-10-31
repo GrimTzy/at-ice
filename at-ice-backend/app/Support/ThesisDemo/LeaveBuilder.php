@@ -33,9 +33,23 @@ class LeaveBuilder
 
             return $d->toDateString();
         };
-        $f21 = $future(21);
         $f35 = $future(35);
-        $asOf = $c->asOf->toDateString();
+        // Two leave days with no rest day or holiday inside the range (the app
+        // counts weekends as leave days, defect D3; only L-16 shows that on purpose).
+        $open = fn (string $ymd) => $c->isWorkDay($ymd) && ! $c->isHoliday($ymd);
+        $twoDays = function (string $first) use ($c, $open) {
+            $next = $c->date($first)->addDay()->toDateString();
+
+            return $open($next) ? [$first, $next] : [$first, $first];
+        };
+        // L-01: two open days in a row, about three weeks ahead
+        $ahead = 21;
+        $f21 = $future($ahead);
+        while (! $open($c->date($f21)->addDay()->toDateString())) {
+            $f21 = $future(++$ahead);
+        }
+        // E06 is on leave on the as-of day (or the next work day when it is a rest day)
+        $l18 = $twoDays($future(0));
 
         return [
             ['L-04', 'E12', 'sick', $wd($p(6), 4), $wd($p(6), 4), false, null, 'approved', -1, 'Fever and colds, advised rest by the barangay health center.', ['unpaid' => true, 'note' => 'Marked unpaid by HR: medical certificate did not cover the date.']],
@@ -49,7 +63,7 @@ class LeaveBuilder
             ['L-05', 'E13', 'vacation', $wd($aw, 2), $wd($aw, 4), false, null, 'approved', 15, 'Out-of-town trip to Nueva Ecija.', []],
             ['L-07', 'E13', 'vacation', $wd($aw, 8), $wd($aw, 9), false, null, 'rejected', 15, 'Personal reasons.', ['reject' => 'Peak delivery week with two salesmen already on leave. Please refile for another week.']],
             ['L-06b', 'E13', 'emergency', $wd($aw, 7), $wd($aw, 7), false, 4, 'approved', 0, 'Left 4 hours early: flooding at home.', []],
-            ['L-18', 'E06', 'vacation', $asOf, $c->asOf->addDay()->toDateString(), false, null, 'approved', 20, 'Vacation leave (barangay fiesta in the province).', []],
+            ['L-18', 'E06', 'vacation', $l18[0], $l18[1], false, null, 'approved', 20, 'Vacation leave (barangay fiesta in the province).', []],
         ];
     }
 

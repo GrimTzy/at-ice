@@ -4,6 +4,7 @@ namespace App\Support\ThesisDemo;
 
 use App\Models\Employee;
 use App\Support\PayrollCalculator;
+use Illuminate\Support\Facades\DB;
 
 // Paid payroll history for the fictional employees: the app's own
 // PayrollCalculator, period by period in date order (so a carried-over
@@ -75,5 +76,67 @@ class PayrollBuilder
                 }
             }
         }
+        $this->buildExisting();
+    }
+
+    // Existing employees (--existing): paid history for the paid periods in
+    // which the dataset seeded their attendance, so a closed period does not
+    // show them unpaid next to paid fictional staff. Only periods that end on
+    // or after their hire date (the ones the Timesheets page lists). A period
+    // that already has a payroll (made by HR) is never touched. The awaiting
+    // period stays for HR to approve live.
+    public function buildExisting(): void
+    {
+        $c = $this->c;
+        foreach ($c->existingEmployeeIds as $id) {
+            $employee = Employee::find($id);
+            if (! $employee || ! $employee->is_active) {
+                continue;
+            }
+            foreach ($c->paid as $period) {
+                $key = "payroll:existing:{$id}:{$period['start']}";
+                if ($c->m->has($key) || $employee->date_hired->toDateString() > $period['end']) {
+                    continue;
+                }
+                if (DB::table('payrolls')->where('employee_id', $id)->where('period_start', $period['start'])->exists()) {
+                    $c->note("existing {$employee->employee_id} {$period['start']}: a payroll already exists, not changed");
+
+                    continue;
+                }
+                if (! self::hasSeededAttendance($c, $id, $period)) {
+                    continue;
+                }
+                $values = PayrollCalculator::compute($employee, $period, []);
+                $approvedAt = $c->stamp($c->date($period['end'])->addDay()->toDateString(), '10:00:00');
+                $paidAt = $c->stamp($period['pay_day'], '16:00:00');
+                $c->m->insert($key, 'payrolls', $values + [
+                    'employee_id' => $id,
+                    'period_start' => $period['start'],
+                    'period_end' => $period['end'],
+                    'status' => 'paid',
+                    'prepared_by' => $c->hrUserId,
+                    'timesheet_approved_by' => $c->hrUserId,
+                    'timesheet_approved_at' => $approvedAt,
+                    'paid_at' => $paidAt,
+                    'paid_by' => $c->hrUserId,
+                    'notes' => 'Seeded payroll history (thesis dataset).',
+                    'created_at' => $approvedAt,
+                    'updated_at' => $paidAt,
+                ]);
+                $c->note("existing {$employee->employee_id} {$period['start']}: paid payroll seeded, net {$values['net_pay']}");
+            }
+        }
+    }
+
+    // True when the dataset seeded at least one attendance day for this
+    // employee inside the period.
+    public static function hasSeededAttendance(Context $c, int $employeeId, array $period): bool
+    {
+        return DB::table('attendances as a')
+            ->join(Manifest::TABLE.' as m', fn ($j) => $j->on('m.record_id', '=', 'a.id')
+                ->where('m.table_name', 'attendances')->where('m.dataset', $c->m->dataset))
+            ->where('a.employee_id', $employeeId)
+            ->whereBetween('a.date', [$period['start'], $period['end']])
+            ->exists();
     }
 }

@@ -84,6 +84,25 @@ class User extends Authenticatable
         return $this->role === 'employee' && $this->sub_role === $subRole;
     }
 
+    // True when this account must not be used: the login itself is disabled,
+    // or it belongs to an employee HR has deactivated. The second case covers
+    // accounts deactivated before deactivation also disabled the login (their
+    // users.is_active is still true). A NULL is_active (older seeded accounts)
+    // counts as active.
+    public function isDeactivated(): bool
+    {
+        if ($this->is_active === false) {
+            return true;
+        }
+        if (in_array($this->role, ['employee', 'driver'], true)) {
+            $employee = $this->employee()->first(['id', 'is_active']);
+
+            return $employee !== null && ! $employee->is_active;
+        }
+
+        return false;
+    }
+
     // RELATIONSHIPS
     public function employee()
     {
