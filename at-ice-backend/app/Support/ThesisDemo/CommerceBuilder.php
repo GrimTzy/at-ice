@@ -418,7 +418,8 @@ class CommerceBuilder
                 'user_id' => $c->adminUserId, 'created_at' => $c->stamp($ymd, '07:50:00'), 'updated_at' => $c->stamp($ymd, '07:50:00'),
             ]);
             $c->m->insert("adjreq:applied:{$id}", 'delivery_adjustment_requests', [
-                'delivery_id' => $id, 'customer_id' => $c->cust[$k], 'items' => json_encode([$p => $after]),
+                'delivery_id' => $id, 'customer_id' => $c->cust[$k],
+                'items' => json_encode([['product_type' => $p, 'before' => $items[$p], 'after' => $after]]),
                 'reason' => 'Rainy day, slow sales expected.', 'status' => 'applied', 'review_note' => null,
                 'reviewed_by' => $c->adminUserId, 'reviewed_at' => $c->stamp($ymd, '07:50:00'), 'adjustment_id' => $adj,
                 'requested_by' => DB::table('customers')->where('id', $c->cust[$k])->value('user_id'),
@@ -583,6 +584,21 @@ class CommerceBuilder
         }
     }
 
+    // The stored shape of a store's request, the same as DeliveryAdjust::requestChange
+    // writes and the Admin and customer pages read: one entry per product,
+    // [{product_type, before, after}], where before = sacks on the delivery now
+    // and after = sacks the store asks for.
+    public static function requestItems(int $deliveryId, array $wanted): array
+    {
+        $out = [];
+        foreach ($wanted as $type => $after) {
+            $before = (int) DB::table('delivery_items')->where('delivery_id', $deliveryId)->where('product_type', $type)->sum('quantity_ordered');
+            $out[] = ['product_type' => $type, 'before' => $before, 'after' => $after === $before ? $after + 5 : (int) $after];
+        }
+
+        return $out;
+    }
+
     // Store requests to change sacks: pending (upcoming), declined and withdrawn (history)
     private function adjustmentRequests(): void
     {
@@ -594,13 +610,13 @@ class CommerceBuilder
             ['declined', $hist('K1')['id'] ?? null, 'K1', ['bags' => 80], 'Expecting many buyers today.', 'The truck was already loaded and out; please request earlier next time.'],
             ['withdrawn', $hist('K6')['id'] ?? null, 'K6', ['small_sack' => 2], 'Fewer customers expected.', null],
         ];
-        foreach ($rows as [$status, $deliveryId, $k, $items, $reason, $note]) {
+        foreach ($rows as [$status, $deliveryId, $k, $wanted, $reason, $note]) {
             if (! $deliveryId) {
                 continue;
             }
             $at = $status === 'pending' ? $c->stamp($c->asOf->toDateString(), '07:05:00') : DB::table('deliveries')->where('id', $deliveryId)->value('ordered_at');
             $c->m->insert("adjreq:{$status}", 'delivery_adjustment_requests', [
-                'delivery_id' => $deliveryId, 'customer_id' => $c->cust[$k], 'items' => json_encode($items), 'reason' => $reason,
+                'delivery_id' => $deliveryId, 'customer_id' => $c->cust[$k], 'items' => json_encode(self::requestItems($deliveryId, $wanted)), 'reason' => $reason,
                 'status' => $status, 'review_note' => $note, 'reviewed_by' => $status === 'declined' ? $c->adminUserId : null,
                 'reviewed_at' => $status === 'declined' ? $at : null, 'adjustment_id' => null,
                 'requested_by' => DB::table('customers')->where('id', $c->cust[$k])->value('user_id'),

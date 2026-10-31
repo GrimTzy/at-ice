@@ -155,4 +155,39 @@ class ThesisDemoDatasetTest extends TestCase
         $this->assertSame('nte', $memo->level);
         $this->assertSame(4, (int) $memo->offense_no);
     }
+
+    // The JSON columns are written in the shape the Admin and customer pages
+    // read (r.items.map(i => i.before → i.after)); verify flags any other shape.
+    public function test_json_columns_have_the_shape_the_app_reads(): void
+    {
+        $this->install();
+        $m = new Manifest(Context::DATASET);
+
+        $requests = DB::table('delivery_adjustment_requests')->whereIn('id', $m->ids('delivery_adjustment_requests'))->get();
+        $this->assertCount(4, $requests);
+        foreach ($requests as $r) {
+            $items = json_decode($r->items, true);
+            $this->assertTrue(array_is_list($items));
+            foreach ($items as $i) {
+                $this->assertSame(['after', 'before', 'product_type'], collect($i)->keys()->sort()->values()->all());
+                $this->assertNotSame($i['before'], $i['after']);
+            }
+        }
+        // "before" is the sacks on the delivery when asked (the pending one: the delivery as it is now)
+        $pending = $requests->firstWhere('status', 'pending');
+        $item = json_decode($pending->items, true)[0];
+        $this->assertSame((int) DB::table('delivery_items')->where('delivery_id', $pending->delivery_id)->where('product_type', $item['product_type'])->sum('quantity_ordered'), $item['before']);
+
+        // the admin endpoint the page calls returns the list shape
+        Sanctum::actingAs(User::where('role', 'admin')->first());
+        $row = collect($this->getJson('/api/delivery-adjustment-requests?status=all')->assertOk()->json())->firstWhere('id', $pending->id);
+        $this->assertArrayHasKey('before', $row['items'][0]);
+
+        // verify passes, and fails on the old object shape
+        $this->artisan('thesis-demo', ['action' => 'verify', '--out' => $this->out])->assertExitCode(0);
+        DB::table('delivery_adjustment_requests')->where('id', $pending->id)->update(['items' => json_encode(['bags' => 70])]);
+        $this->artisan('thesis-demo', ['action' => 'verify', '--out' => $this->out])
+            ->expectsOutputToContain('FAIL delivery_adjustment_requests.items')
+            ->assertExitCode(1);
+    }
 }

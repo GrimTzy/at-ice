@@ -174,6 +174,24 @@ class Reports
         return [$this->write('THESIS-DEMO-PAYROLL.csv', $header, $rows), count($rows), $mismatch];
     }
 
+    // [table, column, description, validator] for every JSON column the installer writes
+    public static function jsonShapes(): array
+    {
+        $list = fn ($v) => is_array($v) && array_is_list($v) && $v !== [];
+        $types = array_keys(\App\Models\DeliveryItem::PRODUCT_TYPES);
+        $int = fn ($x) => is_int($x) && $x >= 0;
+        $change = fn ($v) => $list($v) && collect($v)->every(fn ($i) => is_array($i) && in_array($i['product_type'] ?? null, $types, true)
+            && $int($i['before'] ?? null) && $int($i['after'] ?? null) && count($i) === 3);
+
+        return [
+            ['delivery_adjustment_requests', 'items', 'a list of {product_type, before, after}', $change],
+            ['delivery_adjustments', 'changes', 'a list of {product_type, before, after}', $change],
+            ['delivery_contracts', 'items', 'a list of {product_type, quantity}', fn ($v) => $list($v) && collect($v)->every(fn ($i) => is_array($i)
+                && in_array($i['product_type'] ?? null, $types, true) && is_int($i['quantity'] ?? null) && $i['quantity'] >= 1)],
+            ['delivery_contracts', 'delivery_days', 'a list of mon..sun', fn ($v) => $list($v) && ! array_diff($v, \App\Models\DeliveryContract::DAYS)],
+        ];
+    }
+
     // Consistency checks; returns lines (FAIL lines start with "FAIL").
     public function checks(): array
     {
@@ -220,6 +238,24 @@ class Reports
         $ok($bad === 0, 'every delivered delivery has Driver and Salesman arrivals');
         $bad = DB::table('deliveries')->whereIn('id', $m->ids('deliveries') ?: [0])->where('scheduled_date', '>=', $c->asOf->toDateString())->whereNotNull('driver_id')->count();
         $ok($bad === 0, 'no dataset delivery on or after the as-of date has a fictional driver (dispatcher cannot move them to real drivers)');
+
+        // JSON columns have the shape the app reads (AdjustmentRequests.jsx,
+        // AdjustmentRequestPanel.jsx, SameDayChanges.jsx, ContractsTab.jsx,
+        // DeliveryAdjust::applyRequest, DeliveryDispatch::generate)
+        foreach (self::jsonShapes() as [$table, $column, $label, $valid]) {
+            $mine = $m->ids($table);
+            $bad = [];
+            $badReal = [];
+            foreach (DB::table($table)->get(['id', $column]) as $r) {
+                if (! $valid(json_decode((string) $r->$column, true))) {
+                    in_array((int) $r->id, $mine, true) ? $bad[] = $r->id : $badReal[] = $r->id;
+                }
+            }
+            $ok(! $bad, "{$table}.{$column} is {$label}".($bad ? ' (bad ids '.implode(',', $bad).')' : ''));
+            if ($badReal) {
+                $out[] = "WARN {$table}.{$column}: rows outside the dataset with another shape (ids ".implode(',', $badReal).'); the app may fail on them';
+            }
+        }
 
         // stock agrees with confirmed movements
         foreach (DB::table('products')->whereIn('id', $m->ids('products') ?: [0])->get() as $p) {
