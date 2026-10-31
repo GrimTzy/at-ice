@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "../lib/toast";
 
 // Login email chip with a pencil to fix a wrong email (PUT /api/accounts/{id}/email).
@@ -10,8 +11,9 @@ export default function LoginEmailChip({ userId, email, onSaved }) {
   const [value, setValue] = useState(email);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const anchorRef = useRef(null);
 
-  const start = () => { setValue(email); setError(""); setOpen(true); };
+  const start =() => { setValue(email); setError(""); setOpen(true); };
 
   const save = async (e) => {
     e.preventDefault();
@@ -40,7 +42,7 @@ export default function LoginEmailChip({ userId, email, onSaved }) {
 
   return (
     <>
-      <span className="inline-flex items-center gap-1">
+      <span ref={anchorRef} className="inline-flex items-center gap-1">
         <span className="email-chip">{email}</span>
         <button
           type="button"
@@ -53,8 +55,14 @@ export default function LoginEmailChip({ userId, email, onSaved }) {
         </button>
       </span>
 
-      {open && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onMouseDown={(e) => e.target === e.currentTarget && !saving && setOpen(false)}>
+      {/* The chip sits in a table cell. The dialog is rendered at the app root
+          (the themed .neu wrapper, else <body>) so no cell, row or card styles
+          or stacking reach it. Clicks stop here: a portal still bubbles React
+          events up to the row it came from. */}
+      {open && createPortal(
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget && !saving) setOpen(false); }}>
           <form onSubmit={save} className="bg-white rounded-xl border border-black/[0.09] w-full max-w-sm p-5 text-left">
             <h3 className="text-[14px] font-semibold text-slate-800 mb-1">Change login email</h3>
             <p className="text-[12px] text-slate-500 mb-3">
@@ -80,7 +88,8 @@ export default function LoginEmailChip({ userId, email, onSaved }) {
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        anchorRef.current?.closest(".neu") || document.body,
       )}
     </>
   );

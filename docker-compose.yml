@@ -41,7 +41,14 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       SESSION_DRIVER: database
       SESSION_SECURE_COOKIE: "true"
-      CACHE_STORE: database
+      # Cache, rate limits and the scheduler's locks live in the redis service
+      # below (shared by backend, worker and scheduler). The database store hit
+      # deadlocks on the rate limiter's insert-ignore under load. Set the
+      # CACHE_STORE variable to "database" to go back without a code change.
+      CACHE_STORE: ${CACHE_STORE:-redis}
+      REDIS_CLIENT: predis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
       QUEUE_CONNECTION: database
       FILESYSTEM_DISK: local
       BROADCAST_CONNECTION: ${BROADCAST_CONNECTION:-pusher}
@@ -69,6 +76,8 @@ services:
       - private-storage:/var/www/html/storage/app/private
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
@@ -119,6 +128,18 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
+    restart: unless-stopped
+
+  # Cache only (rate limits, locks, cached settings): internal network, no
+  # port published, nothing written to disk. Losing it only clears the cache.
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
 volumes:
