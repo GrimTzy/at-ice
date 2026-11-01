@@ -21,16 +21,17 @@ use Throwable;
 
 class CustomerController extends Controller
 {
-    // Businesses may use mobile or landline numbers: +63 and 9 to 10 digits.
-    private const CONTACT_REGEX = PhoneFormatter::ANY_REGEX;
+    // Mobile only: +63 followed by 10 digits starting with 9.
+    private const CONTACT_REGEX = PhoneFormatter::MOBILE_REGEX;
 
-    private const CONTACT_MESSAGE = PhoneFormatter::ANY_MESSAGE;
+    private const CONTACT_MESSAGE = PhoneFormatter::MOBILE_MESSAGE;
 
-    // Stores the number as +63XXXXXXXXXX. A leading 0 or 63 is converted.
+    // Stores the number as +63XXXXXXXXXX. A leading 0 or 63 is converted, and the
+    // 10 digits alone (what the form's input holds) get the +63 in front.
     private function cleanContactNumber(Request $request): void
     {
         if ($request->filled('contact_number')) {
-            $request->merge(['contact_number' => PhoneFormatter::normalize((string) $request->contact_number)]);
+            $request->merge(['contact_number' => PhoneFormatter::mobile((string) $request->contact_number)]);
         }
     }
 

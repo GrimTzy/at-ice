@@ -363,9 +363,12 @@ export default function Dashboard() {
 
         {/* PRIMARY METRIC: Total Sales (opens Receipts) */}
         <div
-          onClick={() => navigate("/admin/receipts")}
+          onClick={() => navigate("/admin/receipts", { state: { dest: true } })}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/admin/receipts", { state: { dest: true } }); } }}
           title="Open Invoices"
-          className={`col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150 ${activeCard ? "opacity-60" : ""}`}
+          className={`stat-card col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150 ${activeCard ? "opacity-60" : ""}`}
         >
           <div className="flex items-center gap-2 min-w-0">
             <span className={`w-7 h-7 rounded-lg grid place-items-center flex-shrink-0 ${TONES.emerald.badge}`}><KpiIcon name="wallet" /></span>
@@ -424,12 +427,12 @@ export default function Dashboard() {
             delta: `${overdueCustomers} customer${overdueCustomers === 1 ? "" : "s"}`,
             context: hasOverdue ? "Action needed" : "All current",
             isAlert: true,
-            to: "/admin/receipts",
+            to: "/admin/receipts?filter=overdue",
           },
         ].map((card) => {
           const clickable = card.to || card.panel;
           const selected = card.panel && activeCard === card.panel;
-          const open = () => (card.panel ? setActiveCard((a) => (a === card.panel ? null : card.panel)) : navigate(card.to));
+          const open = () => (card.panel ? setActiveCard((a) => (a === card.panel ? null : card.panel)) : navigate(card.to, { state: { dest: true } }));
           return (
           <div
             key={card.label}
@@ -813,7 +816,7 @@ export default function Dashboard() {
                     <BoardRow
                       key={s.customer_id}
                       tone="purple"
-                      onClick={() => navigate("/admin/receipts")}
+                      onClick={() => navigate("/admin/receipts", { state: { dest: true } })}
                       title="Open invoices"
                       cells={[
                         <span key="n">
@@ -935,7 +938,7 @@ export default function Dashboard() {
               {(overdue.receipts||[]).map((r) => (
                 <div
                   key={r.id}
-                  onClick={() => navigate("/admin/receipts")}
+                  onClick={() => navigate("/admin/receipts", { state: { dest: true } })}
                   title={r.receipt_no}
                   className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 items-center px-[18px] py-2.5 border-b border-black/[0.09] last:border-b-0 hover:bg-slate-50 transition-colors cursor-pointer"
                 >

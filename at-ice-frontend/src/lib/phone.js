@@ -7,6 +7,15 @@ export const PHONE_PREFIX = "+63";
 export const MOBILE_REGEX = /^9\d{9}$/;
 export const MOBILE_MESSAGE = "Enter 10 digits starting with 9 (e.g. 9171234567).";
 
+// Messages for the live check under a mobile field.
+export function mobileError(digits) {
+  if (!digits) return "";
+  if (!/^\d+$/.test(digits)) return "Only numbers are allowed.";
+  if (digits[0] !== "9") return "Philippine mobile number must start with 9.";
+  if (digits.length !== 10) return "Enter exactly 10 digits after +63.";
+  return "";
+}
+
 // Mobile or landline with area code: 9 to 10 digits (customers, suppliers).
 export const ANY_REGEX = /^\d{9,10}$/;
 export const ANY_MESSAGE = "Enter 9 to 10 digits. Landlines need the area code, without the 0 (e.g. 281234567).";
@@ -26,11 +35,8 @@ export function localDigits(stored) {
 export const PHONE_MAX_DIGITS = 10;
 
 // Cleans what the user types or pastes into the input: digits only, no leading 0,
-// no pasted 63 country code. It never cuts digits off the end: a number that is
-// too long stays visible (up to a sanity cap of 15) and the form rejects it, so a
-// digit can never be dropped silently. (A version that cut the number to 10 digits
-// here lost the 11th digit typed without any message.) The input has no maxLength
-// for the same reason.
+// no pasted 63 country code. It keeps up to 15 digits; PhoneInput then cuts the
+// result to PHONE_MAX_DIGITS, so nothing longer than a valid number is ever kept.
 export function typedDigits(input) {
   let d = String(input || "").replace(/\D/g, "");
   if (d.startsWith("0")) d = d.slice(1);

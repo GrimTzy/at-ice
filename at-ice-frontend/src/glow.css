@@ -1,0 +1,208 @@
+/* Ambient glow and breathing light.
+   Soft diffused light behind dialogs and interactive surfaces, in the app's
+   cyan. Everything reads the tokens below, so a theme or a new component
+   changes the look in one place. Loaded after the neumorphism styles. */
+
+/* The two animated values. Registered so the browser can animate them. */
+@property --glow-pulse { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --glow-boost { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --glow-open  { syntax: "<number>"; inherits: false; initial-value: 1; }
+
+:root {
+  --glow-rgb: 34, 211, 238;        /* cyan-400, the brand accent */
+  --glow-pulse-time: 3.2s;         /* breathing cycle, 2.5 to 4s */
+  --glow-rest: 0.3;                /* modal glow opacity at rest ... */
+  --glow-swing: 0.16;              /* ... plus this at the top of a breath */
+  --glow-hover: 0.22;              /* ... plus this while the pointer is over it */
+  --glow-blur: 56px;
+  --glow-blur-swing: 16px;
+  --glow-lift: 0.38;               /* hover glow on buttons and cards */
+}
+.cp-dark,
+.neu-dark {
+  --glow-rest: 0.36;
+  --glow-lift: 0.45;
+}
+
+/* ---- Dialogs, drawers and confirmation boxes ------------------------------
+   Marked by lib/modalGlow.js: data-glow="active" on the topmost one (pulses),
+   "idle" on any under it (a quiet, still glow). It is a wide box-shadow added
+   after the panel's own drop shadow, so it sits behind and around the panel,
+   is never clipped by its scroll box, and takes no clicks. The repeated
+   attribute is only specificity, to beat the older panel shadow rules. */
+:root:not(#glow) [data-glow][data-glow][data-glow][data-glow][data-glow] {
+  box-shadow:
+    var(--float-shadow, 0 24px 48px -12px rgba(15, 23, 42, 0.32)),
+    0 0 calc(var(--glow-blur) + var(--glow-pulse) * var(--glow-blur-swing) + var(--glow-boost) * 16px)
+      calc(6px + var(--glow-boost) * 6px)
+      rgba(var(--glow-rgb), calc((var(--glow-rest) + var(--glow-pulse) * var(--glow-swing) + var(--glow-boost) * var(--glow-hover)) * var(--glow-open))) !important;
+  transition: --glow-boost 0.45s ease;
+}
+:root:not(#glow) [data-glow="idle"][data-glow][data-glow][data-glow][data-glow] {
+  --glow-rest: 0.07;
+}
+@media (hover: hover) {
+  [data-glow="active"]:hover { --glow-boost: 1; }
+}
+
+/* ---- Hover, pressed and selected surfaces ---------------------------------
+   One glow for every button, card button, tab and sidebar link: a drop-shadow
+   behind the element that eases in on hover. It is a filter, so it works on
+   top of whatever shadow the element already has and never moves the layout.
+   Only the hovered or selected element is affected, so a dense page stays
+   cheap. */
+@media (hover: hover) {
+  .neu :is(button, [role="button"], a.sidenav-link, summary):not(:disabled):not([aria-disabled="true"]):hover,
+  .kpi-card:is(button):hover,
+  .soft-link:hover {
+    filter: drop-shadow(0 0 10px rgba(var(--glow-rgb), var(--glow-lift)));
+  }
+}
+/* Pressed: the glow pulls in while the button sinks */
+.neu :is(button, [role="button"]):not(:disabled):is(:active, [data-pressed]) {
+  filter: drop-shadow(0 0 4px rgba(var(--glow-rgb), calc(var(--glow-lift) * 0.5)));
+}
+
+/* Selected or current: a steady glow that breathes. It follows real state
+   (aria-pressed, aria-selected, aria-current), and the selected look is still
+   there without it, so the glow is never the only sign. */
+.neu :is(
+  button[aria-pressed="true"], button[aria-selected="true"], [role="tab"][aria-selected="true"],
+  .kpi-card-active, [aria-current="true"], [aria-current="page"], aside nav .border-l-2.border-cyan-500
+) {
+  --glow-pulse: 0.5;
+  filter: drop-shadow(0 0 calc(7px + var(--glow-pulse) * 6px) rgba(var(--glow-rgb), calc(0.22 + var(--glow-pulse) * 0.2)));
+  animation: glow-breathe var(--glow-pulse-time) ease-in-out infinite alternate;
+}
+@keyframes glow-breathe {
+  from { --glow-pulse: 0; }
+  to   { --glow-pulse: 1; }
+}
+
+/* Dropdowns and calendars: a still, soft glow behind the popup. A box-shadow, not a
+   filter, so it costs nothing extra while the page scrolls. */
+.soft-pop {
+  box-shadow: var(--float-shadow-sm), 0 0 18px rgba(var(--glow-rgb), calc(var(--glow-rest) * 0.6));
+}
+
+/* Reduced motion: no breathing, a still glow instead */
+@media (prefers-reduced-motion: reduce) {
+  .neu :is(
+    button[aria-pressed="true"], button[aria-selected="true"], [role="tab"][aria-selected="true"],
+    .kpi-card-active, [aria-current="true"], [aria-current="page"], aside nav .border-l-2.border-cyan-500
+  ) {
+    animation: none;
+  }
+  :root:not(#glow) [data-glow][data-glow][data-glow][data-glow][data-glow] {
+    --glow-pulse: 0.5;
+    transition: none;
+  }
+}
+
+/* ---- Destination pulse ----------------------------------------------------
+   lib/destination.js puts data-dest-pulse on the list a card points to for
+   about 2.6 seconds. Two cyan breaths, then the element is as it was. The
+   glow is a box-shadow around it (never inside), so nothing is covered. */
+@keyframes dest-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--glow-rgb), 0); }
+  25%, 75% { box-shadow: 0 0 0 3px rgba(var(--glow-rgb), 0.55), 0 0 36px 6px rgba(var(--glow-rgb), 0.45); }
+  50%      { box-shadow: 0 0 0 2px rgba(var(--glow-rgb), 0.3), 0 0 22px 2px rgba(var(--glow-rgb), 0.22); }
+}
+[data-dest-pulse] {
+  animation: dest-pulse 1.3s ease-in-out 2;
+  scroll-margin-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-dest-pulse] {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(var(--glow-rgb), 0.55), 0 0 24px 2px rgba(var(--glow-rgb), 0.3);
+  }
+}
+
+/* ---- Cards: hover, pressed and selected look different ----------------------
+   Hover: a cyan glow around the card and a 1px lift. Pressed: the card sinks
+   (inset shadow) with a tighter glow. Selected: a steady cyan ring on the sunken
+   card that breathes (see the selected rule above), so it is not mistaken for
+   hover. The lift is a transform, so nothing around it moves. */
+@media (hover: hover) {
+  .neu button.kpi-card:not(.kpi-card-active):hover {
+    transform: translateY(-1px);
+    transition: transform 160ms ease-out, filter 160ms ease-out;
+  }
+}
+.neu button.kpi-card:active {
+  transform: none;
+  box-shadow: var(--neu-inset) !important;
+}
+
+/* ---- Every summary card glows the same way --------------------------------
+   One rule set for KPI cards (components/Kpi.jsx) and the Admin Dashboard's own
+   stat cards, clickable or not. Hover: a cyan glow around the card, softer on a
+   card that does nothing when clicked and stronger on one that does. Pressed:
+   the card sinks. Selected: the steady breathing ring (rules above). Only real
+   hover devices get the hover glow, so nothing stays lit after a tap. */
+:root {
+  --glow-card: 0.5;        /* hover glow of a clickable card */
+  --glow-card-still: 0.28; /* hover glow of a card that is only informational */
+}
+.cp-dark, .neu-dark { --glow-card: 0.6; --glow-card-still: 0.34; }
+.kpi-card, .stat-card { transition: filter 0.25s ease-out, transform 0.16s ease-out, box-shadow 0.2s ease-out; }
+@media (hover: hover) {
+  .kpi-card:not(button):hover,
+  .stat-card:not([role="button"]):hover {
+    filter: drop-shadow(0 0 12px rgba(var(--glow-rgb), var(--glow-card-still)));
+  }
+  .neu button.kpi-card:not(.kpi-card-active):hover,
+  .stat-card[role="button"]:not([data-selected="true"]):hover {
+    filter: drop-shadow(0 0 14px rgba(var(--glow-rgb), var(--glow-card)));
+  }
+  .stat-card[role="button"]:not([data-selected="true"]):hover { transform: translateY(-1px); }
+}
+.stat-card[role="button"]:active {
+  transform: none;
+  filter: drop-shadow(0 0 4px rgba(var(--glow-rgb), calc(var(--glow-card) * 0.5)));
+}
+/* The Dashboard's selected stat card breathes like a selected KPI card */
+.stat-card[data-selected="true"] {
+  --glow-pulse: 0.5;
+  filter: drop-shadow(0 0 calc(7px + var(--glow-pulse) * 6px) rgba(var(--glow-rgb), calc(0.22 + var(--glow-pulse) * 0.2)));
+  animation: glow-breathe var(--glow-pulse-time) ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stat-card[data-selected="true"] { animation: none; }
+}
+
+/* ---- Winning over the base hover rule --------------------------------------
+   index.css dims every button on hover with
+     #root :is(button, [role="button"], ...):hover { filter: brightness(.93) }
+   and an id selector beats the plain class rules above, so the glow never
+   showed on buttons and cards. These repeat the glow rules behind #root so
+   they win; the same filter property carries hover, pressed and selected, and
+   they are listed hover first, then pressed, then selected, so the later
+   state wins when two apply (a selected card that is hovered stays selected). */
+@media (hover: hover) {
+  #root .neu :is(button, [role="button"], a.sidenav-link, summary):not(:disabled):not([aria-disabled="true"]):hover {
+    filter: drop-shadow(0 0 10px rgba(var(--glow-rgb), var(--glow-lift)));
+  }
+  #root .neu button.kpi-card.kpi-card:not(:disabled):hover,
+  #root .neu .stat-card.stat-card[role="button"]:not([aria-disabled="true"]):not(:disabled):hover {
+    filter: drop-shadow(0 0 14px rgba(var(--glow-rgb), var(--glow-card)));
+  }
+}
+#root .neu :is(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):is(:active, [data-pressed]) {
+  filter: drop-shadow(0 0 4px rgba(var(--glow-rgb), calc(var(--glow-card) * 0.5)));
+}
+#root .neu :is(
+  button[aria-pressed="true"], button[aria-selected="true"], [role="tab"][aria-selected="true"],
+  .kpi-card-active, [aria-current="true"], [aria-current="page"], aside nav .border-l-2.border-cyan-500,
+  .stat-card[data-selected="true"]
+):is(:hover, :active) {
+  filter: drop-shadow(0 0 calc(7px + var(--glow-pulse) * 6px) rgba(var(--glow-rgb), calc(0.22 + var(--glow-pulse) * 0.2)));
+}
+
+/* The optional motion layer (ui-effects) sets its own card transition; keep the
+   glow easing in beside its lift */
+html[data-fx] .kpi-card.kpi-card,
+html[data-fx] .stat-card.stat-card {
+  transition: filter 0.25s ease-out, transform var(--fx-mid, 0.2s) var(--fx-ease, ease-out), box-shadow var(--fx-mid, 0.2s) var(--fx-ease, ease-out);
+}

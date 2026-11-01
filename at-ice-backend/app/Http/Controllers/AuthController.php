@@ -3,16 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\LoginLockout;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
-    // LOGIN with Brute Force Protection
-    // 5 attempts, 3-minute lockout (per email + IP)
+    // Login with progressive account/IP lockout while retaining the timing
+    // protection and deactivated-account guard below.
     public function login(Request $request)
     {
         $request->validate([
@@ -20,18 +19,9 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        // Build a unique throttle key: email + IP
-        $throttleKey = Str::lower($request->email).'|'.$request->ip();
-
-        // Check if already locked out
-        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
-            $seconds = RateLimiter::availableIn($throttleKey);
-            $minutes = ceil($seconds / 60);
-
-            return response()->json([
-                'message' => "Too many login attempts. Please try again in {$minutes} minute(s).",
-                'retry_after_seconds' => $seconds,
-            ], 429);
+        $ip = (string) $request->ip();
+        if ($seconds = LoginLockout::secondsLeft($request->email, $ip)) {
+            return $this->lockedResponse($seconds);
         }
 
         // Attempt login
@@ -47,19 +37,15 @@ class AuthController extends Controller
         }
 
         if (! $user || ! $passwordOk) {
-            // Increment failed attempt (decays after 180 seconds = 3 minutes)
-            RateLimiter::hit($throttleKey, 180);
+            if ($seconds = LoginLockout::recordFailure($request->email, $ip)) {
+                return $this->lockedResponse($seconds);
+            }
 
-            $remaining = 5 - RateLimiter::attempts($throttleKey);
-
-            return response()->json([
-                'message' => 'Invalid credentials.',
-                'attempts_remaining' => max(0, $remaining),
-            ], 401);
+            return response()->json(['message' => 'Invalid credentials.'], 401);
         }
 
-        // Success — clear throttle
-        RateLimiter::clear($throttleKey);
+        // A valid sign-in resets the lockout history for this email/IP pair.
+        LoginLockout::clear($request->email, $ip);
 
         // Block deactivated accounts (a disabled login, or an employee
         // deactivated by HR; see User::isDeactivated). Checked only after the
@@ -84,6 +70,17 @@ class AuthController extends Controller
                 'email' => $user->email,
             ],
         ]);
+    }
+
+    private function lockedResponse(int $seconds)
+    {
+        $minutes = (int) ceil($seconds / 60);
+
+        return response()->json([
+            'message' => "Too many login attempts. Please try again in {$minutes} minute(s).",
+            'retry_after_seconds' => $seconds,
+            'locked_until' => now()->addSeconds($seconds)->toIso8601String(),
+        ], 429)->header('Retry-After', (string) $seconds);
     }
 
     // LOGOUT
