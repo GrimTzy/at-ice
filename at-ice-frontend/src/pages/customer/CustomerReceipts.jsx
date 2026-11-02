@@ -64,7 +64,10 @@ export default function CustomerReceipts() {
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(() => {
+    const f = new URLSearchParams(window.location.search).get("filter");
+    return ["unpaid", "overdue", "paid"].includes(f) ? f : "all";
+  });
   // The open invoice comes back after a refresh (with its payment proof draft).
   const openDraft = useDraft("receipts:open", { selectedId: null }, { when: (v) => v.selectedId != null });
   const { selectedId } = openDraft.values;
@@ -129,8 +132,8 @@ export default function CustomerReceipts() {
             return (
               <KpiGrid cols={4}>
                 <KpiCard label="Balance due" icon="wallet" tone="amber" money value={summary.balance} sub={summary.balance > 0 ? "Unpaid and overdue invoices" : "No balance"} bar={billed ? summary.balance / billed : 0} onClick={() => setFilter("unpaid")} active={filter === "unpaid"} />
-                <KpiCard label="Overdue" icon="alert" tone="rose" money value={summary.overdueAmount} sub={`${summary.overdueCount} invoice${summary.overdueCount === 1 ? "" : "s"}`} bar={billed ? summary.overdueAmount / billed : 0} onClick={() => setFilter("overdue")} active={filter === "overdue"} />
-                <KpiCard label="Paid" icon="check" tone="emerald" money value={summary.paidAmount} sub={`${summary.paidCount} invoice${summary.paidCount === 1 ? "" : "s"}`} bar={billed ? summary.paidAmount / billed : 0} onClick={() => setFilter("paid")} active={filter === "paid"} />
+                <KpiCard heroKey="overdue" label="Overdue" icon="alert" tone="rose" money value={summary.overdueAmount} sub={`${summary.overdueCount} invoice${summary.overdueCount === 1 ? "" : "s"}`} bar={billed ? summary.overdueAmount / billed : 0} onClick={() => setFilter("overdue")} active={filter === "overdue"} />
+                <KpiCard heroKey="paid" label="Paid" icon="check" tone="emerald" money value={summary.paidAmount} sub={`${summary.paidCount} invoice${summary.paidCount === 1 ? "" : "s"}`} bar={billed ? summary.paidAmount / billed : 0} onClick={() => setFilter("paid")} active={filter === "paid"} />
                 <KpiCard label="Proofs under review" icon="file" tone="violet" value={proofsWaiting} sub={proofsWaiting ? "We are checking your payment" : "Nothing waiting"} live={proofsWaiting > 0} />
               </KpiGrid>
             );

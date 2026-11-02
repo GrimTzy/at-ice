@@ -84,6 +84,10 @@ from the app. Set the Attendance Station PIN from the HR page **Kiosk PIN**, or:
 php artisan kiosk:set-pin
 ```
 
+Do **not** run `php artisan db:seed` on a real database. `DatabaseSeeder` creates a
+sample user (`test@example.com`) with the factory's default password, plus sample
+customers. The steps above are all you need for a real setup.
+
 ---
 
 ## Your own settings (`at-ice-backend/.env`)
@@ -128,6 +132,25 @@ Gmail sends up to about 500 emails a day for free.
 
 Maps use OpenStreetMap, so no map key is needed.
 
+### Settings that already have defaults
+
+These are optional. Add them to `at-ice-backend/.env` only to change the default.
+
+| Setting | Default | What it is for |
+|---|---|---|
+| `ATICE_TIMEZONE` | `Asia/Manila` | Business time zone for attendance, kiosk and payroll. The frontend's `VITE_BUSINESS_TZ` must match it. |
+| `PAYROLL_ANCHOR` | `2026-01-05` | First Monday of a bi-weekly pay period. The value saved in Admin > Settings takes precedence; `.env` only gives the starting default. |
+| `CORS_ALLOWED_ORIGINS` | the local Vite dev server | Browser origins allowed to call the API. Production sets it from `APP_URL`. |
+| `GROQ_VISION_MODEL`, `GROQ_TEXT_MODEL` | built-in models | AI models for reading IDs and resumes. |
+
+`at-ice-backend/.env.example` has `APP_DEBUG=true` for local work only. Production runs
+with debug off.
+
+The frontend reads its own `at-ice-frontend/.env` (copy `.env.example`). `VITE_BACKEND_URL`,
+`VITE_PUSHER_APP_KEY`, `VITE_PUSHER_APP_CLUSTER` and `VITE_BUSINESS_TZ` go there. Anything
+starting with `VITE_` is compiled into the web page, so **never put a private key in it**.
+`VITE_LAN_HOST` is not set by hand: `vite.config.js` fills it in when the dev server starts.
+
 ### Camera and GPS need HTTPS
 
 Browsers give the camera (Attendance Station face recognition) and the location
@@ -143,7 +166,7 @@ site runs on HTTPS, so there they work.
 
 | Where | Command | What it does |
 |---|---|---|
-| backend | `composer test` | Runs the tests |
+| backend | `composer test` | Runs the tests (an in-memory SQLite database, never your real one) |
 | backend | `./vendor/bin/pint` | Formats the PHP code |
 | backend | `php artisan migrate` | Applies new database changes after a pull |
 | frontend | `npm run lint` | Checks the JavaScript code |

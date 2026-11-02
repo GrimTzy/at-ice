@@ -12,6 +12,7 @@ use App\Support\PayrollCalendar;
 use App\Support\Settings;
 use App\Support\ThirteenthMonth;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 // Payroll (docs/REVIEW-DECISIONS.md). HR approves timesheets
@@ -78,15 +79,21 @@ class PayrollController extends Controller
     // POST /api/payrolls/{id}/adjustments { label, amount, taxable } (HR)
     public function addAdjustment(Request $request, $id)
     {
-        $payroll = $this->unpaid($id);
         $data = $request->validate([
             'label' => 'required|string|max:100',
             'amount' => 'required|numeric|min:0.01|max:1000000',
             'taxable' => 'required|boolean',
         ]);
-        $adj = $payroll->adjustments()->create($data + ['created_by' => $request->user()->id]);
-        PayrollCalculator::refresh($payroll->fresh());
-        Audit::log('payroll.adjustment_added', $payroll, null, $adj->only(['label', 'amount', 'taxable']));
+        // The row is locked while the paid check and the change happen, so a
+        // "mark paid" running at the same time cannot slip in between.
+        $payroll = DB::transaction(function () use ($id, $data, $request) {
+            $payroll = $this->unpaid($id, true);
+            $adj = $payroll->adjustments()->create($data + ['created_by' => $request->user()->id]);
+            PayrollCalculator::refresh($payroll->fresh());
+            Audit::log('payroll.adjustment_added', $payroll, null, $adj->only(['label', 'amount', 'taxable']));
+
+            return $payroll;
+        });
 
         return response()->json($payroll->fresh()->load('adjustments'), 201);
     }
@@ -95,10 +102,14 @@ class PayrollController extends Controller
     public function removeAdjustment($id)
     {
         $adj = PayrollAdjustment::findOrFail($id);
-        $payroll = $this->unpaid($adj->payroll_id);
-        $adj->delete();
-        PayrollCalculator::refresh($payroll->fresh());
-        Audit::log('payroll.adjustment_removed', $payroll, $adj->only(['label', 'amount', 'taxable']), null);
+        $payroll = DB::transaction(function () use ($adj) {
+            $payroll = $this->unpaid($adj->payroll_id, true);
+            $adj->delete();
+            PayrollCalculator::refresh($payroll->fresh());
+            Audit::log('payroll.adjustment_removed', $payroll, $adj->only(['label', 'amount', 'taxable']), null);
+
+            return $payroll;
+        });
 
         return response()->json($payroll->fresh()->load('adjustments'));
     }
@@ -108,11 +119,13 @@ class PayrollController extends Controller
     {
         $data = $request->validate(['ids' => 'required|array|min:1', 'ids.*' => 'integer|exists:payrolls,id']);
         $count = 0;
-        foreach (Payroll::whereIn('id', $data['ids'])->where('status', 'unpaid')->get() as $payroll) {
-            $payroll->update(['status' => 'paid', 'paid_at' => now(), 'paid_by' => $request->user()->id]);
-            Audit::log('payroll.paid', $payroll, ['status' => 'unpaid'], ['status' => 'paid', 'net_pay' => (string) $payroll->net_pay]);
-            $count++;
-        }
+        DB::transaction(function () use ($data, $request, &$count) {
+            foreach (Payroll::whereIn('id', $data['ids'])->where('status', 'unpaid')->lockForUpdate()->get() as $payroll) {
+                $payroll->update(['status' => 'paid', 'paid_at' => now(), 'paid_by' => $request->user()->id]);
+                Audit::log('payroll.paid', $payroll, ['status' => 'unpaid'], ['status' => 'paid', 'net_pay' => (string) $payroll->net_pay]);
+                $count++;
+            }
+        });
 
         return response()->json(['message' => "{$count} payroll".($count === 1 ? '' : 's').' marked paid.', 'paid' => $count]);
     }
@@ -130,9 +143,9 @@ class PayrollController extends Controller
         return response()->json(['year' => $year, 'credit_date' => $year.'-'.Settings::get('thirteenth.credit_date'), 'rows' => $rows]);
     }
 
-    private function unpaid($id): Payroll
+    private function unpaid($id, bool $lock = false): Payroll
     {
-        $payroll = Payroll::findOrFail($id);
+        $payroll = $lock ? Payroll::lockForUpdate()->findOrFail($id) : Payroll::findOrFail($id);
         if ($payroll->status === 'paid') {
             throw ValidationException::withMessages(['payroll' => ['This payroll is already paid and can no longer be changed.']]);
         }

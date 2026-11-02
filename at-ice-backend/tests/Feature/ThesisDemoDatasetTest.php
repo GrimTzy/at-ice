@@ -180,7 +180,9 @@ class ThesisDemoDatasetTest extends TestCase
         $starts = (clone $seeded)->where('employee_id', $this->real->id)->orderBy('period_start')->pluck('period_start')->map(fn ($d) => substr($d, 0, 10))->all();
         $this->assertSame(['2026-08-03', '2026-08-17', '2026-08-31', '2026-09-14'], $starts);
         $this->assertSame(['paid'], (clone $seeded)->where('employee_id', $this->real->id)->distinct()->pluck('status')->all());
-        $this->assertSame('6000.00', (string) DB::table('payrolls')->where('employee_id', $this->real->id)->where('period_start', '2026-09-28')->value('net_pay'));
+        // SQLite and MySQL serialize DECIMAL values differently (6000.00 vs
+        // 6000), so compare the stored amount instead of its display format.
+        $this->assertEquals(6000.0, (float) DB::table('payrolls')->where('employee_id', $this->real->id)->where('period_start', '2026-09-28')->value('net_pay'));
         $this->assertFalse(DB::table('payrolls')->where('employee_id', $this->real->id)->where('period_start', '2026-10-12')->exists());
 
         // EMP-0002 (hired Oct 2): only Sep 28 to Oct 11, no government deductions carried from before the hire
@@ -269,7 +271,8 @@ class ThesisDemoDatasetTest extends TestCase
 
         // E06's leave on the as-of day (Thu Oct 29) and the next day; no rest day in L-01
         $l18 = DB::table('leave_requests')->where('id', $m->id('leave:L-18'))->first();
-        $this->assertSame(['2026-10-29', '2026-10-30', '2.00'], [substr($l18->start_date, 0, 10), substr($l18->end_date, 0, 10), (string) $l18->total_days]);
+        $this->assertSame(['2026-10-29', '2026-10-30'], [substr($l18->start_date, 0, 10), substr($l18->end_date, 0, 10)]);
+        $this->assertEquals(2.0, (float) $l18->total_days);
         $l01 = DB::table('leave_requests')->where('id', $m->id('leave:L-01'))->first();
         foreach ([$l01->start_date, $l01->end_date] as $d) {
             $this->assertLessThanOrEqual(5, \Carbon\CarbonImmutable::parse($d)->dayOfWeekIso);

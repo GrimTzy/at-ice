@@ -24,7 +24,9 @@ class AttendanceRosterTest extends TestCase
 
     public function test_roster_lists_who_has_not_timed_in_and_who_is_on_leave(): void
     {
-        $today = now()->toDateString();
+        // Use a known non-holiday weekday so the result does not change when
+        // CI happens to run on a weekend or Philippine public holiday.
+        $today = '2026-10-29';
         $in = $this->employee('EMP-001', 'Ana');
         $out = $this->employee('EMP-002', 'Ben');
         $leave = $this->employee('EMP-003', 'Carl');
@@ -35,7 +37,7 @@ class AttendanceRosterTest extends TestCase
         LeaveRequest::create(['employee_id' => $pendingLeave->id, 'leave_type' => 'vacation', 'start_date' => $today, 'end_date' => $today, 'total_days' => 1, 'reason' => 'Trip', 'status' => 'pending']);
 
         Sanctum::actingAs(User::create(['name' => 'HR', 'email' => 'hr@atice.cloud', 'password' => 'secret-password', 'role' => 'hr']));
-        $data = $this->getJson('/api/attendances/roster')->assertOk()->json();
+        $data = $this->getJson('/api/attendances/roster?date='.$today)->assertOk()->json();
 
         $notIn = collect($data['not_in'])->pluck('id')->all();
         $onLeave = collect($data['on_leave'])->pluck('id')->all();

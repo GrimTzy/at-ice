@@ -16,10 +16,13 @@ class Lateness
     {
         $grace ??= (int) Settings::get('attendance.grace_minutes');
         $diff = self::seconds($timeIn) - self::seconds($shiftStart);
-        // Across midnight: more than 12 hours apart means the other side of it.
+        // Across midnight. A Time In more than 12 hours before the clock time
+        // of the start is a late arrival after midnight. One more than 21 hours
+        // after it is an early arrival (up to 3 hours) for a start just after
+        // midnight. Anything between is simply late, not early.
         if ($diff < -43200) {
             $diff += 86400;
-        } elseif ($diff > 43200) {
+        } elseif ($diff > 75600) {
             $diff -= 86400;
         }
         $late = intdiv($diff, 60);

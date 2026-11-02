@@ -21,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'kiosk' => \App\Http\Middleware\EnsureKioskToken::class,
             'timed.in' => \App\Http\Middleware\EnsureTimedIn::class,
         ]);
+        // Check the role before route model binding, so a wrong role gets 403 on
+        // every route, not 404 for ids that do not exist (which showed which ids do).
+        $middleware->prependToPriorityList(\Illuminate\Routing\Middleware\SubstituteBindings::class, \App\Http\Middleware\RoleMiddleware::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
