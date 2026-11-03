@@ -26,12 +26,13 @@ class AccountCredentials extends Mailable implements ShouldBeEncrypted, ShouldQu
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Your AT Ice customer portal account');
+        // No "password" or "credentials" in the subject: spam filters weigh those words.
+        return new Envelope(subject: 'Welcome to '.config('mail.from.name').': account activation');
     }
 
     public function content(): Content
     {
-        return new Content(view: 'emails.account-credentials', with: [
+        return new Content(view: 'emails.account-credentials', text: 'emails.account-credentials-text', with: [
             'loginUrl' => rtrim(config('app.url'), '/').'/login',
         ]);
     }

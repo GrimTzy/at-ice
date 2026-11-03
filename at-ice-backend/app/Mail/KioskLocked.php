@@ -23,11 +23,11 @@ class KioskLocked extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "AT Ice: Attendance Station kiosk {$this->kiosk} is locked");
+        return new Envelope(subject: config('mail.from.name').": Attendance Station kiosk {$this->kiosk} is locked");
     }
 
     public function content(): Content
     {
-        return new Content(view: 'emails.kiosk-locked');
+        return new Content(view: 'emails.kiosk-locked', text: 'emails.kiosk-locked-text');
     }
 }

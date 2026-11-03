@@ -112,7 +112,11 @@ return [
 
     'from' => [
         'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-        'name' => env('MAIL_FROM_NAME', 'Example'),
+        // The sender name every email shows, and the brand used in subjects.
+        'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'AT-ICE ERP')),
     ],
+
+    // Company name in the short footer of every email.
+    'company' => env('MAIL_COMPANY_NAME', 'Bella Erin Tube Ice Inc.'),
 
 ];
