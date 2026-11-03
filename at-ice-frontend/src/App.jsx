@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute'
 import { NightScope } from './components/NightMode'
@@ -7,6 +8,7 @@ import Toaster from './components/Toaster'
 import ActionGuard from './components/ActionGuard'
 import AttachmentViewer from './components/AttachmentViewer'
 import OverflowTitle from './components/OverflowTitle'
+import RouteLoading from './components/RouteLoading'
 import { DestinationWatcher } from './lib/destination'
 import { installHeroPulse } from './lib/heroPulse'
 installHeroPulse()
@@ -14,62 +16,62 @@ installHeroPulse()
 // -- General Pages
 import LoginPage from './pages/LoginPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
-import ApplyPage from './pages/ApplyPage'
-import AttendanceStation from './pages/AttendanceStation'
+const ApplyPage = lazy(() => import('./pages/ApplyPage'))
+const AttendanceStation = lazy(() => import('./pages/AttendanceStation'))
 import KioskGate from './components/KioskGate'
-import LeaveRequestPage from './pages/LeaveRequestPage'
+const LeaveRequestPage = lazy(() => import('./pages/LeaveRequestPage'))
 
 // -- Admin Module (folder is "Admin" with a capital A: Linux servers are
 // case-sensitive, so every import must match it exactly)
-import Dashboard from './pages/Admin/Dashboard'
-import CustomerPriceManagement from './pages/Admin/CustomerPriceManagement'
-import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
-import StockLimitsPage from './pages/Admin/StockLimitsPage'
-import ProjectsPage from './pages/Admin/ProjectsPage'
-import MaintenanceProjectsPage from './pages/employees/MaintenanceProjectsPage'
-import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
-import PerformancePage from './pages/Admin/PerformancePage'
-import CustomersPage from './pages/Admin/CustomersPage'
-import DeliveriesPage from './pages/Admin/DeliveriesPage'
-import ReceiptsPage from './pages/Admin/ReceiptsPage'
-import SupportInboxPage from './pages/Admin/SupportInboxPage'
-import SettingsPage from './pages/Admin/SettingsPage'
+const Dashboard = lazy(() => import('./pages/Admin/Dashboard'))
+const CustomerPriceManagement = lazy(() => import('./pages/Admin/CustomerPriceManagement'))
+const StockOutApprovalPage = lazy(() => import('./pages/Admin/StockOutApprovalPage'))
+const StockLimitsPage = lazy(() => import('./pages/Admin/StockLimitsPage'))
+const ProjectsPage = lazy(() => import('./pages/Admin/ProjectsPage'))
+const MaintenanceProjectsPage = lazy(() => import('./pages/employees/MaintenanceProjectsPage'))
+const EmployeesOverviewPage = lazy(() => import('./pages/Admin/EmployeesOverviewPage'))
+const PerformancePage = lazy(() => import('./pages/Admin/PerformancePage'))
+const CustomersPage = lazy(() => import('./pages/Admin/CustomersPage'))
+const DeliveriesPage = lazy(() => import('./pages/Admin/DeliveriesPage'))
+const ReceiptsPage = lazy(() => import('./pages/Admin/ReceiptsPage'))
+const SupportInboxPage = lazy(() => import('./pages/Admin/SupportInboxPage'))
+const SettingsPage = lazy(() => import('./pages/Admin/SettingsPage'))
 
 // -- Customer Module
-import ChangePasswordPage from './pages/ChangePasswordPage'
-import CustomerDashboard from './pages/customer/CustomerDashboard'
-import CustomerDeliveries from './pages/customer/CustomerDeliveries'
-import CustomerDeliveryProofs from './pages/customer/CustomerDeliveryProofs'
-import CustomerReceipts from './pages/customer/CustomerReceipts'
-import CustomerPrices from './pages/customer/CustomerPrices'
-import CustomerSupport from './pages/customer/CustomerSupport'
+const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'))
+const CustomerDashboard = lazy(() => import('./pages/customer/CustomerDashboard'))
+const CustomerDeliveries = lazy(() => import('./pages/customer/CustomerDeliveries'))
+const CustomerDeliveryProofs = lazy(() => import('./pages/customer/CustomerDeliveryProofs'))
+const CustomerReceipts = lazy(() => import('./pages/customer/CustomerReceipts'))
+const CustomerPrices = lazy(() => import('./pages/customer/CustomerPrices'))
+const CustomerSupport = lazy(() => import('./pages/customer/CustomerSupport'))
 
 // -- Driver Module
-import { DeliveriesPage as DriverDeliveriesPage } from './pages/drivers/DeliveriesPage'
-import { GpsTrackingPage } from './pages/drivers/GpsTrackingPage'
+const DriverDeliveriesPage = lazy(() => import('./pages/drivers/DeliveriesPage').then((m) => ({ default: m.DeliveriesPage })))
+const GpsTrackingPage = lazy(() => import('./pages/drivers/GpsTrackingPage').then((m) => ({ default: m.GpsTrackingPage })))
 
 // -- HR Module
-import HRDashboard from './pages/hr/HRDashboard'
-import EmployeesPage from './pages/hr/EmployeesPage'
-import AttendancePage from './pages/hr/AttendancePage'
-import LeaveRequestsPage from './pages/hr/LeaveRequestsPage'
-import MemoManager from './pages/hr/MemoManager'
-import InterviewsPage from './pages/hr/InterviewsPage'
-import TimesheetsPage from './pages/hr/TimesheetsPage'
-import HolidaysPage from './pages/hr/HolidaysPage'
-import PayrollRecordsPage from './pages/hr/PayrollRecordsPage'
-import KioskPinPage from './pages/hr/KioskPinPage'
+const HRDashboard = lazy(() => import('./pages/hr/HRDashboard'))
+const EmployeesPage = lazy(() => import('./pages/hr/EmployeesPage'))
+const AttendancePage = lazy(() => import('./pages/hr/AttendancePage'))
+const LeaveRequestsPage = lazy(() => import('./pages/hr/LeaveRequestsPage'))
+const MemoManager = lazy(() => import('./pages/hr/MemoManager'))
+const InterviewsPage = lazy(() => import('./pages/hr/InterviewsPage'))
+const TimesheetsPage = lazy(() => import('./pages/hr/TimesheetsPage'))
+const HolidaysPage = lazy(() => import('./pages/hr/HolidaysPage'))
+const PayrollRecordsPage = lazy(() => import('./pages/hr/PayrollRecordsPage'))
+const KioskPinPage = lazy(() => import('./pages/hr/KioskPinPage'))
 
 // -- Employee Module
-import CheckerDashboard from './pages/employees/CheckerDashboard'
-import CheckerIceLoadingPage from './pages/employees/CheckerIceLoadingPage'
-import CheckerInventoryManagementPage from './pages/employees/CheckerInventoryManagementPage'
-import CheckerStockMovementsPage from './pages/employees/CheckerStockMovementsPage'
-import CheckerSupplierManagementPage from './pages/employees/CheckerSupplierManagementPage'
-import SalesmanDashboard from './pages/employees/SalesmanDashboard'
-import SalesmanDeliveryConfirmation from './pages/employees/SalesmanDeliveryConfirmation'
-import MaintenanceDashboard from './pages/employees/MaintenanceDashboard'
-import MaintenanceStockOutRequestPage from './pages/employees/MaintenanceStockOutRequestPage'
+const CheckerDashboard = lazy(() => import('./pages/employees/CheckerDashboard'))
+const CheckerIceLoadingPage = lazy(() => import('./pages/employees/CheckerIceLoadingPage'))
+const CheckerInventoryManagementPage = lazy(() => import('./pages/employees/CheckerInventoryManagementPage'))
+const CheckerStockMovementsPage = lazy(() => import('./pages/employees/CheckerStockMovementsPage'))
+const CheckerSupplierManagementPage = lazy(() => import('./pages/employees/CheckerSupplierManagementPage'))
+const SalesmanDashboard = lazy(() => import('./pages/employees/SalesmanDashboard'))
+const SalesmanDeliveryConfirmation = lazy(() => import('./pages/employees/SalesmanDeliveryConfirmation'))
+const MaintenanceDashboard = lazy(() => import('./pages/employees/MaintenanceDashboard'))
+const MaintenanceStockOutRequestPage = lazy(() => import('./pages/employees/MaintenanceStockOutRequestPage'))
 
 
 function App() {
@@ -83,6 +85,8 @@ function App() {
       <AttachmentViewer />
       <OverflowTitle />
       <DestinationWatcher />
+      {/* Pages load on demand (React.lazy); the loader fades in only if a page is slow */}
+      <Suspense fallback={<RouteLoading />}>
       <Routes>
 
         {/* -- General (public, no auth needed) -- */}
@@ -508,6 +512,7 @@ function App() {
         <Route path="*" element={<Navigate to="/login" replace />} />
 
       </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

@@ -169,7 +169,7 @@ export default function SideNav({ items, onNavigate }) {
               onClick={() => { if (item.children) { pin(item.label); unclose(item.label); } go(); }}
               title={item.label}
               aria-current={isActive && !item.children ? "page" : undefined}
-              className={`flex items-center gap-2.5 px-[18px] ${item.children ? "pr-9" : ""} py-[7px] text-[13px] cursor-pointer transition-all duration-100 border-l-2 ${isActive ? "text-cyan-500 bg-cyan-500/[0.08] border-cyan-500" : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50"}`}
+              className={`flex items-center gap-2.5 px-[18px] ${item.children ? "pr-9" : ""} py-[7px] text-[13px] cursor-pointer transition-[color,background-color,border-color,box-shadow,transform] duration-100 border-l-2 ${isActive ? "text-cyan-500 bg-cyan-500/[0.08] border-cyan-500" : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50"}`}
             >
               <span className="opacity-80 flex-shrink-0">{item.icon}</span>
               <span className="rail-label truncate flex-1">{item.label}</span>

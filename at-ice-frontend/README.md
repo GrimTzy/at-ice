@@ -1,41 +1,16 @@
-# AT Ice frontend
+# React + Vite
 
-The web app for AT Ice ERP, built with React and Vite. It talks to the Laravel API in
-`../at-ice-backend`. Full setup is in the [main README](../README.md).
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Run it
+Currently, two official plugins are available:
 
-```bash
-npm install
-cp .env.example .env   # Windows: copy .env.example .env
-npm run dev            # http://localhost:5173
-```
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-The dev server sends `/api` requests to the backend on port 8000, so start the backend first
-(`composer dev` in `at-ice-backend`).
+## React Compiler
 
-## Commands
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-| Command | What it does |
-|---|---|
-| `npm run dev` | Starts the dev server |
-| `npm run lint` | Checks the code with ESLint |
-| `npm run build` | Builds the app into `dist/` |
-| `npm run preview` | Serves the built app locally |
+## Expanding the ESLint configuration
 
-## Settings (`.env`)
-
-| Variable | What it is for |
-|---|---|
-| `VITE_BACKEND_URL` | Address of the API |
-| `VITE_PUSHER_APP_KEY`, `VITE_PUSHER_APP_CLUSTER` | Public Pusher settings for instant updates |
-| `VITE_BUSINESS_TZ` | Business time zone; must match `ATICE_TIMEZONE` on the server |
-
-Anything starting with `VITE_` is compiled into the page that browsers download, so never put a
-password or private key in it. `VITE_LAN_HOST` is filled in by `vite.config.js` in dev; do not set it.
-
-## Notes
-
-- Face recognition models for the Attendance Station are in `public/models`.
-- Camera and GPS need HTTPS or `localhost` (see the main README).
-- `dist/` is generated and is not committed.
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.

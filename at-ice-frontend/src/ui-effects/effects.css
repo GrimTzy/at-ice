@@ -12,6 +12,8 @@ html[data-fx="on"] {
 }
 
 @keyframes fx-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* The page / content entrance: a crisp fade with a short upward slide and a hint of scale. */
+@keyframes fx-enter { from { opacity: 0; transform: translateY(14px) scale(0.985); } to { opacity: 1; transform: none; } }
 @keyframes fx-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fx-pop { 0% { transform: scale(0.94); opacity: 0; } 60% { transform: scale(1.02); opacity: 1; } 100% { transform: scale(1); } }
 @keyframes fx-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -23,13 +25,9 @@ html[data-fx="on"] {
 @keyframes fx-dash { from { stroke-dashoffset: var(--fx-dash-from, 300); } to { stroke-dashoffset: var(--fx-dash-to, 0); } }
 @keyframes fx-shimmer { from { background-position: -200px 0; } to { background-position: 200px 0; } }
 
-/* ---- Page content: sections, cards and rows rise in a short stagger ---------
-   Fill "backwards", never "both": a finished animation that keeps holding its
-   end state leaves a transform (or opacity) on every card and table row, which
-   traps a position:fixed modal opened inside them (it was clipped by the card
-   and later rows were painted over it and took its clicks). */
+/* ---- Page content: sections, cards and rows rise in a short stagger --------- */
 html[data-fx="on"] :is(.ice-main, .role-shell main) > * {
-  animation: fx-rise var(--fx-slow) var(--fx-ease) backwards;
+  animation: fx-enter var(--fx-slow) var(--fx-ease) backwards;
 }
 html[data-fx="on"] :is(.ice-main, .role-shell main) > :nth-child(2) { animation-delay: 50ms; }
 html[data-fx="on"] :is(.ice-main, .role-shell main) > :nth-child(3) { animation-delay: 100ms; }
@@ -37,7 +35,7 @@ html[data-fx="on"] :is(.ice-main, .role-shell main) > :nth-child(4) { animation-
 html[data-fx="on"] :is(.ice-main, .role-shell main) > :nth-child(n+5) { animation-delay: 200ms; }
 
 /* KPI cards and grid items in a row */
-html[data-fx="on"] .kpi-grid > * { animation: fx-rise var(--fx-slow) var(--fx-ease) backwards; }
+html[data-fx="on"] .kpi-grid > * { animation: fx-enter var(--fx-slow) var(--fx-ease) backwards; }
 html[data-fx="on"] .kpi-grid > :nth-child(2) { animation-delay: 60ms; }
 html[data-fx="on"] .kpi-grid > :nth-child(3) { animation-delay: 120ms; }
 html[data-fx="on"] .kpi-grid > :nth-child(4) { animation-delay: 180ms; }
@@ -55,6 +53,11 @@ html[data-fx="on"] .ice-main tbody tr:nth-child(6) { --fx-row: 125; }
 html[data-fx="on"] .ice-main tbody tr:nth-child(7) { --fx-row: 150; }
 html[data-fx="on"] .ice-main tbody tr:nth-child(8) { --fx-row: 175; }
 html[data-fx="on"] .ice-main tbody tr:nth-child(n+9) { --fx-row: 200; }
+
+/* Content that replaces a skeleton (marked by ui-effects/reveal.js) enters the
+   same way a new page does. Fill mode "backwards": nothing is held after the
+   animation, so hover lifts and presses keep working. */
+html[data-fx="on"] .fx-reveal { animation: fx-enter var(--fx-slow) var(--fx-ease) backwards; }
 
 /* ---- Cards: a gentle lift on hover ------------------------------------------ */
 html[data-fx="on"] .kpi-card,
@@ -95,7 +98,7 @@ html[data-fx="on"] .live-dot { animation: fx-ring 2s ease-out infinite; }
 html[data-fx="on"] .fx-breathe { animation: fx-breathe 3.2s ease-in-out infinite; }
 
 /* ---- Dialogs, drawers and popups scale in ------------------------------------ */
-html[data-fx="on"] .fixed.inset-0 > :is(div, form):not(.fixed) { animation: fx-pop 260ms var(--fx-ease) backwards; }
+html[data-fx="on"] .fixed.inset-0 > :is(div, form):not(.fixed) { animation: fx-pop 260ms var(--fx-ease) both; }
 html[data-fx="on"] .fixed.inset-0:is([class*="bg-black/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"]) { animation: fx-fade 200ms ease both; }
 
 /* ---- Chosen dates, times and options pop ------------------------------------- */
@@ -158,4 +161,15 @@ html[data-fx="on"] .animate-pulse {
 
 @media (prefers-reduced-motion: reduce) {
   html[data-fx="on"] *, html[data-fx="on"] *::before, html[data-fx="on"] *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---- Open dialogs escape the entrance animation -----------------------------
+   A rising card or fading row keeps a transform/opacity animation, which makes
+   it its own layer: a dialog opened inside it was clipped to the card and later
+   table rows painted over it. Any section or row that holds an open dialog
+   drops its animation, so the dialog sits above the whole page. */
+html[data-fx="on"] :is(.ice-main > *, .role-shell main > *, .kpi-grid > *, .ice-main tbody tr):has(.fixed.inset-0) {
+  animation: none !important;
+  transform: none !important;
+  opacity: 1 !important;
 }

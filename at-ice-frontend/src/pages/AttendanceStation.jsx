@@ -372,7 +372,7 @@ export default function AttendanceStation() {
                     type="button"
                     onClick={() => changeMode(key)}
                     aria-pressed={mode === key}
-                    className={`flex flex-col items-center justify-center gap-0.5 py-4 rounded-xl border-2 text-[17px] font-semibold cursor-pointer transition-all ${
+                    className={`flex flex-col items-center justify-center gap-0.5 py-4 rounded-xl border-2 text-[17px] font-semibold cursor-pointer transition-[color,background-color,border-color,box-shadow,transform] ${
                       mode === key ? cfg.activeBtn : cfg.idleBtn
                     }`}
                   >

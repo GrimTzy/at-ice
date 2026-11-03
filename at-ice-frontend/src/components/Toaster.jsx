@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { subscribeToasts } from "../lib/toast";
+import { useLiveDark } from "../lib/theme";
 
 const DURATION = 3000; // shown 3 seconds, the last 300ms fading out
 const FADE = 300;
@@ -27,9 +28,10 @@ export default function Toaster() {
     []
   );
 
+  // Night mode is set on the page layout, not on <body>; this follows a switch while a toast is showing
+  const dark = useLiveDark(undefined, items.length > 0);
+
   if (items.length === 0) return null;
-  // Night mode is set on the page layout, not on <body>
-  const dark = !!document.querySelector(".cp-dark");
 
   return createPortal(
     <div className={`soft-toasts ${dark ? "neu-dark" : ""}`} aria-live="polite">
