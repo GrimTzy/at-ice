@@ -34,18 +34,20 @@ export function findDestination(id) {
 // is still sliding through the viewport.
 export function runWhenInView(el, fn) {
   const r = el.getBoundingClientRect();
-  if (r.top >= 0 && r.bottom <= window.innerHeight) return fn();
+  // already well in view (top on screen with room to show rows): do not move the page
+  if (r.top >= 0 && r.top <= window.innerHeight - 160) return fn();
   el.scrollIntoView({ behavior: "smooth", block: "start" });
   let fired = false;
   const go = () => {
     if (fired) return;
     fired = true;
-    window.removeEventListener("scrollend", go);
+    window.removeEventListener("scrollend", go, true);
     window.clearTimeout(backstop);
     fn();
   };
   const backstop = window.setTimeout(go, 900);
-  window.addEventListener("scrollend", go);
+  // capture: the page scrolls inside <main>, and scrollend does not bubble
+  window.addEventListener("scrollend", go, true);
 }
 
 // Pulse the element once. Calling it again restarts the pulse.
@@ -60,10 +62,21 @@ export function pulseDestination(el) {
   });
 }
 
-// Same page: the filter's list is committed by React before the next frame,
-// so pulse on that frame instead of after a fixed delay.
+// Restart the staggered row cascade on a list (ui-effects/effects.css plays the
+// same keyframes under the name a or b, so flipping it restarts every row).
+export function recascade(el) {
+  if (el) el.setAttribute("data-cascade", el.getAttribute("data-cascade") === "a" ? "b" : "a");
+}
+
+// Same page: the filter's list is committed by React before the next frame, so
+// restart the cascade on that frame, then scroll to the list and pulse it. An
+// empty result still cascades and pulses (its "no match" row is a row too).
 export function focusDestination(id) {
-  requestAnimationFrame(() => pulseDestination(findDestination(id)));
+  requestAnimationFrame(() => {
+    const el = findDestination(id);
+    recascade(el);
+    pulseDestination(el);
+  });
 }
 
 // Other page: wait (up to 5 seconds) for the list to exist and have rows.

@@ -1,6 +1,32 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { PAGE_SIZES } from "../lib/usePagination";
 import { Icon } from "./icons";
+
+// Height of the page's docked action bar (.role-actionbar), 0 when there is none.
+// It appears and goes with the page's selection, so it is watched, not read once.
+function useActionBarHeight(active) {
+  const [height, setHeight] = useState(0);
+  useLayoutEffect(() => {
+    if (!active) return undefined;
+    let observer;
+    let current;
+    const read = () => {
+      const bar = document.querySelector(".role-actionbar:not(.pager-dock)");
+      if (bar === current) return;
+      current = bar;
+      observer?.disconnect();
+      if (!bar) return setHeight(0);
+      setHeight(bar.offsetHeight);
+      observer = new ResizeObserver(() => setHeight(bar.offsetHeight));
+      observer.observe(bar);
+    };
+    read();
+    const mutations = new MutationObserver(read);
+    mutations.observe(document.getElementById("root") || document.body, { childList: true, subtree: true });
+    return () => { mutations.disconnect(); observer?.disconnect(); };
+  }, [active]);
+  return height;
+}
 
 const ChevLeft = () => <Icon name="chevronLeft" size={14} />;
 const ChevRight = () => <Icon name="chevron" size={14} />;
@@ -12,8 +38,14 @@ const ChevRight = () => <Icon name="chevron" size={14} />;
 // Stable height: the table box right above the bar keeps the height of a full
 // page, so a short last page never pulls the bar up under the mouse. It starts
 // over when the page size or the row count changes.
-export default function Pagination({ pager, fixed = false }) {
+// dock: the bar is fixed above the bottom navigation (Driver, Salesman) instead of
+// sitting in the page flow. `dockBottom` is how far up from the frame's bottom.
+// When the page shows an action bar (a primary button docked above the nav) the
+// pagination stacks right above it, whatever height it has. `dockPad` makes the
+// bar a solid base that reaches down to the frame's edge (under a floating button).
+export default function Pagination({ pager, fixed = false, dock = false, dockBottom = "4rem", dockPad = "0px" }) {
   const navRef = useRef(null);
+  const lift = useActionBarHeight(dock);
   const tallest = useRef({ key: "", height: 0 });
   useLayoutEffect(() => {
     const box = navRef.current?.previousElementSibling;
@@ -29,8 +61,8 @@ export default function Pagination({ pager, fixed = false }) {
   const { page, pageCount, pageSize, setPage, setPageSize } = pager;
   const pill = "inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-black/[0.09] bg-white text-[12px] font-medium text-slate-600 transition-colors";
 
-  return (
-    <nav ref={navRef} aria-label="Pagination" className="pager flex flex-col items-center gap-2 w-full px-[18px] py-4 border-t border-black/[0.06]">
+  const bar = (
+    <nav ref={navRef} aria-label="Pagination" className={`pager flex flex-col items-center gap-2 w-full px-[18px] ${dock ? "py-2" : "py-4 border-t border-black/[0.06]"}`}>
       <div className="flex justify-center items-center gap-3 w-full">
         <button type="button" onClick={() => setPage(page - 1)} disabled={page <= 1} aria-label="Previous page"
           className={`${pill} hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}>
@@ -54,5 +86,11 @@ export default function Pagination({ pager, fixed = false }) {
         </label>
       )}
     </nav>
+  );
+  if (!dock) return bar;
+  return (
+    <div className="pager-dock role-actionbar fixed inset-x-0 z-[39] bg-white border-t border-slate-200" style={{ bottom: `calc(${dockBottom} + ${lift}px)`, paddingBottom: `calc(${dockPad} + env(safe-area-inset-bottom, 0px))` }}>
+      {bar}
+    </div>
   );
 }

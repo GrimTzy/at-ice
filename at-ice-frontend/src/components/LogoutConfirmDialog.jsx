@@ -1,13 +1,33 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 // "Are you sure you want to log out?" dialog. Opened through useLogoutConfirm.
 export default function LogoutConfirmDialog({ open, onCancel, onConfirm }) {
+  const cardRef = useRef(null);
+
+  // The parent passes a new onCancel on every render; the effect must not restart
+  // (and re-register its key listener) each time, so it reads the latest one here.
+  const cancelRef = useRef(onCancel);
+  useEffect(() => { cancelRef.current = onCancel; });
+
+  // Esc closes; Tab stays between the two buttons. Giving focus back to whatever
+  // opened the dialog is done by useLogoutConfirm (the Cancel button already took
+  // focus by the time an effect here could ask which element had it).
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === "Escape" && onCancel();
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") return cancelRef.current();
+      if (e.key !== "Tab") return undefined;
+      const buttons = cardRef.current?.querySelectorAll("button");
+      if (!buttons?.length) return undefined;
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      return undefined;
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onCancel]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -15,6 +35,7 @@ export default function LogoutConfirmDialog({ open, onCancel, onConfirm }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-950/60" onClick={onCancel} />
       <div
+        ref={cardRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="logout-confirm-title"

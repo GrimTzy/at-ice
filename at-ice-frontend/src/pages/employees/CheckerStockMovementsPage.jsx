@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import RoleShell from "../../components/RoleShell";
-import { StatusBadge, LoadingButton, BottomSheet, ActionBar, Stepper, ErrorBanner, EmptyCard, CardSkeleton, Icon } from "../../components/MobileUi";
-import { CARD, FIELD, TEXTAREA, LABEL } from "../../lib/mobileUi";
+import { StatusBadge, LoadingButton, BottomSheet, ActionBar, Stepper, ErrorBanner, EmptyCard, CardSkeleton, SearchBar, Icon } from "../../components/MobileUi";
+import { CARD, FIELD, TEXTAREA, LABEL, matchesQuery } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
@@ -31,6 +31,7 @@ export default function CheckerStockMovementsPage() {
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("pending");
+  const [query, setQuery] = useState("");
   const [formError, setFormError] = useState("");
 
   const draft = useDraft("checker:movement", { showForm: false, productId: "", type: "stock_in", quantity: "", notes: "" }, { when: (v) => v.showForm });
@@ -112,7 +113,8 @@ export default function CheckerStockMovementsPage() {
     }
   }
 
-  const visible = filter === "pending" ? movements.filter((m) => m.status === "pending") : movements;
+  const visible = (filter === "pending" ? movements.filter((m) => m.status === "pending") : movements).filter((m) =>
+    matchesQuery(query, m.product?.name, m.type === "stock_in" ? "stock in" : "stock out", m.type, m.id, m.reference, m.reason, m.notes, m.entered_by?.name));
   const pendingCount = movements.filter((m) => m.status === "pending").length;
 
   return (
@@ -123,14 +125,16 @@ export default function CheckerStockMovementsPage() {
     >
       <TimeInNotice timedIn={timedIn} />
 
+      <SearchBar value={query} onChange={setQuery} placeholder="Search item, type or reference" label="Search stock movements" />
+
       <FilterSelect label="Show" value={filter} onChange={setFilter} className="w-full [&>select]:flex-1"
         options={[{ value: "pending", label: "To confirm", count: pendingCount }, { value: "all", label: "All", count: movements.length }]} />
 
       {status === "loading" && <CardSkeleton rows={3} />}
       {status === "error" && <ErrorBanner onRetry={load}>{error}</ErrorBanner>}
       {status === "ready" && visible.length === 0 && (
-        <EmptyCard icon="swap" title={filter === "pending" ? "Nothing to confirm" : "No movements yet"}>
-          {filter === "pending" ? "Every logged movement is confirmed." : "Tap Log a movement to record stock in or out."}
+        <EmptyCard icon="swap" title={query ? "No match" : filter === "pending" ? "Nothing to confirm" : "No movements yet"}>
+          {query ? "No movement matches your search." : filter === "pending" ? "Every logged movement is confirmed." : "Tap Log a movement to record stock in or out."}
         </EmptyCard>
       )}
 

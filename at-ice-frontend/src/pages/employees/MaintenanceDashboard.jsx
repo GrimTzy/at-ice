@@ -52,9 +52,6 @@ export default function MaintenanceDashboard() {
   return (
     <RoleShell role="maintenance" title="Maintenance">
       <TimeInNotice timedIn={timedIn} />
-      <div className="text-[14px] text-slate-500">
-        {new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-      </div>
 
       {status === "loading" && <CardSkeleton rows={3} />}
       {status === "error" && <ErrorBanner onRetry={load}>{error}</ErrorBanner>}

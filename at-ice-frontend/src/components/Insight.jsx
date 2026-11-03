@@ -5,6 +5,7 @@
 import { KpiIcon } from "./Kpi";
 import { TONES } from "../lib/kpiTones";
 import EmptyState from "./EmptyState";
+import { focusDestination } from "../lib/destination";
 
 export function InsightPanel({ title, subtitle, action, children, className = "" }) {
   return (
@@ -25,7 +26,7 @@ export function InsightPanel({ title, subtitle, action, children, className = ""
 
 // Share of each status: a labelled bar per item, with its count and percent.
 //   items: [{ label, count, tone }]
-export function StatusBreakdown({ title = "Status breakdown", subtitle, items, empty = "Nothing to break down yet.", onPick, active, footer }) {
+export function StatusBreakdown({ title = "Status breakdown", subtitle, items, empty = "Nothing to break down yet.", onPick, active, footer, dest }) {
   const total = items.reduce((s, i) => s + (i.count || 0), 0);
   return (
     <InsightPanel title={title} subtitle={subtitle ?? (total ? `${total.toLocaleString("en-PH")} in all` : undefined)}>
@@ -40,8 +41,8 @@ export function StatusBreakdown({ title = "Status breakdown", subtitle, items, e
             return (
               <li key={i.label}>
                 <Row
-                  {...(onPick ? { type: "button", onClick: () => onPick(i), "data-no-confirm": true, "aria-current": active === i.key ? "true" : undefined } : {})}
-                  className={`w-full text-left ${onPick ? "breakdown-row cursor-pointer" : ""} ${onPick && active === i.key ? "font-semibold" : ""}`}
+                  {...(onPick ? { type: "button", onClick: () => { onPick(i); focusDestination(dest); }, "data-tone": i.tone, "data-no-confirm": true, "aria-current": active === i.key ? "true" : undefined } : {})}
+                  className={`w-full text-left ${onPick ? "breakdown-row cursor-pointer" : ""}`}
                 >
                   <div className="flex items-center gap-2 text-[12px]">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${t.bar}`} />

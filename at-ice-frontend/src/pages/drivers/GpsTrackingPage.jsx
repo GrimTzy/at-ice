@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import logo from "../../assets/logo.png";
-import { clearSession } from "../../lib/auth";
-import { useLogoutConfirm } from "../../lib/useLogoutConfirm";
 import { SkeletonList } from "../../components/Skeleton";
-import HeaderAvatar from "../../components/HeaderAvatar";
-import { ScopeStatusRow } from "../../components/NightMode";
-import { initialsOf } from "../../lib/initials";
+import MobileHeader from "../../components/MobileHeader";
 import { useLiveTick } from "../../lib/live";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -31,9 +25,6 @@ const MapPinIcon = () => (
 );
 const PackageIcon = () => (
   <Icon name="parcel" size={12} />
-);
-const BackIcon = () => (
-  <Icon name="back" size={17} />
 );
 
 // Classic map pin shape for store markers, drawn with its tip at (0, 0) and the
@@ -64,7 +55,6 @@ const escapeHtml = (value) =>
   }[c]));
 
 export function GpsTrackingPage() {
-  const navigate = useNavigate();
   const mapRef         = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef     = useRef([]);
@@ -90,15 +80,6 @@ export function GpsTrackingPage() {
   const pending   = stores.filter((s) => s.status === "pending").length;
   const inTransit = stores.filter((s) => s.status === "in_transit").length;
   const delivered = stores.filter((s) => s.status === "delivered").length;
-
-  // Sign out: clear the session first (same as the Deliveries page).
-  // Previously this only navigated to the login page and kept the token.
-  const handleLogout = () => {
-    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-    clearSession();
-    navigate("/login");
-  };
-  const [askLogout, logoutDialog] = useLogoutConfirm(handleLogout);
 
   const live = useLiveTick(["deliveries"]);
 
@@ -262,71 +243,45 @@ export function GpsTrackingPage() {
     };
   }, []);
 
-  const todayLabel = new Date().toLocaleDateString(undefined, {
-    weekday: "long", year: "numeric", month: "long", day: "numeric",
-  });
-
   return (
-    <div className="min-h-screen flex flex-col font-sans bg-slate-50">
-      {logoutDialog}
-
-      {/* ── Top Bar ── */}
-      <header className="bg-white border-b border-black/[0.08] px-5 pt-4 pb-4 flex-shrink-0 sticky top-0 z-20">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate("/driver/deliveries")}
-              className="text-slate-400 active:text-slate-600 transition-colors cursor-pointer p-1 -ml-1 mr-1"
-            >
-              <BackIcon />
-            </button>
-            <div className="brand-logo w-11 h-11 flex-shrink-0 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center overflow-hidden">
-              <img src={logo} alt="AT-ICE logo" className="w-full h-full object-contain p-1" />
-            </div>
-            <div>
-              <div className="text-[15px] font-semibold text-slate-800 leading-tight">{user?.name || "Driver"}</div>
-              <div className="text-[11px] text-slate-400 tracking-wide">Driver</div>
-            </div>
+    <div className="gps-root h-[100dvh] overflow-hidden flex flex-col font-sans bg-slate-50">
+      <MobileHeader
+        role="driver"
+        title="GPS Tracking"
+        back="/driver/deliveries"
+        status={
+          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium border whitespace-nowrap ${
+            gpsStatus === "active"  ? "bg-green-50 border-green-200 text-green-600" :
+            gpsStatus === "error"   ? "bg-red-50 border-red-200 text-red-500" :
+                                      "bg-amber-50 border-amber-200 text-amber-600"
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              gpsStatus === "active" ? "bg-green-500 animate-pulse" :
+              gpsStatus === "error"  ? "bg-red-500" : "bg-amber-400 animate-pulse"
+            }`} />
+            {gpsStatus === "active" ? "GPS" : gpsStatus === "error" ? "Error" : "Wait…"}
           </div>
-          <div className="flex items-center gap-3">
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border ${
-              gpsStatus === "active"  ? "bg-green-50 border-green-200 text-green-600" :
-              gpsStatus === "error"   ? "bg-red-50 border-red-200 text-red-500" :
-                                        "bg-amber-50 border-amber-200 text-amber-600"
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                gpsStatus === "active" ? "bg-green-500 animate-pulse" :
-                gpsStatus === "error"  ? "bg-red-500" : "bg-amber-400 animate-pulse"
-              }`} />
-              {gpsStatus === "active" ? "GPS Active" : gpsStatus === "error" ? "GPS Error" : "Acquiring..."}
-            </div>
-            <HeaderAvatar initials={initialsOf(user?.name, "DR")} name={user?.name || "Driver"} subtitle={user?.email || "Driver"} onSignOut={askLogout} mobileSignOut />
+        }
+      >
+        <div className="px-4 pt-1 pb-3">
+          <div className="grid grid-cols-4 gap-2 mt-2 pill-row">
+            {[
+              { label: "Stops",      value: stores.length, color: "text-slate-800" },
+              { label: "Pending",    value: pending,       color: "text-amber-500" },
+              { label: "In Transit", value: inTransit,     color: "text-blue-500"  },
+              { label: "Delivered",  value: delivered,     color: "text-green-500" },
+            ].map((s) => (
+              <div key={s.label} className="bg-slate-50 border border-black/[0.08] rounded-xl px-1.5 py-2 text-center min-w-0">
+                <div className={`text-[16px] font-semibold font-mono leading-none ${s.color}`}>{s.value}</div>
+                <div className="text-[11px] text-slate-400 mt-1 tracking-wide whitespace-nowrap">{s.label}</div>
+              </div>
+            ))}
           </div>
         </div>
-
-        <ScopeStatusRow />
-        <div className="mt-3">
-          <div className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">GPS Tracking</div>
-          <div className="text-[12px] text-slate-400 mt-0.5">{todayLabel}</div>
-        </div>
-
-        <div className="flex gap-2 mt-3">
-          {[
-            { label: "Total Stops", value: stores.length, color: "text-slate-800" },
-            { label: "Pending",     value: pending,       color: "text-amber-500" },
-            { label: "In Transit",  value: inTransit,     color: "text-blue-500"  },
-            { label: "Delivered",   value: delivered,     color: "text-green-500" },
-          ].map((s) => (
-            <div key={s.label} className="flex-1 bg-slate-50 border border-black/[0.08] rounded-xl px-2 py-2 text-center">
-              <div className={`text-[16px] font-semibold font-mono leading-none ${s.color}`}>{s.value}</div>
-              <div className="text-[9px] text-slate-400 mt-0.5 tracking-wide">{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </header>
+      </MobileHeader>
 
       {/* ── Map ── */}
-      <div className="relative flex-1" style={{ minHeight: "320px" }}>
+      <div className="relative flex-1 min-h-0" style={{ minHeight: "160px" }}>
         <div ref={mapRef} className="absolute inset-0 w-full h-full z-0" />
 
         <button
@@ -383,7 +338,7 @@ export function GpsTrackingPage() {
       </div>
 
       {/* ── Delivery Stops Panel — shows ALL stops, Delivered included (Option 1) ── */}
-      <div className={`relative z-20 bg-white border-t border-black/[0.08] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] flex-shrink-0 transition-all duration-300 overflow-hidden ${panelOpen ? "max-h-[280px]" : "max-h-[52px]"}`}>
+      <div className={`relative z-20 bg-white border-t border-black/[0.08] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] flex flex-col flex-shrink-0 transition-all duration-300 overflow-hidden ${panelOpen ? "max-h-[min(280px,42dvh)]" : "max-h-[52px]"}`}>
 
         <button
           onClick={() => setPanelOpen((v) => !v)}
@@ -397,7 +352,7 @@ export function GpsTrackingPage() {
           <span className="text-slate-400">{panelOpen ? <ChevronDownIcon /> : <ChevronUpIcon />}</span>
         </button>
 
-        <div className="overflow-y-auto px-4 pb-6 flex flex-col gap-2" style={{ maxHeight: "220px" }}>
+        <div className="overflow-y-auto min-h-0 px-4 pb-6 flex flex-col gap-2" style={{ maxHeight: "220px" }}>
           {loading && (
             <SkeletonList />
           )}

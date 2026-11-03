@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import RoleShell from "../../components/RoleShell";
-import { StatusBadge, LoadingButton, BottomSheet, ActionBar, ErrorBanner, SuccessBanner, EmptyCard, CardSkeleton, Icon } from "../../components/MobileUi";
-import { CARD, FIELD, TEXTAREA, LABEL } from "../../lib/mobileUi";
+import { StatusBadge, LoadingButton, BottomSheet, ActionBar, ErrorBanner, SuccessBanner, EmptyCard, CardSkeleton, SearchBar, Icon } from "../../components/MobileUi";
+import { CARD, FIELD, TEXTAREA, LABEL, matchesQuery } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
@@ -42,6 +42,7 @@ export default function MaintenanceStockOutRequestPage() {
     autoPurpose: setAutoPurpose, projectId: setProjectId,
   } = draft.set;
   const [submitting, setSubmitting] = useState(false);
+  const [query, setQuery] = useState("");
   const [formError, setFormError] = useState("");
   const [items, setItems] = useState([]);
   const [itemsError, setItemsError] = useState("");
@@ -156,7 +157,8 @@ export default function MaintenanceStockOutRequestPage() {
     if (v === "all") next.delete("status"); else next.set("status", v);
     setParams(next, { replace: true });
   };
-  const visible = filter === "all" ? requests : requests.filter((r) => r.status === filter);
+  const visible = (filter === "all" ? requests : requests.filter((r) => r.status === filter)).filter((r) =>
+    matchesQuery(query, r.product?.name, r.item_name, r.purpose, r.project?.name, r.id));
   const countOf = (v) => (v === "all" ? requests.length : requests.filter((r) => r.status === v).length);
 
   return (
@@ -168,6 +170,8 @@ export default function MaintenanceStockOutRequestPage() {
       <TimeInNotice timedIn={timedIn} />
       <SuccessBanner>{notice}</SuccessBanner>
 
+      <SearchBar value={query} onChange={setQuery} placeholder="Search part, purpose or project" label="Search parts requests" />
+
       {/* quick status filter */}
       <FilterSelect label="Status" value={filter} onChange={setFilter} className="w-full [&>select]:flex-1"
         options={FILTERS.map(([v, label]) => ({ value: v, label, count: countOf(v) }))} />
@@ -175,8 +179,8 @@ export default function MaintenanceStockOutRequestPage() {
       {loading && <CardSkeleton rows={3} />}
       {!loading && loadError && <ErrorBanner onRetry={fetchRequests}>{loadError}</ErrorBanner>}
       {!loading && !loadError && visible.length === 0 && (
-        <EmptyCard icon="wrench" title={filter === "all" ? "No requests yet" : `No ${STATUS_LABEL[filter].toLowerCase()} requests`}>
-          {filter === "all" ? "Tap Request parts to ask for an item." : "Try another filter."}
+        <EmptyCard icon="wrench" title={query ? "No match" : filter === "all" ? "No requests yet" : `No ${STATUS_LABEL[filter].toLowerCase()} requests`}>
+          {query ? "No request matches your search." : filter === "all" ? "Tap Request parts to ask for an item." : "Try another filter."}
         </EmptyCard>
       )}
 

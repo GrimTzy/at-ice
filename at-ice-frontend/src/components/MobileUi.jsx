@@ -1,7 +1,7 @@
-import { useEffect, useId } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./icons";
-import { TONE_CLASS, toneFor, BTN, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER } from "../lib/mobileUi";
+import { TONE_CLASS, toneFor, BTN, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER, FIELD } from "../lib/mobileUi";
 
 // Building blocks of the Maintenance, Checker and Salesman screens (the AT-ICE
 // mobile contract; classes in lib/mobileUi.js): 44px touch targets, 16px
@@ -33,6 +33,26 @@ export function LoadingButton({ loading = false, variant = "primary", className 
       {loading && <Spinner />}
       {children}
     </button>
+  );
+}
+
+// The one search box of the role screens (same look as Inventory and Suppliers).
+// It types freely and hands the text to the page 250ms after the last key, so a
+// long list is not filtered on every letter.
+export function SearchBar({ value, onChange, placeholder = "Search", label = "Search", delay = 250 }) {
+  const [text, setText] = useState(value ?? "");
+  const latest = useRef(onChange);
+  useEffect(() => { latest.current = onChange; });
+  useEffect(() => {
+    if (text === value) return undefined;
+    const timer = setTimeout(() => latest.current(text), delay);
+    return () => clearTimeout(timer);
+  }, [text, value, delay]);
+  return (
+    <div className="relative">
+      <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+      <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} aria-label={label} className={`${FIELD} pl-10`} />
+    </div>
   );
 }
 

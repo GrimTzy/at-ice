@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import RoleShell from "../../components/RoleShell";
-import { StatusBadge, LoadingButton, BottomSheet, ActionBar, ErrorBanner, EmptyCard, CardSkeleton, Icon } from "../../components/MobileUi";
-import { CARD, FIELD, TEXTAREA, LABEL } from "../../lib/mobileUi";
+import { StatusBadge, LoadingButton, BottomSheet, ActionBar, ErrorBanner, EmptyCard, CardSkeleton, SearchBar, Icon } from "../../components/MobileUi";
+import { CARD, FIELD, TEXTAREA, LABEL, matchesQuery } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import { useTimedIn } from "../../lib/timeIn";
@@ -25,6 +25,7 @@ export default function MaintenanceProjectsPage() {
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (params.get("new") === "1") {
@@ -95,7 +96,9 @@ export default function MaintenanceProjectsPage() {
 
   // stuck and overdue first, done last
   const order = { stuck: 0, working: 1, planned: 2, done: 3 };
-  const sorted = [...projects].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+  const sorted = [...projects]
+    .filter((p) => matchesQuery(query, p.name, p.description, p.location, p.machine, p.truck, p.id))
+    .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
 
   return (
     <RoleShell
@@ -104,10 +107,11 @@ export default function MaintenanceProjectsPage() {
       actionBar={<ActionBar><LoadingButton disabled={timedIn === false} onClick={() => setShowForm(true)}><Icon name="plus" /> Log a repair job</LoadingButton></ActionBar>}
     >
       <TimeInNotice timedIn={timedIn} />
+      <SearchBar value={query} onChange={setQuery} placeholder="Search project, truck or machine" label="Search projects" />
       {status === "loading" && <CardSkeleton rows={3} />}
       {status === "error" && <ErrorBanner onRetry={load}>{loadError}</ErrorBanner>}
       {status === "ready" && sorted.length === 0 && (
-        <EmptyCard icon="clipboard" title="No projects yet">Tap Log a repair job to add a job for Admin to schedule.</EmptyCard>
+        <EmptyCard icon="clipboard" title={query ? "No match" : "No projects yet"}>{query ? "No project matches your search." : "Tap Log a repair job to add a job for Admin to schedule."}</EmptyCard>
       )}
 
       {status === "ready" && (

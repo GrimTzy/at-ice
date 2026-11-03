@@ -52,4 +52,10 @@ export const ROLE_NAV = {
   ],
 };
 
-export const ROLE_LABEL = { maintenance: "Maintenance", checker: "Checker", salesman: "Salesman" };
+export const ROLE_LABEL = { maintenance: "Maintenance", checker: "Checker", salesman: "Salesman", driver: "Driver" };
+
+// Search box helper: does any of the values contain the typed text (case-blind)?
+export const matchesQuery = (query, ...values) => {
+  const q = String(query || "").trim().toLowerCase();
+  return !q || values.some((v) => String(v ?? "").toLowerCase().includes(q));
+};

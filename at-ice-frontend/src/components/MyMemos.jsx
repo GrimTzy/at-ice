@@ -115,13 +115,26 @@ function MemoCard({ memo, onAcknowledged }) {
 }
 
 // Top-bar button: opens the sheet; the badge counts memos to read or sign.
-export function MyMemosButton({ compact = false }) {
+export function MyMemosButton({ compact = false, variant = "icon", onActivate }) {
   const { memos, loading, error, load, setMemos } = useMyMemos();
   const [open, setOpen] = useState(false);
   const pending = memos.filter((m) => m.status === "sent" || m.status === "awaiting_physical").length;
 
   return (
     <>
+      {variant === "menu" ? (
+        <button
+          type="button"
+          role="menuitem"
+          data-no-confirm
+          onClick={() => { onActivate?.(); setOpen(true); }}
+          className="profile-item w-full flex items-center gap-3 min-h-[48px] px-3 text-[14px] font-medium text-slate-700 text-left cursor-pointer"
+        >
+          <FileIcon />
+          <span className="flex-1 min-w-0 truncate">Memos</span>
+          {pending > 0 && <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[11px] font-bold flex items-center justify-center">{pending}</span>}
+        </button>
+      ) : (
       <button
         type="button"
         data-no-confirm
@@ -136,6 +149,7 @@ export function MyMemosButton({ compact = false }) {
           <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center">{pending}</span>
         )}
       </button>
+      )}
       <BottomSheet open={open} onClose={() => setOpen(false)} title="My Memos" front>
         {loading ? (
           <div className="text-[14px] text-slate-500">Loading your memos…</div>

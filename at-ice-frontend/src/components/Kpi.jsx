@@ -42,6 +42,7 @@ export function KpiCard({ label, value, icon = "chart", tone = "cyan", sub, tren
     <Tag
       {...(press ? { type: "button", onClick: press, "aria-current": active ? "true" : undefined, "data-no-confirm": true } : {})}
       data-hero={heroKey}
+      data-tone={tone}
       title={title}
       className={`kpi-card bg-white border border-black/[0.09] rounded-xl px-4 py-3.5 flex flex-col gap-2 text-left min-w-0 h-full ${press ? "cursor-pointer" : ""} ${active ? "kpi-card-active" : ""}`}
     >
