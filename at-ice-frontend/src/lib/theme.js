@@ -1,6 +1,6 @@
 // Theme state and colors shared by every layout. Components that use them
 // (NightStyle, NightToggle, NightScope) are in components/NightMode.jsx.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import iceImage from "../assets/iceproduct.png";
 
 export const THEME_KEY = "atice-theme";
@@ -193,6 +193,31 @@ export function useNightMode(storageKey = THEME_KEY) {
     });
   }, [storageKey]);
   return [dark, switchTheme];
+}
+
+// Dialogs, pickers and toasts are mounted under <body>, outside the page's
+// .cp-dark scope, so they cannot inherit the theme. While `active` they ask
+// `probe()` ("is it dark where I belong?") and ask again whenever a class
+// changes under #root (which is what a theme switch does), so an open dialog,
+// picker or toast changes colors together with the page.
+export const pageIsDark = () => !!document.querySelector("#root .cp-dark");
+export function useLiveDark(probe = pageIsDark, active = true) {
+  const [dark, setDark] = useState(() => (active ? probe() : false));
+  const probeRef = useRef(probe);
+  useEffect(() => { probeRef.current = probe; });
+  useEffect(() => {
+    if (!active) return undefined;
+    let frame = 0;
+    const sync = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setDark(probeRef.current()));
+    };
+    setDark(probeRef.current());
+    const observer = new MutationObserver(sync);
+    observer.observe(document.getElementById("root") || document.body, { subtree: true, attributes: true, attributeFilter: ["class"] });
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [active]);
+  return dark;
 }
 
 // Tint laid over the ice photo behind the page content. Light enough that the

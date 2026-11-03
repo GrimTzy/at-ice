@@ -73,11 +73,11 @@ function DonutChart({ id, data, colors }) {
     const chart = new Chart(ctx, {
       type: "doughnut",
       data: { datasets: [{ data: JSON.parse(dataKey), backgroundColor: JSON.parse(colorKey), borderWidth:0, spacing:2, hoverOffset:4 }] },
-      options: { cutout:"65%", responsive:true, maintainAspectRatio:true, plugins:{ legend:{display:false}, tooltip:{ backgroundColor:"#fff", borderColor:"rgba(0,0,0,0.12)", borderWidth:1, bodyColor:"#1a2332", padding:8 } } },
+      options: { cutout:"65%", responsive:true, maintainAspectRatio:true, layout:{ padding:8 }, plugins:{ legend:{display:false}, tooltip:{ backgroundColor:"#fff", borderColor:"rgba(0,0,0,0.12)", borderWidth:1, bodyColor:"#1a2332", padding:8 } } },
     });
     return () => chart.destroy();
   }, [id, dataKey, colorKey]);
-  return <canvas id={id} className="w-[90px] h-[90px]" />;
+  return <canvas id={id} className="w-[100px] h-[100px] overflow-visible" />;
 }
 
 // SALES BAR CHART (real data)
@@ -368,7 +368,7 @@ export default function Dashboard() {
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/admin/receipts", { state: { dest: true } }); } }}
           title="Open Invoices"
-          className={`stat-card col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150 ${activeCard ? "opacity-60" : ""}`}
+          className={`stat-card col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-[color,background-color,border-color,box-shadow,transform] duration-150 ${activeCard ? "opacity-60" : ""}`}
         >
           <div className="flex items-center gap-2 min-w-0">
             <span className={`w-7 h-7 rounded-lg grid place-items-center flex-shrink-0 ${TONES.emerald.badge}`}><KpiIcon name="wallet" /></span>
@@ -443,7 +443,7 @@ export default function Dashboard() {
             aria-expanded={card.panel ? selected : undefined}
             data-selected={selected || undefined}
             title={card.panel ? (selected ? "Hide the stock alerts" : "Show the stock alerts") : card.to ? "Open details" : undefined}
-            className={`stat-card bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 transition-all duration-150 ${clickable ? "cursor-pointer hover:shadow-md hover:-translate-y-px" : ""} ${activeCard && !selected ? "opacity-60" : ""}`}
+            className={`stat-card bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 transition-[color,background-color,border-color,box-shadow,transform] duration-150 ${clickable ? "cursor-pointer hover:shadow-md hover:-translate-y-px" : ""} ${activeCard && !selected ? "opacity-60" : ""}`}
           >
             <div className="flex items-center gap-2 min-w-0">
               <span className={`w-7 h-7 rounded-lg grid place-items-center flex-shrink-0 ${TONES[card.tone || "slate"].badge}`}><KpiIcon name={card.icon || "chart"} /></span>
@@ -683,11 +683,11 @@ export default function Dashboard() {
                         key={p.id}
                         type="button"
                         onClick={() => navigate("/admin/projects")}
-                        className="w-full grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 py-1.5 text-xs text-left border-b border-black/[0.06] last:border-b-0 cursor-pointer hover:bg-slate-50"
+                        className="soft-row w-full grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 mb-1.5 last:mb-0 text-xs text-left cursor-pointer"
                       >
                         <span className="truncate text-slate-800">{p.name}{p.overdue && <span className="ml-1 text-[10px] text-[#b4233c] font-semibold">overdue</span>}</span>
                         <span className="text-[10px] font-mono text-slate-500">{fmt(p.materials_cost)}</span>
-                        <StatusCell tone={{ working: "working", stuck: "stuck", planned: "info" }[p.status] || "idle"} className="min-h-[20px] rounded px-1.5 text-[10px]">
+                        <StatusCell tone={{ working: "working", stuck: "stuck", planned: "info" }[p.status] || "idle"} className="soft-chip min-h-[20px] rounded-full px-2 text-[10px]">
                           {{ working: "Working", stuck: "Stuck", planned: "Planned" }[p.status] || p.status}
                         </StatusCell>
                       </button>
@@ -695,9 +695,9 @@ export default function Dashboard() {
                   </div>
                 )}
                 {(inventory.critical_items||[]).map((item, i, arr) => (
-                  <div key={item.id} className={`flex justify-between items-center py-1.5 text-xs ${i < arr.length-1 ? "border-b border-black/[0.09]" : ""}`}>
+                  <div key={item.id} className={`soft-row flex justify-between items-center gap-2 text-xs ${i < arr.length-1 ? "mb-1.5" : ""}`}>
                     <span className={item.current_stock === 0 ? "text-red-500 font-medium" : "text-slate-800"}>{item.name}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${item.current_stock === 0 ? "bg-red-100 text-red-500" : "bg-amber-100 text-amber-600"}`}>
+                    <span className={`soft-chip text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${item.current_stock === 0 ? "bg-red-100 text-red-500" : "bg-amber-100 text-amber-600"}`}>
                       {item.current_stock === 0 ? "0 left" : `${item.current_stock} left`}
                     </span>
                   </div>

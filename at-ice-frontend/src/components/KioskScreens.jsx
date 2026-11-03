@@ -185,7 +185,7 @@ export function PinEntry({ onUnlocked }) {
               <div
                 key={i}
                 aria-hidden="true"
-                className={`pin-box ${i === active ? "pin-active" : ""} ${error && !lockedOut && i !== active ? "pin-error" : ""} w-14 h-16 rounded-xl border flex items-center justify-center bg-slate-950/70 transition-all duration-150 ${
+                className={`pin-box ${i === active ? "pin-active" : ""} ${error && !lockedOut && i !== active ? "pin-error" : ""} w-14 h-16 rounded-xl border flex items-center justify-center bg-slate-950/70 transition-[color,background-color,border-color,box-shadow,transform] duration-150 ${
                   i === active
                     ? "border-cyan-400 shadow-[0_0_0_3px_rgba(34,211,238,0.18),0_0_18px_rgba(34,211,238,0.25)]"
                     : error && !lockedOut
