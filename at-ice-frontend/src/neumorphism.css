@@ -732,3 +732,8 @@ select:not([multiple], [size]:not([size="1"]), [data-native]) {
 :is(.cp-dark, .neu-dark) .neu-chip-orange { color: #fdba74; }
 :is(.cp-dark, .neu-dark) .neu-chip-rose { color: #fda4af; }
 :is(.cp-dark, .neu-dark) .neu-chip-slate { color: #cbd5e1; }
+
+/* Warning and reminder tones (missing required fields and the like). Text on the
+   page material: 5.6:1 and 5.8:1 in light, 10.8:1 and 9.2:1 in night mode. */
+:root { --neu-warn: #92400e; --neu-warn-strong: #9a3412; }
+:is(.cp-dark, .neu-dark) { --neu-warn: #fcd34d; --neu-warn-strong: #fdba74; }

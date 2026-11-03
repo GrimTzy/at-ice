@@ -456,7 +456,7 @@ export default function CustomersPage() {
                     ) : (() => {
                       const missing = missingForLogin(c);
                       return (
-                        <div className="create-login mx-auto flex w-full max-w-[190px] flex-col items-center gap-1">
+                        <div className="create-login mx-auto grid w-full max-w-[320px] gap-1">
                           <button
                             onClick={() => createAccount(c)}
                             disabled={missing.length > 0 || creatingAccountFor === c.id}
@@ -926,7 +926,7 @@ function Req() {
 function MissingBadge({ missing }) {
   // Shown right under Create Login (no floating tooltip, so nothing is covered).
   return (
-    <div role="status" className="w-full text-center text-[11px] leading-snug text-slate-500">
+    <div role="status" className="create-login-reminder w-full text-center text-[11px] leading-snug">
       Fill in on Edit first: <span className="font-medium">{missing.join(", ")}</span>
     </div>
   );

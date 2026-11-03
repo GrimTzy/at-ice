@@ -3,7 +3,8 @@
 // or with this folder deleted, the app looks and works exactly as designed.
 //
 // What it adds (all scoped to html[data-fx="on"], see effects.css):
-//  - cards, rows and sections fade and slide up in a short stagger
+//  - cards, rows and sections fade and slide up in a short stagger, and so does
+//    content that replaces a skeleton once it has loaded (reveal.js)
 //  - KPI numbers count up ([data-fx-count]) and bars fill with a moving wave
 //  - tab and segmented groups ([data-fx-tabs]) get a sliding active pill
 //  - tips widgets ([data-fx-cycle]) show one tip at a time and fade between them
@@ -17,6 +18,7 @@ import { startTabIndicators } from "./tabIndicator";
 import { startCycles } from "./cycle";
 import { startLeaveAnimations } from "./leave";
 import { celebrate as burst, startCelebrations } from "./celebrate";
+import { startReveal } from "./reveal";
 
 let on = false;
 
@@ -35,6 +37,7 @@ export function install() {
   startCycles();
   startLeaveAnimations();
   startCelebrations();
+  startReveal();
 }
 
 export function celebrate(x, y) {

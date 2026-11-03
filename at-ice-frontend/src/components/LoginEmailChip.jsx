@@ -40,17 +40,22 @@ export default function LoginEmailChip({ userId, email, onSaved }) {
 
   return (
     <>
-      <span className="inline-flex items-center gap-1">
+      {/* The pill itself is centered in the cell, in line with a Create Login
+          button; the pencil hangs just outside its right edge, so it never
+          pushes the pill off center. */}
+      <span className="flex w-full items-center justify-center">
+        <span className="relative inline-flex min-w-0 max-w-full">
         <span className="email-chip">{email}</span>
         <button
           type="button"
           onClick={start}
           title="Change login email"
           aria-label={`Change login email ${email}`}
-          className="grid h-7 w-7 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
+          className="absolute left-full top-1/2 ml-1 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
         >
-          <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
+          <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="shrink-0"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
         </button>
+        </span>
       </span>
 
       {open && (

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import iceImage from "../assets/iceproduct.png";
 
 export const THEME_KEY = "atice-theme";
+const THEME_CHANGE_EVENT = "atice-theme-change";
 
 export const DARK_CSS = String.raw`
 .cp-dark { color-scheme: dark; }
@@ -168,29 +169,62 @@ function savedTheme(storageKey) {
   try { return localStorage.getItem(storageKey); } catch { return null; }
 }
 
+// The visible theme belongs to the whole document, not to an individual
+// layout. Keeping it on <html> makes page content and UI portalled to <body>
+// (dialogs, pickers and toasts) change together. The custom event also keeps
+// any mounted layout instances in this tab in sync; the storage event covers
+// another tab.
+function publishTheme(storageKey, dark, { persist = true } = {}) {
+  document.documentElement.classList.toggle("cp-dark", dark);
+  if (persist) {
+    try { localStorage.setItem(storageKey, dark ? "dark" : "light"); } catch { /* ignore */ }
+  }
+  window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: { storageKey, dark } }));
+}
+
 export function useNightMode(storageKey = THEME_KEY) {
   const [dark, setDark] = useState(() => {
     const saved = savedTheme(storageKey);
     return saved ? saved === "dark" : deviceDark();
   });
+  // the latest value, so switchTheme can compute the next one without running
+  // side effects inside a state updater (React may run an updater twice)
+  const darkRef = useRef(dark);
+  useEffect(() => {
+    darkRef.current = dark;
+    publishTheme(storageKey, dark, { persist: false });
+  }, [dark, storageKey]);
+  useEffect(() => {
+    const sync = (event) => {
+      if (event.detail?.storageKey === storageKey) setDark(event.detail.dark);
+    };
+    const syncExternal = (event) => {
+      if (event.key === storageKey && event.newValue) setDark(event.newValue === "dark");
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, sync);
+    window.addEventListener("storage", syncExternal);
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, sync);
+      window.removeEventListener("storage", syncExternal);
+    };
+  }, [storageKey]);
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
     if (!media) return undefined;
     const follow = (e) => {
       if (savedTheme(storageKey)) return;
       fadeThemeSwitch();
+      publishTheme(storageKey, e.matches, { persist: false });
       setDark(e.matches);
     };
     media.addEventListener("change", follow);
     return () => media.removeEventListener("change", follow);
   }, [storageKey]);
   const switchTheme = useCallback((value) => {
+    const next = typeof value === "function" ? value(darkRef.current) : value;
     fadeThemeSwitch();
-    setDark((prev) => {
-      const next = typeof value === "function" ? value(prev) : value;
-      try { localStorage.setItem(storageKey, next ? "dark" : "light"); } catch { /* ignore */ }
-      return next;
-    });
+    publishTheme(storageKey, next);
+    setDark(next);
   }, [storageKey]);
   return [dark, switchTheme];
 }
@@ -224,13 +258,15 @@ export function useLiveDark(probe = pageIsDark, active = true) {
 // ice texture stays visible in both themes (slate-50 at 80%, slate-950 at 85%).
 export const nightOverlay = (dark) => (dark ? "rgba(2,6,23,0.85)" : "rgba(248,250,252,0.80)");
 
-// Ice photo background with the theme tint. The tint is an inset shadow, not a
-// gradient, so it can fade between themes like the other colors.
+// Ice photo background with the theme tint. The tint is a flat gradient layer
+// whose color is the registered property --ambient-tint (index.css), which
+// fades with the theme on the same clock as every other color. (It used to be a
+// 9999px inset box-shadow, a huge shape to repaint on every frame of the fade.)
 export const ambientStyle = (dark) => ({
-  backgroundImage: `url(${iceImage})`,
+  "--ambient-tint": nightOverlay(dark),
+  backgroundImage: `linear-gradient(var(--ambient-tint), var(--ambient-tint)), url(${iceImage})`,
   backgroundSize: "cover",
   backgroundPosition: "center",
   backgroundAttachment: "fixed",
-  boxShadow: `inset 0 0 0 9999px ${nightOverlay(dark)}`,
 });
 

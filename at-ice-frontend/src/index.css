@@ -74,10 +74,19 @@
 .theme-switching *::before,
 .theme-switching *::after {
   transition-property: background-color, border-color, color, fill, stroke, box-shadow,
-    outline-color, text-decoration-color, caret-color, scrollbar-color, accent-color !important;
+    outline-color, text-decoration-color, caret-color, scrollbar-color, accent-color,
+    --ambient-tint !important;
   transition-duration: var(--theme-fade-duration) !important;
   transition-timing-function: var(--theme-fade-ease) !important;
   transition-delay: 0s !important;
+}
+/* The tint over the ice photo (lib/theme.js ambientStyle). A registered color
+   can be transitioned, so it fades on the same clock as every other surface
+   without the full-screen inset box-shadow it used to need. */
+@property --ambient-tint {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: rgba(248, 250, 252, 0.8);
 }
 
 /* Let the ice background show behind the full-page role screens. */
@@ -274,16 +283,16 @@
   box-shadow: var(--neu-inset-sm);
 }
 /* The row actions column (last column holding buttons) is only as wide as its
-   buttons and sits at the right end of the table; its header, buttons and
-   badges are right-aligned (owner, 2026-10-22), every other column stays
-   centered. */
+   buttons and sits at the right end of the table. Its header, buttons and
+   badges are centered on one line, so the word "Actions" is exactly over the
+   middle of the button group (owner, 2026-11-03; it was right-aligned before). */
 :is(.ice-main, .ice-scope) table:has(td:last-child button) :is(th, td):last-child {
   width: 1%;
   white-space: nowrap;
-  text-align: right !important;
+  text-align: center !important;
 }
 :is(.ice-main, .ice-scope) table td:last-child > :is(div, span).flex:has(> button) {
-  justify-content: flex-end !important;
+  justify-content: center !important;
 }
 /* Icon-only row buttons (a small set width) are square. A button with a wider
    set width (e.g. w-[76px], so a column of buttons lines up) keeps it. */

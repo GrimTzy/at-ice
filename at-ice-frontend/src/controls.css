@@ -124,6 +124,40 @@
   color: inherit !important;
 }
 
+/* The guidance below a disabled Customer "Create Login" action is a warning
+   reminder: required fields are still missing. It sits centered beneath its
+   button, in the warning tones (--neu-warn, --neu-warn-strong in neumorphism.css,
+   each at least 4.5:1 in light and night mode) with a small warning icon. */
+#root td > .create-login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+#root .create-login-reminder {
+  justify-self: center;
+  width: fit-content;
+  max-width: 100%;
+  color: var(--neu-warn);
+  font-weight: 500;
+  text-align: center;
+  white-space: normal;
+}
+#root .create-login-reminder::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  vertical-align: -2px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'/%3E%3Cline x1='12' y1='9' x2='12' y2='13'/%3E%3Cline x1='12' y1='17' x2='12.01' y2='17'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'/%3E%3Cline x1='12' y1='9' x2='12' y2='13'/%3E%3Cline x1='12' y1='17' x2='12.01' y2='17'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+#root .create-login-reminder :is(.font-medium, .font-semibold) {
+  color: var(--neu-warn-strong);
+  font-weight: 700;
+}
+
 /* Custom dropdowns (a button that opens a list, e.g. the Driver picker) look
    exactly like a native select: the same dent, height, radius and cyan chevron. */
 #root button[aria-haspopup="listbox"] {
