@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import RoleShell from "../../components/RoleShell";
-import { StatusBadge, LoadingButton, BottomSheet, Stepper, ErrorBanner, EmptyCard, CardSkeleton, Icon } from "../../components/MobileUi";
-import { CARD, CARD_BUTTON, FIELD, LABEL } from "../../lib/mobileUi";
+import { StatusBadge, LoadingButton, BottomSheet, Stepper, ErrorBanner, EmptyCard, CardSkeleton, SearchBar, Icon } from "../../components/MobileUi";
+import { CARD, CARD_BUTTON, FIELD, LABEL, matchesQuery } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
@@ -36,6 +36,7 @@ export default function CheckerIceLoadingPage() {
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [loadError, setLoadError] = useState("");
   const timedIn = useTimedIn();
+  const [query, setQuery] = useState("");
 
   // The count is kept as a draft while open, so a refresh keeps it.
   const draft = useDraft("checker:ice-loading", {
@@ -131,6 +132,8 @@ export default function CheckerIceLoadingPage() {
   }, [loadings]);
 
   const toCount = deliveries.filter((d) => !d.loaded).length;
+  const shownDeliveries = deliveries.filter((d) => matchesQuery(query, d.customer, d.delivery_no, d.driver, d.loaded_by));
+  const shownHistory = history.filter((g) => matchesQuery(query, g.delivery?.customer?.name, g.delivery?.delivery_no, g.checker));
 
   return (
     <RoleShell role="checker" title="Ice loading">
@@ -139,6 +142,8 @@ export default function CheckerIceLoadingPage() {
       {status === "loading" && <CardSkeleton rows={4} />}
       {status === "error" && <ErrorBanner onRetry={load}>{loadError}</ErrorBanner>}
 
+      {status === "ready" && <SearchBar value={query} onChange={setQuery} placeholder="Search truck, driver or delivery no." label="Search loading" />}
+
       {status === "ready" && (
         <>
           <section aria-label="Deliveries to count" className="space-y-3">
@@ -146,11 +151,11 @@ export default function CheckerIceLoadingPage() {
               <h2 className="text-[15px] font-semibold text-slate-900">Today's trucks</h2>
               <StatusBadge tone={toCount ? "pending" : "done"}>{toCount ? `${toCount} to count` : "All counted"}</StatusBadge>
             </div>
-            {deliveries.length === 0 ? (
-              <EmptyCard icon="truck" title="No trucks to count">No pending or in-transit deliveries today.</EmptyCard>
+            {shownDeliveries.length === 0 ? (
+              <EmptyCard icon="truck" title={query ? "No match" : "No trucks to count"}>{query ? "No truck or delivery matches your search." : "No pending or in-transit deliveries today."}</EmptyCard>
             ) : (
               <div className="grid grid-cols-1 gap-3">
-                {deliveries.map((d) => (
+                {shownDeliveries.map((d) => (
                   <button key={d.id} type="button" onClick={() => openCount(d)} disabled={d.loaded}
                     aria-label={`${d.delivery_no} ${d.customer || ""}${d.loaded ? ", counted" : ", tap to count"}`}
                     className={`${CARD_BUTTON} flex items-center gap-3 ${d.loaded ? "!opacity-100 border-emerald-200 bg-emerald-50/40" : ""}`}>
@@ -172,9 +177,9 @@ export default function CheckerIceLoadingPage() {
 
           <section aria-label="Recorded counts" className="space-y-3">
             <h2 className="text-[15px] font-semibold text-slate-900">Recorded counts</h2>
-            {history.length === 0 ? (
-              <EmptyCard icon="clipboard" title="No counts yet">Counts you save show here.</EmptyCard>
-            ) : history.map((g) => (
+            {shownHistory.length === 0 ? (
+              <EmptyCard icon="clipboard" title={query ? "No match" : "No counts yet"}>{query ? "No recorded count matches your search." : "Counts you save show here."}</EmptyCard>
+            ) : shownHistory.map((g) => (
               <article key={g.key} className={CARD}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

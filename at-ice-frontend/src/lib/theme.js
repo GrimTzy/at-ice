@@ -1,6 +1,6 @@
 // Theme state and colors shared by every layout. Components that use them
 // (NightStyle, NightToggle, NightScope) are in components/NightMode.jsx.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import iceImage from "../assets/iceproduct.png";
 
 export const THEME_KEY = "atice-theme";
@@ -174,8 +174,24 @@ function savedTheme(storageKey) {
 // (dialogs, pickers and toasts) change together. The custom event also keeps
 // any mounted layout instances in this tab in sync; the storage event covers
 // another tab.
+// Pages that must stay as designed (login, attendance station, job
+// application) hold a light lock: while any is mounted, <html> never gets
+// .cp-dark, whatever the saved or device theme is. The choice itself is
+// untouched and comes back when the page unmounts.
+let lightLocks = 0;
+let lastDark = false;
+const syncDocDark = () => document.documentElement.classList.toggle("cp-dark", lastDark && lightLocks === 0);
+export function useLightLock() {
+  useLayoutEffect(() => {
+    lightLocks += 1;
+    syncDocDark();
+    return () => { lightLocks -= 1; syncDocDark(); };
+  }, []);
+}
+
 function publishTheme(storageKey, dark, { persist = true } = {}) {
-  document.documentElement.classList.toggle("cp-dark", dark);
+  lastDark = dark;
+  syncDocDark();
   if (persist) {
     try { localStorage.setItem(storageKey, dark ? "dark" : "light"); } catch { /* ignore */ }
   }

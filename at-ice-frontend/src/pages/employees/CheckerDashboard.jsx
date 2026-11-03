@@ -49,9 +49,6 @@ export default function CheckerDashboard() {
   return (
     <RoleShell role="checker" title="Checker">
       <TimeInNotice timedIn={timedIn} />
-      <div className="text-[14px] text-slate-500">
-        {new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-      </div>
 
       {status === "loading" && <CardSkeleton rows={4} />}
       {status === "error" && <ErrorBanner onRetry={load}>{error}</ErrorBanner>}

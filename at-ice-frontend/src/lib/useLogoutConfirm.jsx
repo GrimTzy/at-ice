@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import LogoutConfirmDialog from "../components/LogoutConfirmDialog";
 import { playSplash } from "./splash";
 
@@ -8,11 +8,21 @@ import { playSplash } from "./splash";
 // then call askLogout from the Log Out button and render {logoutDialog}.
 export function useLogoutConfirm(onConfirm) {
   const [open, setOpen] = useState(false);
-  const ask = useCallback(() => setOpen(true), []);
+  const openerRef = useRef(null);
+  const ask = useCallback(() => {
+    openerRef.current = document.activeElement;
+    setOpen(true);
+  }, []);
+  // closing gives focus back to the control that asked, if it is still on screen
+  const cancel = () => {
+    setOpen(false);
+    const opener = openerRef.current;
+    if (opener instanceof HTMLElement && opener.isConnected) requestAnimationFrame(() => opener.focus());
+  };
   const dialog = (
     <LogoutConfirmDialog
       open={open}
-      onCancel={() => setOpen(false)}
+      onCancel={cancel}
       onConfirm={() => {
         setOpen(false);
         playSplash();

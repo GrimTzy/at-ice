@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import RoleShell from "../../components/RoleShell";
-import { StatusBadge, LoadingButton, ActionBar, ErrorBanner, EmptyCard, CardSkeleton, Icon, BottomSheet } from "../../components/MobileUi";
-import { CARD } from "../../lib/mobileUi";
+import { StatusBadge, LoadingButton, ActionBar, ErrorBanner, EmptyCard, CardSkeleton, SearchBar, Icon, BottomSheet } from "../../components/MobileUi";
+import { CARD, matchesQuery } from "../../lib/mobileUi";
 import { useLiveTick } from "../../lib/live";
 import { printDeliveryConfirmation } from "../../lib/printDelivery";
 import { formatDateTime } from "../../lib/time";
@@ -69,7 +69,9 @@ export default function SalesmanDashboard() {
   useEffect(() => { load(); }, [load, live]);
 
   const stops = route.route || [];
-  const visible = delivered ? done : stops;
+  const [query, setQuery] = useState("");
+  const visible = (delivered ? done : stops).filter((d) =>
+    matchesQuery(query, d.customer?.name, d.store_name, d.customer?.address, d.address, d.customer?.city, d.delivery_no));
   const pager = usePagination(visible, { initialSize: 10 });
   const selected = visible.find((d) => d.id === selectedId) || null;
   const crew = route.crew;
@@ -114,7 +116,7 @@ export default function SalesmanDashboard() {
   }
 
   return (
-    <RoleShell role="salesman" title={delivered ? "Delivered" : "To deliver"} actionBar={actionBar}>
+    <RoleShell role="salesman" title={delivered ? "Delivered" : "To deliver"} actionBar={actionBar} paged>
       <TimeInNotice timedIn={timedIn} />
 
       {!delivered && status === "ready" && (
@@ -151,11 +153,13 @@ export default function SalesmanDashboard() {
         ))}
       </div>
 
+      {status === "ready" && <SearchBar value={query} onChange={setQuery} placeholder="Search store, address or delivery no." label="Search deliveries" />}
+
       {status === "loading" && <CardSkeleton rows={3} />}
       {status === "error" && <ErrorBanner onRetry={load}>{loadError}</ErrorBanner>}
       {status === "ready" && visible.length === 0 && (
-        <EmptyCard icon="truck" title={delivered ? "Nothing delivered yet" : "No stops right now"}>
-          {delivered ? "Deliveries you confirm show here." : crew?.on_shift ? "Your driver has no stops left today." : "Your route shows once a driver has timed in."}
+        <EmptyCard icon="truck" title={query ? "No match" : delivered ? "Nothing delivered yet" : "No stops right now"}>
+          {query ? "No delivery matches your search." : delivered ? "Deliveries you confirm show here." : crew?.on_shift ? "Your driver has no stops left today." : "Your route shows once a driver has timed in."}
         </EmptyCard>
       )}
 
@@ -190,7 +194,7 @@ export default function SalesmanDashboard() {
               </article>
             );
           })}
-          <div className="rounded-2xl overflow-hidden"><Pagination pager={pager} label={delivered ? "deliveries" : "stops"} fixed /></div>
+          <Pagination pager={pager} label={delivered ? "deliveries" : "stops"} fixed dock dockBottom="4rem" />
         </div>
       )}
 

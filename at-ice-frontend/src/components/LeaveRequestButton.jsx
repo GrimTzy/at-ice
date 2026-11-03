@@ -7,8 +7,21 @@ const CalendarIcon = () => <Icon name="calendar" size={13} />;
 // (Checker, Maintenance, Salesman, Driver). It always sits in the top bar,
 // directly left of the Log Out button.
 // compact: the icon only, a 44px square (the role screens' 56px header).
-export default function LeaveRequestButton({ compact = false }) {
+export default function LeaveRequestButton({ compact = false, variant = "icon", onActivate }) {
   const navigate = useNavigate();
+  if (variant === "menu") {
+    return (
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => { onActivate?.(); navigate("/my-leave"); }}
+        className="profile-item w-full flex items-center gap-3 min-h-[48px] px-3 text-[14px] font-medium text-slate-700 text-left cursor-pointer"
+      >
+        <CalendarIcon />
+        <span className="flex-1 min-w-0 truncate">Leave Request</span>
+      </button>
+    );
+  }
   return (
     <button
       type="button"

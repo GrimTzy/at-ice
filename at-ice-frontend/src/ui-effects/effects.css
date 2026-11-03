@@ -34,25 +34,92 @@ html[data-fx="on"] :is(.ice-main, .role-shell main) > :nth-child(3) { animation-
 html[data-fx="on"] :is(.ice-main, .role-shell main) > :nth-child(4) { animation-delay: 150ms; }
 html[data-fx="on"] :is(.ice-main, .role-shell main) > :nth-child(n+5) { animation-delay: 200ms; }
 
-/* KPI cards and grid items in a row */
-html[data-fx="on"] .kpi-grid > * { animation: fx-enter var(--fx-slow) var(--fx-ease) backwards; }
-html[data-fx="on"] .kpi-grid > :nth-child(2) { animation-delay: 60ms; }
-html[data-fx="on"] .kpi-grid > :nth-child(3) { animation-delay: 120ms; }
-html[data-fx="on"] .kpi-grid > :nth-child(4) { animation-delay: 180ms; }
-html[data-fx="on"] .kpi-grid > :nth-child(5) { animation-delay: 240ms; }
-html[data-fx="on"] .kpi-grid > :nth-child(6) { animation-delay: 300ms; }
+/* ---- One staggered cascade: tables, hero cards, breakdown rows, mobile lists -
+   Each item fades in and settles 8px up in 240ms; the first ten step by 40ms
+   (row 1 at 0, row 10 at 360ms) and everything after row 10 comes in with row
+   10, so a long table never feels slow. lib/destination.js flips data-cascade
+   between "a" and "b" on a list when a hero card or breakdown row filters it,
+   which restarts the same cascade on the new rows (even for an empty result).
+   Like all of this file it is off for people who asked for less motion. */
+@keyframes fx-stagger-a { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes fx-stagger-b { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+html[data-fx="on"] :is(
+  .kpi-grid > :not([data-hero-pulse]),
+  :is(.ice-main, .role-shell main) tbody tr,
+  :is(.ice-main, .role-shell main) .insight-panel ul > li,
+  .role-shell main :is(ul, ol) > li
+) {
+  --fx-i: 9;
+  animation: fx-stagger-a 240ms var(--fx-ease) backwards;
+  animation-delay: calc(var(--fx-i) * 40ms);
+}
+/* the grid cards: the hero-card rule in glow.css turns animations off for them */
+html[data-fx="on"] .kpi-grid > .kpi-card:not([data-hero-pulse]) {
+  animation: fx-stagger-a 240ms var(--fx-ease) backwards !important;
+  animation-delay: calc(var(--fx-i) * 40ms) !important;
+}
+html[data-fx="on"] :is(
+  .kpi-grid > :not([data-hero-pulse]),
+  :is(.ice-main, .role-shell main) tbody tr,
+  :is(.ice-main, .role-shell main) .insight-panel ul > li,
+  .role-shell main :is(ul, ol) > li
+):nth-child(1) { --fx-i: 0; }
+html[data-fx="on"] :is(
+  .kpi-grid > :not([data-hero-pulse]),
+  :is(.ice-main, .role-shell main) tbody tr,
+  :is(.ice-main, .role-shell main) .insight-panel ul > li,
+  .role-shell main :is(ul, ol) > li
+):nth-child(2) { --fx-i: 1; }
+html[data-fx="on"] :is(
+  .kpi-grid > :not([data-hero-pulse]),
+  :is(.ice-main, .role-shell main) tbody tr,
+  :is(.ice-main, .role-shell main) .insight-panel ul > li,
+  .role-shell main :is(ul, ol) > li
+):nth-child(3) { --fx-i: 2; }
+html[data-fx="on"] :is(
+  .kpi-grid > :not([data-hero-pulse]),
+  :is(.ice-main, .role-shell main) tbody tr,
+  :is(.ice-main, .role-shell main) .insight-panel ul > li,
+  .role-shell main :is(ul, ol) > li
+):nth-child(4) { --fx-i: 3; }
+html[data-fx="on"] :is(
+  .kpi-grid > :not([data-hero-pulse]),
+  :is(.ice-main, .role-shell main) tbody tr,
+  :is(.ice-main, .role-shell main) .insight-panel ul > li,
+  .role-shell main :is(ul, ol) > li
+):nth-child(5) { --fx-i: 4; }
+html[data-fx="on"] :is(
+  .kpi-grid > :not([data-hero-pulse]),
+  :is(.ice-main, .role-shell main) tbody tr,
+  :is(.ice-main, .role-shell main) .insight-panel ul > li,
+  .role-shell main :is(ul, ol) > li
+):nth-child(6) { --fx-i: 5; }
+html[data-fx="on"] :is(
+  .kpi-grid > :not([data-hero-pulse]),
+  :is(.ice-main, .role-shell main) tbody tr,
+  :is(.ice-main, .role-shell main) .insight-panel ul > li,
+  .role-shell main :is(ul, ol) > li
+):nth-child(7) { --fx-i: 6; }
+html[data-fx="on"] :is(
+  .kpi-grid > :not([data-hero-pulse]),
+  :is(.ice-main, .role-shell main) tbody tr,
+  :is(.ice-main, .role-shell main) .insight-panel ul > li,
+  .role-shell main :is(ul, ol) > li
+):nth-child(8) { --fx-i: 7; }
+html[data-fx="on"] :is(
+  .kpi-grid > :not([data-hero-pulse]),
+  :is(.ice-main, .role-shell main) tbody tr,
+  :is(.ice-main, .role-shell main) .insight-panel ul > li,
+  .role-shell main :is(ul, ol) > li
+):nth-child(9) { --fx-i: 8; }
 
-/* Table rows and list items fade in (first dozen staggered) */
-html[data-fx="on"] .ice-main tbody tr { animation: fx-fade var(--fx-mid) ease backwards; }
-html[data-fx="on"] .ice-main tbody tr:nth-child(-n+12) { animation-delay: calc(var(--fx-row, 0) * 1ms); }
-html[data-fx="on"] .ice-main tbody tr:nth-child(2) { --fx-row: 25; }
-html[data-fx="on"] .ice-main tbody tr:nth-child(3) { --fx-row: 50; }
-html[data-fx="on"] .ice-main tbody tr:nth-child(4) { --fx-row: 75; }
-html[data-fx="on"] .ice-main tbody tr:nth-child(5) { --fx-row: 100; }
-html[data-fx="on"] .ice-main tbody tr:nth-child(6) { --fx-row: 125; }
-html[data-fx="on"] .ice-main tbody tr:nth-child(7) { --fx-row: 150; }
-html[data-fx="on"] .ice-main tbody tr:nth-child(8) { --fx-row: 175; }
-html[data-fx="on"] .ice-main tbody tr:nth-child(n+9) { --fx-row: 200; }
+/* re-trigger: the same keyframes under the other name restart the cascade */
+html[data-fx="on"] [data-cascade="b"][data-cascade] :is(tbody tr, .insight-panel ul > li) {
+  animation-name: fx-stagger-b;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-fx="on"] :is(.kpi-grid > *, tbody tr, .insight-panel ul > li, .role-shell main :is(ul, ol) > li) { animation: none !important; }
+}
 
 /* Content that replaces a skeleton (marked by ui-effects/reveal.js) enters the
    same way a new page does. Fill mode "backwards": nothing is held after the

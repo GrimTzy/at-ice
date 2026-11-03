@@ -853,11 +853,11 @@ function ProofSection({ proof }) {
       <div className="text-[11px] text-slate-400 uppercase tracking-wide">Proof of delivery</div>
       <div className="grid gap-4 md:grid-cols-2">
         {photoUrl(proof.photo_path) ? (
-          <a href={photoUrl(proof.photo_path)} target="_blank" rel="noreferrer">
-            <img src={photoUrl(proof.photo_path)} alt="Delivery proof" className="w-full rounded-lg border border-black/[0.09] object-cover" />
+          <a href={photoUrl(proof.photo_path)} target="_blank" rel="noreferrer" className="proof-well" aria-label="Open the delivery proof photo">
+            <img src={photoUrl(proof.photo_path)} alt="Delivery proof" />
           </a>
         ) : (
-          <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-black/[0.15] text-[12px] text-slate-400">No photo on file</div>
+          <div className="proof-well proof-well-empty">No photo on file</div>
         )}
         <div className="flex flex-col gap-2.5">
           <Row label="Confirmed by" value={proof.salesman?.name || "—"} />
@@ -867,7 +867,7 @@ function ProofSection({ proof }) {
         </div>
       </div>
       {receipt && (
-        <div>
+        <div className="proof-invoice">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[12px] font-semibold text-slate-700">Invoice <span className="font-mono">{receipt.receipt_no}</span></span>
             {receipt.payment_status && (
@@ -876,7 +876,7 @@ function ProofSection({ proof }) {
           </div>
           <div className="flex flex-col gap-1.5">
             {(receipt.items || []).map((it) => (
-              <div key={it.id} className="flex items-center justify-between bg-slate-50 border border-black/[0.09] rounded-md px-3 py-2">
+              <div key={it.id} className="item-card flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5">
                 <span className="text-slate-700">
                   {productLabel(it.product_type)} × {it.quantity}
                   {it.quantity_ordered != null && <QtyCompare ordered={it.quantity_ordered} delivered={it.quantity} />}
@@ -884,7 +884,7 @@ function ProofSection({ proof }) {
                 <span className="text-slate-600 font-mono">{peso(it.line_total)}</span>
               </div>
             ))}
-            <div className="flex items-center justify-between px-3 pt-1 font-semibold text-slate-800">
+            <div className="total-row flex items-center justify-between rounded-xl px-3.5 py-2.5 font-semibold text-slate-800">
               <span>Total</span>
               <span className="font-mono">{peso(receipt.total_amount)}</span>
             </div>

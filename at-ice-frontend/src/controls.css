@@ -1051,10 +1051,10 @@ html.front-sheet-open :is(.fixed.inset-0[class*="z-"], .guard-layer):not([data-f
 #root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > form > [class*="overflow-y-auto"] { flex: 1 1 auto; min-height: 0; }
 #root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > form > div.border-t:last-child { flex: 0 0 auto; margin: 0 !important; }
 /* a footer at the end of the scrolling region: stuck to its bottom, edge to edge */
-#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > :last-child:not(:has(> [class*="overflow-y-auto"])):has(> div.flex:is(.justify-end, .justify-between, .border-t):last-child) {
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > :last-child:not(:has(> [class*="overflow-y-auto"])):has(> div.flex:not(.flex-col):is(.justify-end, .justify-between, .border-t):last-child) {
   padding-bottom: 0 !important;
 }
-#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > :last-child:not(:has(> [class*="overflow-y-auto"])) > div.flex:is(.justify-end, .justify-between, .border-t):last-child:not(:first-child) {
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > :last-child:not(:has(> [class*="overflow-y-auto"])) > div.flex:not(.flex-col):is(.justify-end, .justify-between, .border-t):last-child:not(:first-child) {
   position: sticky;
   bottom: 0;
   z-index: 3;
@@ -1064,7 +1064,7 @@ html.front-sheet-open :is(.fixed.inset-0[class*="z-"], .guard-layer):not([data-f
   border-top: 1px solid var(--groove-dark) !important;
   box-shadow: inset 0 1px 0 var(--groove-light) !important;
 }
-#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > :last-child:not(:has(> [class*="overflow-y-auto"])) > div.flex:is(.justify-end, .justify-between, .border-t):last-child:not(:first-child) :is(button, a) {
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > :last-child:not(:has(> [class*="overflow-y-auto"])) > div.flex:not(.flex-col):is(.justify-end, .justify-between, .border-t):last-child:not(:first-child) :is(button, a) {
   height: var(--ctl-h) !important;
   min-height: var(--ctl-h) !important;
   padding: 0 18px !important;
@@ -1129,3 +1129,250 @@ html.front-sheet-open :is(.fixed.inset-0[class*="z-"], .guard-layer):not([data-f
   .map-full-card { width: 94vw; height: 84vh; padding: 6px; }
   .map-float-actions { max-width: calc(100% - 24px); bottom: 64px; }
 }
+
+/* ---- Store map: one neumorphic family (owner, 2026-11-03) -------------------
+   The enlarged map fills almost the whole screen inside a raised frame; the map
+   itself sits in a sunken bezel. Every control on the map (Enlarge, Lock pin,
+   Locate, the round close and the + / - zoom) is the same raised soft button
+   that presses in, in light and night mode, in place of the old flat white ones. */
+:root { --map-accent: #155e75; --map-ok: #047857; --ring-accent: rgba(6, 182, 212, 0.4); }
+:is(.cp-dark, .neu-dark) { --map-accent: #67e8f9; --map-ok: #6ee7b7; --ring-accent: rgba(103, 232, 249, 0.42); }
+
+.map-full-card {
+  width: 96vw;
+  max-width: 96vw;
+  height: 92vh;
+  max-height: 92vh;
+  padding: 12px;
+}
+@media (max-width: 639px) {
+  .map-full-card { width: 98vw; max-width: 98vw; height: 92vh; max-height: 92vh; padding: 8px; }
+  .map-float-actions { max-width: calc(100% - 24px); bottom: 16px; }
+}
+/* the sunken bezel: drawn over the tiles, under the buttons, never blocks the map */
+.map-area::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: var(--neu-inset);
+}
+.map-full-card .map-area { border-radius: 18px; }
+
+:is(#root, body) .map-btn.map-btn {
+  min-height: 40px;
+  border-radius: 9999px;
+  color: var(--neu-text) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-raised-sm) !important;
+  transition: box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), color 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:is(#root, body) .map-btn.map-btn svg { color: var(--map-accent); }
+:is(#root, body) .map-btn.map-btn:hover { background-color: var(--neu-bg) !important; box-shadow: var(--neu-raised) !important; }
+:is(#root, body) .map-btn.map-btn:active { box-shadow: var(--neu-inset-sm) !important; }
+:is(#root, body) .map-btn.map-btn:focus-visible { box-shadow: var(--neu-raised-sm), 0 0 0 3px #38bdf8 !important; }
+:is(#root, body) .map-btn.map-btn-primary { color: var(--map-accent) !important; background-color: var(--neu-bg) !important; font-weight: 700; }
+:is(#root, body) .map-btn.map-btn-primary:hover { background-color: var(--neu-bg) !important; }
+:is(#root, body) .map-btn.map-btn-locked { color: var(--map-ok) !important; background-color: var(--neu-bg) !important; }
+:is(#root, body) .map-btn.map-btn-locked svg { color: var(--map-ok); }
+:is(#root, body) .map-btn.map-btn-icon { width: 40px; padding: 0; }
+:is(#root, body) .map-btn.map-btn:disabled {
+  color: var(--neu-muted) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset-sm) !important;
+}
+:is(#root, body) .map-btn.map-btn:disabled svg { color: inherit; }
+
+:is(#root, body) .map-full-card .map-close {
+  width: 40px; height: 40px;
+  color: var(--neu-muted);
+  background-color: var(--neu-bg);
+  box-shadow: var(--neu-raised-sm);
+  transition: box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), color 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:is(#root, body) .map-full-card .map-close:hover { color: var(--neu-text); box-shadow: var(--neu-raised); background-color: var(--neu-bg); }
+:is(#root, body) .map-full-card .map-close:active { color: var(--neu-text); box-shadow: var(--neu-inset-sm); background-color: var(--neu-bg); }
+
+/* Leaflet + / - : two separate raised buttons, not one flat white box */
+:is(#root, body) .leaflet-container .leaflet-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+:is(#root, body) .leaflet-container .leaflet-bar a,
+:is(#root, body) .leaflet-container .leaflet-bar a:first-child,
+:is(#root, body) .leaflet-container .leaflet-bar a:last-child {
+  display: grid !important;
+  place-items: center;
+  width: 40px !important;
+  height: 40px !important;
+  line-height: 1 !important;
+  font: 600 20px/1 system-ui, sans-serif !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  color: var(--neu-text) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-raised-sm) !important;
+  transition: box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), color 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:is(#root, body) .leaflet-container .leaflet-bar a:hover { background-color: var(--neu-bg) !important; box-shadow: var(--neu-raised) !important; }
+:is(#root, body) .leaflet-container .leaflet-bar a:active { box-shadow: var(--neu-inset-sm) !important; }
+:is(#root, body) .leaflet-container .leaflet-bar a.leaflet-disabled {
+  color: var(--neu-muted) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset-sm) !important;
+  cursor: not-allowed;
+}
+/* keep the corner controls clear of the sunken bezel */
+:is(#root, body) .leaflet-container .leaflet-bottom.leaflet-right .leaflet-control-zoom { margin: 0 14px 14px 0; }
+:is(#root, body) .leaflet-container .leaflet-control-attribution {
+  margin: 0 14px 4px 0;
+  padding: 1px 8px;
+  border-radius: 8px;
+  color: var(--neu-muted);
+  background-color: var(--neu-bg);
+  opacity: 0.9;
+}
+:is(#root, body) .leaflet-container .leaflet-control-attribution a { color: var(--map-accent); }
+
+/* the speech bubble over the pin and the locked pill follow the same surface */
+:is(#root, body) .map-bubble {
+  color: var(--neu-text) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-raised-sm), var(--float-shadow-sm) !important;
+}
+:is(#root, body) .map-status {
+  color: var(--neu-text) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset-sm) !important;
+}
+:is(#root, body) .map-status-coords { color: var(--map-ok); }
+
+@media (max-width: 767px) {
+  :is(#root, body) .map-btn.map-btn { min-height: 44px; }
+  :is(#root, body) .map-btn.map-btn-icon { width: 44px; }
+  :is(#root, body) .map-btn.map-btn.map-btn-lg { min-height: 44px; }
+  :is(#root, body) .map-full-card .map-close { width: 44px; height: 44px; }
+  :is(#root, body) .leaflet-container .leaflet-bar a,
+  :is(#root, body) .leaflet-container .leaflet-bar a:first-child,
+  :is(#root, body) .leaflet-container .leaflet-bar a:last-child { width: 44px !important; height: 44px !important; }
+  :is(#root, body) .map-btn.map-btn-icon.top-\[60px\] { top: 64px; }
+}
+
+/* ---- Hero cards and breakdown rows: one smooth press / select -----------------
+   Hover, press and the selected (sunken) state all move on the same 220ms curve
+   instead of snapping. The selected state is a deeper well with a faint ring in
+   the tone of the card or row (data-tone). */
+html #root :is(.kpi-card, .stat-card, button.breakdown-row) {
+  transition: box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1), background-color 220ms cubic-bezier(0.22, 1, 0.36, 1), color 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+#root :is(.kpi-card, button.breakdown-row)[data-tone="emerald"] { --ring-accent: rgba(16, 185, 129, 0.45); }
+#root :is(.kpi-card, button.breakdown-row)[data-tone="cyan"] { --ring-accent: rgba(6, 182, 212, 0.45); }
+#root :is(.kpi-card, button.breakdown-row)[data-tone="violet"] { --ring-accent: rgba(139, 92, 246, 0.45); }
+#root :is(.kpi-card, button.breakdown-row)[data-tone="amber"] { --ring-accent: rgba(245, 158, 11, 0.5); }
+#root :is(.kpi-card, button.breakdown-row)[data-tone="rose"] { --ring-accent: rgba(244, 63, 94, 0.45); }
+#root :is(.kpi-card, button.breakdown-row)[data-tone="blue"] { --ring-accent: rgba(59, 130, 246, 0.45); }
+#root :is(.kpi-card, button.breakdown-row)[data-tone="orange"] { --ring-accent: rgba(249, 115, 22, 0.48); }
+#root :is(.kpi-card, button.breakdown-row)[data-tone="slate"] { --ring-accent: rgba(100, 116, 139, 0.45); }
+#root button.breakdown-row[aria-current="true"],
+#root .kpi-card.kpi-card-active {
+  box-shadow: var(--neu-inset), inset 0 0 0 1.5px var(--ring-accent) !important;
+}
+#root button.breakdown-row[aria-current="true"]:active { box-shadow: var(--neu-inset) !important; }
+
+/* ---- Detail modals: media in a well, the body never squeezes its sections ----
+   The region of a dialog that scrolls (the body below the title bar) is a
+   column: its sections keep their own height and the region scrolls, instead
+   of squeezing them so a photo spills over the section below it. Proof and
+   attachment photos sit in a recessed well with a fixed height. */
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child):not(:has(> div.border-t:last-child)) > :last-child:not(:first-child) > *,
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child):has(> div.border-t:last-child) > :nth-last-child(2):not(:first-child) > * {
+  flex-shrink: 0;
+}
+:is(#root, body) .proof-well {
+  display: block !important;
+  position: relative;
+  height: 224px !important;
+  min-height: 0 !important;
+  max-height: 40vh !important;
+  padding: 6px !important;
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset) !important;
+}
+:is(#root, body) .proof-well img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 0 !important;
+  border-radius: 12px;
+}
+:is(#root, body) .proof-well-empty {
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--neu-muted);
+}
+/* the invoice under the proof: its own block, split by an etched groove */
+:is(#root, body) .proof-invoice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--groove-line);
+  box-shadow: inset 0 1px 0 var(--groove-light);
+}
+/* any other photo dropped into a dialog stays inside it */
+#root .fixed.inset-0 img:not([class*="h-"], [class*="max-h"], [class*="size-"]) {
+  max-width: 100%;
+  max-height: 45vh;
+  object-fit: contain;
+}
+
+/* ---- Maps: the floating rounded-square button on the driver's delivery list ------------
+   A raised neumorphic squircle at the bottom center (same 16px radius and raised
+   shadow as the KPI cards), icon over the word "Maps",
+   that sinks in when pressed. 76x64px, well above the 44px touch minimum, kept
+   clear of the phone's bottom edge (safe area). Same surface, shadows and
+   accent as every other map control (see the store map above). */
+#root button.maps-fab.maps-fab {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 76px !important;
+  height: 64px !important;
+  min-height: 64px !important;
+  margin-left: -38px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: var(--neu-radius) !important;
+  cursor: pointer;
+  color: var(--map-accent) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-raised) !important;
+  transition: box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), color 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+#root button.maps-fab.maps-fab > span {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--neu-text);
+}
+#root button.maps-fab.maps-fab:hover { box-shadow: var(--neu-raised), var(--float-shadow-sm) !important; }
+#root button.maps-fab.maps-fab:active { box-shadow: var(--neu-inset) !important; }
+#root button.maps-fab.maps-fab:focus-visible { box-shadow: var(--neu-raised), 0 0 0 3px #38bdf8 !important; }

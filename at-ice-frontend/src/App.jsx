@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute'
 import { NightScope } from './components/NightMode'
+import MobileAppShell from './components/MobileAppShell'
+import LightOnly from './components/LightOnly'
 import SplashScreen from './components/SplashScreen'
 import SoftPickers from './components/SoftPickers'
 import Toaster from './components/Toaster'
@@ -93,25 +95,25 @@ function App() {
         {/* One login page for every role. After login the user goes to their own
             dashboard, chosen by the role and sub_role the API returns. */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/login" element={<LightOnly><LoginPage /></LightOnly>} />
+        <Route path="/forgot-password" element={<LightOnly><ForgotPasswordPage /></LightOnly>} />
         {/* Public job application form, opened from the QR code in HRIS > Interviews */}
-        <Route path="/apply" element={<ApplyPage />} />
+        <Route path="/apply" element={<LightOnly><ApplyPage /></LightOnly>} />
         {/* The same form from an employee's referral link (records who referred) */}
-        <Route path="/job-applications/:referrer" element={<ApplyPage />} />
+        <Route path="/job-applications/:referrer" element={<LightOnly><ApplyPage /></LightOnly>} />
 
         {/* Old per-role login links still work: they all go to the one login page. */}
         {["/admin/login", "/hr/login", "/driver/login", "/customer/login", "/checker/login", "/salesman/login", "/maintenance/login"].map((path) => (
           <Route key={path} path={path} element={<Navigate to="/login" replace />} />
         ))}
-        <Route path="/attendance-station" element={<KioskGate><AttendanceStation /></KioskGate>} />
+        <Route path="/attendance-station" element={<LightOnly><KioskGate><AttendanceStation /></KioskGate></LightOnly>} />
 
         {/* -- Leave Request (every Employee role and Driver, own requests only) -- */}
         <Route
           path="/my-leave"
           element={
             <ProtectedRoute allowedRoles={["employee", "driver"]}>
-              <NightScope><LeaveRequestPage /></NightScope>
+              <MobileAppShell><NightScope><LeaveRequestPage /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -407,7 +409,7 @@ function App() {
           path="/driver/deliveries"
           element={
             <ProtectedRoute allowedRoles={["driver"]}>
-              <NightScope><DriverDeliveriesPage /></NightScope>
+              <MobileAppShell><NightScope><DriverDeliveriesPage /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -415,7 +417,7 @@ function App() {
           path="/driver/gps"
           element={
             <ProtectedRoute allowedRoles={["driver"]}>
-              <NightScope><GpsTrackingPage /></NightScope>
+              <MobileAppShell><NightScope><GpsTrackingPage /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -425,7 +427,7 @@ function App() {
           path="/checker/dashboard"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <NightScope><CheckerDashboard /></NightScope>
+              <MobileAppShell><NightScope><CheckerDashboard /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -435,7 +437,7 @@ function App() {
           path="/checker/ice-loading"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <NightScope><CheckerIceLoadingPage /></NightScope>
+              <MobileAppShell><NightScope><CheckerIceLoadingPage /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -443,7 +445,7 @@ function App() {
           path="/checker/inventory"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <NightScope><CheckerInventoryManagementPage /></NightScope>
+              <MobileAppShell><NightScope><CheckerInventoryManagementPage /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -451,7 +453,7 @@ function App() {
           path="/checker/stock-movements"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <NightScope><CheckerStockMovementsPage /></NightScope>
+              <MobileAppShell><NightScope><CheckerStockMovementsPage /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -462,7 +464,7 @@ function App() {
           path="/checker/suppliers"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <NightScope><CheckerSupplierManagementPage /></NightScope>
+              <MobileAppShell><NightScope><CheckerSupplierManagementPage /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -470,7 +472,7 @@ function App() {
           path="/salesman/deliveries"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["salesman"]}>
-              <NightScope><SalesmanDashboard /></NightScope>
+              <MobileAppShell><NightScope><SalesmanDashboard /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -478,7 +480,7 @@ function App() {
           path="/salesman/deliveries/:id/confirm"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["salesman"]}>
-              <NightScope><SalesmanDeliveryConfirmation /></NightScope>
+              <MobileAppShell><NightScope><SalesmanDeliveryConfirmation /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -486,7 +488,7 @@ function App() {
           path="/maintenance/dashboard"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
-              <NightScope><MaintenanceDashboard /></NightScope>
+              <MobileAppShell><NightScope><MaintenanceDashboard /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -494,7 +496,7 @@ function App() {
           path="/maintenance/stock-out-request"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
-              <NightScope><MaintenanceStockOutRequestPage /></NightScope>
+              <MobileAppShell><NightScope><MaintenanceStockOutRequestPage /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />
@@ -503,7 +505,7 @@ function App() {
           path="/maintenance/projects"
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
-              <NightScope><MaintenanceProjectsPage /></NightScope>
+              <MobileAppShell><NightScope><MaintenanceProjectsPage /></NightScope></MobileAppShell>
             </ProtectedRoute>
           }
         />

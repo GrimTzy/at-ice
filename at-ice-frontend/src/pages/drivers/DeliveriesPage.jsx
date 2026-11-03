@@ -1,18 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import logo from "../../assets/logo.png";
-import { clearSession } from "../../lib/auth";
-import { useLogoutConfirm } from "../../lib/useLogoutConfirm";
-import LeaveRequestButton from "../../components/LeaveRequestButton";
-import { MemoAlert, MyMemosButton } from "../../components/MyMemos";
+import { MemoAlert } from "../../components/MyMemos";
+import MobileHeader from "../../components/MobileHeader";
+import { SearchBar } from "../../components/MobileUi";
+import { matchesQuery } from "../../lib/mobileUi";
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
 import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
-import HeaderAvatar from "../../components/HeaderAvatar";
-import { ScopeStatusRow } from "../../components/NightMode";
-import { initialsOf } from "../../lib/initials";
 import EmptyState from "../../components/EmptyState";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
@@ -67,9 +63,6 @@ const ChevronRightIcon = () => (
 const ClockIcon = () => (
   <Icon name="clock" size={12} />
 );
-const MapIcon = () => (
-  <Icon name="map" size={13} />
-);
 
 const STATUS_CONFIG = {
   pending:    { bg: "bg-amber-50",  text: "text-amber-600",  dot: "bg-amber-400",  label: "Pending"    },
@@ -86,11 +79,8 @@ const FILTERS = [
 
 export function DeliveriesPage() {
   const navigate = useNavigate();
-  const [askLogout, logoutDialog] = useLogoutConfirm(() => {
-    clearSession();
-    navigate("/login");
-  });
   const [filter, setFilter] = useState("all");
+  const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(null);
   const [deliveries, setDeliveries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,7 +92,6 @@ export function DeliveriesPage() {
   const watchIdRef = useRef(null);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const driverName = user?.name || "Driver";
 
   const fetchDeliveries = useCallback(async () => {
     setLoading(true);
@@ -188,7 +177,8 @@ export function DeliveriesPage() {
     }
   }
 
-  const visible = filter === "all" ? deliveries : deliveries.filter((d) => d.status === filter);
+  const visible = (filter === "all" ? deliveries : deliveries.filter((d) => d.status === filter)).filter((d) =>
+    matchesQuery(query, d.delivery_no, d.customer?.name, d.customer?.address, d.customer?.city, d.customer?.province));
   const pager = usePagination(visible, { initialSize: 10 });
 
   // I am at the store: the server checks the phone is near the store pin
@@ -221,47 +211,12 @@ export function DeliveriesPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {logoutDialog}
-
-      {/* Top bar */}
-      <header className="bg-white border-b border-black/[0.08] px-5 pt-4 pb-4 flex-shrink-0 sticky top-0 z-20">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <div className="brand-logo w-11 h-11 flex-shrink-0 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center overflow-hidden">
-              <img src={logo} alt="AT-ICE logo" className="w-full h-full object-contain p-1" />
-            </div>
-            <div>
-              <div className="text-[15px] font-semibold text-slate-800 leading-tight">{driverName}</div>
-              <div className="text-[11px] text-slate-400 tracking-wide">Driver</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate("/driver/gps")}
-              title="GPS map"
-              aria-label="GPS map"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-lg text-cyan-600 text-[11px] font-medium active:bg-cyan-500/20 transition-colors cursor-pointer"
-            >
-              <MapIcon />
-              {/* icon only on phones, so the row fits beside the name */}
-              <span className="hidden sm:inline">GPS</span>
-            </button>
-            <MyMemosButton />
-            <LeaveRequestButton />
-            <HeaderAvatar initials={initialsOf(user?.name, "DR")} name={user?.name || "Driver"} subtitle={user?.email || "Driver"} onSignOut={askLogout} mobileSignOut />
-          </div>
-        </div>
-
-        <ScopeStatusRow />
-        <div className="mt-3"><MemoAlert /></div>
-        <div className="mt-3">
-          <div className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">My Deliveries</div>
-        </div>
-
-        <div className="flex gap-2 mt-3">
-          {SUMMARY.map((s) => (
-            // Tap a count to show only those deliveries (same as the tabs below)
-            (() => {
+      <MobileHeader role="driver" title="My Deliveries">
+        <div className="px-4 pt-1 pb-3">
+          <MemoAlert />
+          <div className="grid grid-cols-4 gap-2 mt-2 pill-row">
+            {SUMMARY.map((s) => {
+              // Tap a count to show only those deliveries (same as the tabs below)
               const key = s.label === "Total" ? "all" : FILTERS.find((f) => f.label === s.label)?.key;
               return (
                 <button
@@ -269,25 +224,28 @@ export function DeliveriesPage() {
                   type="button"
                   onClick={() => setFilter(key)}
                   title={`Show ${s.label === "Total" ? "all" : s.label.toLowerCase()} deliveries`}
-                  className={`stat-pill flex-1 bg-slate-50 border border-black/[0.08] rounded-xl px-2 py-2 text-center cursor-pointer ${filter === key ? "is-active" : ""}`}
+                  className={`stat-pill bg-slate-50 border border-black/[0.08] rounded-xl px-1.5 py-2 text-center cursor-pointer min-w-0 ${filter === key ? "is-active" : ""}`}
                 >
                   <div className={`text-[16px] font-semibold font-mono leading-none ${s.color}`}>{s.value}</div>
-                  <div className="text-[9px] text-slate-400 mt-0.5 tracking-wide">{s.label}</div>
+                  <div className="text-[11px] text-slate-400 mt-1 tracking-wide whitespace-nowrap">{s.label}</div>
                 </button>
               );
-            })()
-          ))}
+            })}
+          </div>
         </div>
-      </header>
+      </MobileHeader>
 
       {/* Filter tabs */}
       <div className="px-4 pt-4 flex-shrink-0">
-        <FilterSelect label="Status" value={filter} onChange={setFilter} className="w-full [&>select]:flex-1"
-          options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: counts[f.key === "all" ? "total" : f.key] }))} />
+        <div className="grid gap-3">
+          <SearchBar value={query} onChange={setQuery} placeholder="Search store, delivery no. or address" label="Search deliveries" />
+          <FilterSelect label="Status" value={filter} onChange={setFilter} className="w-full [&>select]:flex-1"
+            options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: counts[f.key === "all" ? "total" : f.key] }))} />
+        </div>
       </div>
 
       {/* Delivery list */}
-      <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
+      <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-56">
         <TimeInNotice timedIn={timedIn} />
         {salesmen.length > 0 && (
           <div className="bg-white border border-black/[0.08] rounded-2xl px-4 py-3 text-[12px] text-slate-600">
@@ -447,9 +405,23 @@ export function DeliveriesPage() {
           );
         })}
         {!loading && visible.length > 0 && (
-          <div className="rounded-2xl overflow-hidden"><Pagination pager={pager} label="stops" fixed /></div>
+          <div className="rounded-2xl overflow-hidden"><Pagination pager={pager} label="stops" fixed dock dockBottom="0px" dockPad="6.25rem" /></div>
         )}
       </div>
+
+      {/* The map, one tap away from anywhere in the list: a round raised button
+          floating at the bottom center (it was a small button in the top bar) */}
+      <button
+        type="button"
+        onClick={() => navigate("/driver/gps")}
+        title="Open the GPS map"
+        aria-label="Maps: open the GPS map"
+        data-no-confirm
+        className="maps-fab"
+      >
+        <Icon name="map" size={22} />
+        <span>Maps</span>
+      </button>
     </div>
   );
 }
