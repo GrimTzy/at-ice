@@ -223,7 +223,7 @@ export default function AttendancePage() {
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <select aria-label="Range" value={rangeMode} onChange={(e) => setRangeMode(e.target.value)} className="px-2.5 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-700">
+            <select name="range_mode" aria-label="Range" value={rangeMode} onChange={(e) => setRangeMode(e.target.value)} className="px-2.5 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-700">
               <option value="cutoff">Pay period (cutoff)</option>
               <option value="range">Date range</option>
             </select>
@@ -234,13 +234,13 @@ export default function AttendancePage() {
                   {period ? payPeriodLabel(period) : "…"}
                 </span>
                 <button type="button" aria-label="Next cutoff" disabled={!period} onClick={() => loadPeriod(addDays(period.end, 1))} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500 hover:border-cyan-400 cursor-pointer">›</button>
-                <input type="date" aria-label="Go to the cutoff of a date" max={todayLocal()} onChange={(e) => e.target.value && loadPeriod(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
+                <input name="cutoff_date" type="date" aria-label="Go to the cutoff of a date" max={todayLocal()} onChange={(e) => e.target.value && loadPeriod(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
-                <input type="date" aria-label="From" value={from} max={to && to < todayLocal() ? to : todayLocal()} onChange={(e) => e.target.value && setFrom(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-700" />
+                <input name="from" type="date" aria-label="From" value={from} max={to && to < todayLocal() ? to : todayLocal()} onChange={(e) => e.target.value && setFrom(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-700" />
                 <span className="text-[11px] text-slate-400">to</span>
-                <input type="date" aria-label="To" value={to} min={from} max={todayLocal()} onChange={(e) => e.target.value && setTo(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-700" />
+                <input name="to" type="date" aria-label="To" value={to} min={from} max={todayLocal()} onChange={(e) => e.target.value && setTo(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-700" />
               </div>
             )}
           </div>
@@ -248,7 +248,7 @@ export default function AttendancePage() {
 
         <div className="flex items-center gap-2 px-2.5 py-1.5 border border-black/[0.09] rounded-md text-slate-400 w-full sm:w-64">
           <SearchIcon />
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID (EMP-0001) or name"
+          <input name="search" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID (EMP-0001) or name"
             aria-label="Search by employee ID or name" className="flex-1 min-w-0 text-xs text-slate-700 bg-transparent focus:outline-none" />
         </div>
 

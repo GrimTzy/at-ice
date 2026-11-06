@@ -163,7 +163,7 @@ export default function CheckerInventoryManagementPage() {
       {filter !== "alerts" && (
         <div className="relative">
           <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or category" aria-label="Search items" className={`${FIELD} pl-10`} />
+          <input name="query" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or category" aria-label="Search items" className={`${FIELD} pl-10`} />
         </div>
       )}
 
@@ -204,7 +204,7 @@ export default function CheckerInventoryManagementPage() {
       {status === "ready" && filter === "alerts" && (
         <>
           <label className="flex items-center gap-2 min-h-[44px] text-[14px] text-slate-600">
-            <input type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} />
+            <input name="show_resolved" type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} />
             Show resolved alerts
           </label>
           {visibleAlerts.length === 0 ? (

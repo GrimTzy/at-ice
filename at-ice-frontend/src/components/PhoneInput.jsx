@@ -11,6 +11,7 @@ export default function PhoneInput({ value, onChange, className = "", invalid = 
     <div className="phone-field">
       <span aria-hidden="true" className="phone-prefix">{PHONE_PREFIX}</span>
       <input
+        name="phone"
         type="tel"
         inputMode="numeric"
         autoComplete="off"

@@ -144,6 +144,11 @@ export default function CustomerDashboard() {
 
   return (
     <CustomerLayout pageTitle="Dashboard" breadcrumb="Overview">
+      {profile?.customer_linked === false && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[13px] text-amber-800">
+          This login has no customer account yet, so there is nothing to show. Please contact the office to link your account.
+        </div>
+      )}
       {/* Left: profile, counts and the two recent lists, stretched to the
           height of the company card on the right, so there is no dead space */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-stretch">

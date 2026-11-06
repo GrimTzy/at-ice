@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,6 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
     // subscription at POST /api/broadcasting/auth with its Sanctum token.
     ->withBroadcasting(__DIR__.'/../routes/channels.php', ['prefix' => 'api', 'middleware' => ['auth:sanctum']])
     ->withMiddleware(function (Middleware $middleware) {
+        // Guests on the API get a JSON 401, never a login redirect (there is no login route).
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : route('login'));
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'password.changed' => \App\Http\Middleware\EnsurePasswordChanged::class,
@@ -35,4 +38,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json(['message' => 'Not found.'], 404);
             }
         });
+        // The API always answers in JSON; other requests keep their usual response.
+        $exceptions->shouldRenderJsonWhen(fn (Request $request, Throwable $e) => $request->is('api/*') || $request->expectsJson());
     })->create();

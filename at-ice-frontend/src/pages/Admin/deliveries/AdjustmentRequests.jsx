@@ -76,7 +76,7 @@ function RequestRow({ r, onDone }) {
       {!r.delivery_open && <div className="text-[12px] text-rose-700">This delivery is already {String(d.status || "").replace("_", " ")}, so it cannot change. Decline the request with a note.</div>}
       {declining ? (
         <div className="flex flex-col sm:flex-row gap-2">
-          <input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Why, e.g. The truck is already loaded" aria-label="Reason for declining" className={fieldCls} autoFocus />
+          <input name="note" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Why, e.g. The truck is already loaded" aria-label="Reason for declining" className={fieldCls} autoFocus />
           <div className="flex gap-2 justify-end">
             <button type="button" data-no-confirm onClick={() => { setDeclining(false); setNote(""); }} className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-[12px] text-slate-600 hover:bg-slate-50 cursor-pointer">Back</button>
             <button type="button" data-no-confirm disabled={busy} onClick={decline} title="Turn the request down; the store sees your note" className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[12px] font-medium cursor-pointer disabled:opacity-50">{busy ? "Sending…" : "Send decline"}</button>

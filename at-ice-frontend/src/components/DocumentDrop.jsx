@@ -45,7 +45,7 @@ function Zone({ kind, items, onAdd, onRemove, viewUrl, disabled }) {
         <div className="text-[12.5px] font-semibold text-slate-700">{kind.label}</div>
         <div className="text-[11px] text-slate-500 mt-0.5">Drop here or tap to choose · {kind.hint}</div>
       </div>
-      <input ref={input} type="file" accept={kind.accept} capture={kind.capture} multiple={kind.type !== "photo"} hidden
+      <input name="file" ref={input} type="file" accept={kind.accept} capture={kind.capture} multiple={kind.type !== "photo"} hidden
         onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
       {items.map((it) => (
         <div key={it.key} className="rounded-lg border border-black/[0.09] px-3 py-2">

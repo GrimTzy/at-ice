@@ -207,7 +207,7 @@ export default function LeaveRequestsPage() {
           <div className="flex-1" />
           <div className="flex items-center gap-2 px-2.5 py-1.5 border border-black/[0.09] rounded-md text-slate-400 w-full sm:w-64">
             <SearchIcon />
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID, name or type"
+            <input name="search" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID, name or type"
               aria-label="Search by employee ID, name or leave type" className="flex-1 min-w-0 text-xs text-slate-700 bg-transparent focus:outline-none" />
           </div>
         </div>
@@ -311,19 +311,19 @@ export default function LeaveRequestsPage() {
                 </p>
                 {dl.leave_type === "sick" && (
                   <label className="flex items-center gap-2 text-slate-700">
-                    <input type="checkbox" data-native checked={slPaid} onChange={(e) => setSlPaid(e.target.checked)} />
+                    <input name="sl_paid" type="checkbox" data-native checked={slPaid} onChange={(e) => setSlPaid(e.target.checked)} />
                     Paid sick leave (uncheck to approve it as unpaid)
                   </label>
                 )}
                 <label className="flex flex-col gap-1">
                   <span className="text-[11px] font-medium text-slate-500">Remarks (optional)</span>
-                  <textarea rows={2} maxLength={300} value={remarks} onChange={(e) => setRemarks(e.target.value)} className="px-2.5 py-2 border border-black/[0.09] rounded-md text-xs" />
+                  <textarea name="remarks" rows={2} maxLength={300} value={remarks} onChange={(e) => setRemarks(e.target.value)} className="px-2.5 py-2 border border-black/[0.09] rounded-md text-xs" />
                 </label>
               </>
             ) : (
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] font-medium text-slate-500">Reason for rejecting (required)</span>
-                <textarea rows={3} maxLength={300} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="px-2.5 py-2 border border-black/[0.09] rounded-md text-xs" autoFocus />
+                <textarea name="reject_reason" rows={3} maxLength={300} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="px-2.5 py-2 border border-black/[0.09] rounded-md text-xs" autoFocus />
               </label>
             )}
             {decisionError && <div role="alert" className="text-red-600">{decisionError}</div>}

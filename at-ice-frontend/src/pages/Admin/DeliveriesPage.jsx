@@ -444,7 +444,7 @@ export default function DeliveriesPage() {
           <div className="flex items-center gap-2">
             {(tab === "drivers" || tab === "stores") && (
               <>
-                <input
+                <input name="board_date"
                   type="date"
                   value={boardDate}
                   onChange={(e) => e.target.value && setBoardDate(e.target.value)}
@@ -473,7 +473,7 @@ export default function DeliveriesPage() {
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
               <SearchIcon />
-              <input
+              <input name="search"
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -644,7 +644,7 @@ export default function DeliveriesPage() {
                       )}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[11px] text-slate-500 mb-1 block">Driver *</label>
+                          <div className="text-[11px] text-slate-500 mb-1 block">Driver *</div>
                           <DriverPicker
                             drivers={availability.drivers}
                             loading={availLoading}
@@ -661,8 +661,8 @@ export default function DeliveriesPage() {
                           )}
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-500 mb-1 block">Customer *</label>
-                          <select
+                          <label htmlFor={`deliveries-page-${block.key}-customer`} className="text-[11px] text-slate-500 mb-1 block">Customer *</label>
+                          <select id={`deliveries-page-${block.key}-customer`} name="customer_id"
                             value={block.customer_id}
                             onChange={(e) => updateBlock(bi, { customer_id: e.target.value })}
                             className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
@@ -680,8 +680,8 @@ export default function DeliveriesPage() {
                           <p className="text-[11px] text-slate-400 mt-1">Customers with a delivery on this date are greyed out.</p>
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-500 mb-1 block">Scheduled Date *</label>
-                          <input
+                          <label htmlFor={`deliveries-page-${block.key}-scheduled-date`} className="text-[11px] text-slate-500 mb-1 block">Scheduled Date *</label>
+                          <input id={`deliveries-page-${block.key}-scheduled-date`} name="scheduled_date"
                             type="date"
                             min={todayStr()}
                             value={block.scheduled_date}
@@ -690,8 +690,8 @@ export default function DeliveriesPage() {
                           />
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-500 mb-1 block">Notes</label>
-                          <textarea
+                          <label htmlFor={`deliveries-page-${block.key}-notes`} className="text-[11px] text-slate-500 mb-1 block">Notes</label>
+                          <textarea id={`deliveries-page-${block.key}-notes`} name="notes"
                             rows={3}
                             value={block.notes}
                             onChange={(e) => updateBlock(bi, { notes: e.target.value })}
@@ -701,11 +701,11 @@ export default function DeliveriesPage() {
                       </div>
 
                       <div>
-                        <label className="text-[11px] text-slate-500 mb-2 block">Items * <span className="text-slate-400">(up to {maxQty} each)</span></label>
+                        <div className="text-[11px] text-slate-500 mb-2 block">Items * <span className="text-slate-400">(up to {maxQty} each)</span></div>
                         <div className="flex flex-col gap-2">
                           {block.items.map((item, idx) => (
                             <div key={idx} className="grid grid-cols-[minmax(0,1fr)_84px_40px] sm:grid-cols-[1fr_120px_40px] gap-2 items-center">
-                              <select
+                              <select name="product_type"
                                 value={item.product_type}
                                 onChange={(e) => updateItem(bi, idx, "product_type", e.target.value)}
                                 aria-label={`Product ${idx + 1}`}
@@ -841,8 +841,8 @@ export default function DeliveriesPage() {
                 <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2 mb-2">
                   This delivery is in transit. It can only be cancelled for a real emergency.
                 </p>
-                <label className="text-[11px] text-slate-500 mb-1 block">What happened? *</label>
-                <textarea
+                <label htmlFor="deliveries-page-what-happened" className="text-[11px] text-slate-500 mb-1 block">What happened? *</label>
+                <textarea id="deliveries-page-what-happened" name="cancel_reason"
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   rows={2}
@@ -851,8 +851,8 @@ export default function DeliveriesPage() {
               </div>
             ) : (
               <div className="mb-4">
-                <label className="text-[11px] text-slate-500 mb-1 block">Reason (optional)</label>
-                <input
+                <label htmlFor="deliveries-page-reason-optional" className="text-[11px] text-slate-500 mb-1 block">Reason (optional)</label>
+                <input id="deliveries-page-reason-optional" name="cancel_reason"
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
@@ -1026,7 +1026,7 @@ function DriverPicker({ drivers, loading, enforced, value, onChange, onOpen }) {
       {open && (
         <div className="menu-pop absolute z-20 mt-2 w-full min-w-[340px] max-w-[calc(100vw-48px)] p-1.5">
           <div className="p-1.5 pb-2">
-            <input
+            <input name="q"
               ref={inputRef}
               type="text"
               value={q}

@@ -59,7 +59,7 @@ export default function TopUpForm({ url, onDone, onCancel, products = ICE_PRODUC
         {products.map((p) => (
           <label key={p.value} className="flex flex-col gap-1">
             <span className="text-[11px] font-medium text-slate-600">{p.label}</span>
-            <input type="number" inputMode="numeric" min={0} max={maxQty} value={qty[p.value] ?? ""} placeholder="0"
+            <input name="qty" type="number" inputMode="numeric" min={0} max={maxQty} value={qty[p.value] ?? ""} placeholder="0"
               onChange={(e) => { setQty({ ...qty, [p.value]: e.target.value }); setError(""); }} className={inputCls} />
           </label>
         ))}
@@ -67,11 +67,11 @@ export default function TopUpForm({ url, onDone, onCancel, products = ICE_PRODUC
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <label className="flex flex-col gap-1">
           <span className="text-[11px] font-medium text-slate-600">Deliver by (today)</span>
-          <input type="time" value={time} onChange={(e) => { setTime(e.target.value); setError(""); }} className={inputCls} />
+          <input name="time" type="time" value={time} onChange={(e) => { setTime(e.target.value); setError(""); }} className={inputCls} />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[11px] font-medium text-slate-600">Note (optional)</span>
-          <input value={notes} maxLength={200} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Sold out by lunch" className={inputCls} />
+          <input name="notes" value={notes} maxLength={200} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Sold out by lunch" className={inputCls} />
         </label>
       </div>
       {error && <div className="text-[12px] text-red-600">{error}</div>}

@@ -37,11 +37,11 @@ export default function TimeSelect({ id, value, onChange, step = 5, required, cl
         {HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
       </select>
       <span aria-hidden="true">:</span>
-      <select aria-label="Minute" required={required} value={cur ? cur.min : ""} onChange={(e) => emit({ min: +e.target.value })} className={selectClassName} {...native}>
+      <select name="min" aria-label="Minute" required={required} value={cur ? cur.min : ""} onChange={(e) => emit({ min: +e.target.value })} className={selectClassName} {...native}>
         {!cur && <option value="" disabled>--</option>}
         {minutes.map((m) => <option key={m} value={m}>{pad(m)}</option>)}
       </select>
-      <select aria-label="AM or PM" required={required} value={cur ? (cur.pm ? "PM" : "AM") : ""} onChange={(e) => emit({ pm: e.target.value === "PM" })} className={selectClassName} {...native}>
+      <select name="am_or_pm" aria-label="AM or PM" required={required} value={cur ? (cur.pm ? "PM" : "AM") : ""} onChange={(e) => emit({ pm: e.target.value === "PM" })} className={selectClassName} {...native}>
         {!cur && <option value="" disabled>--</option>}
         <option value="AM">AM</option>
         <option value="PM">PM</option>

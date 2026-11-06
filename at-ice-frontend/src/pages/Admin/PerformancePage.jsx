@@ -132,21 +132,21 @@ export default function PerformancePage() {
         <div role="search" aria-label="Filter appraisals" className="px-5 py-3 bg-slate-50 border-b border-black/[0.09] flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-500 flex-1 min-w-[200px] max-w-[280px] focus-within:border-cyan-500/60">
             <SearchIcon />
-            <input type="search" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })}
+            <input name="q" type="search" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })}
               placeholder="Search employee ID or name" aria-label="Search by employee ID or name"
               className="bg-transparent outline-none w-full text-slate-700 placeholder:text-slate-500" />
           </div>
-          <select aria-label="Department" value={filter.department} onChange={(e) => setFilter({ ...filter, department: e.target.value })} className={selectCls}>
+          <select name="department" aria-label="Department" value={filter.department} onChange={(e) => setFilter({ ...filter, department: e.target.value })} className={selectCls}>
             <option value="">All Departments</option>
             {departments.map((d) => <option key={d} value={d}>{d}</option>)}
             <option value="none">No department</option>
           </select>
-          <select aria-label="Rating" value={filter.rating} onChange={(e) => setFilter({ ...filter, rating: e.target.value })} className={selectCls}>
+          <select name="rating" aria-label="Rating" value={filter.rating} onChange={(e) => setFilter({ ...filter, rating: e.target.value })} className={selectCls}>
             <option value="">All Ratings</option>
             {data.labels.map((l) => <option key={l} value={l}>{l}</option>)}
             <option value={LOW_RATING}>Needs support (under 2.5)</option>
           </select>
-          <select aria-label="Pay period" value={periodStart || data.period?.start || ""} onChange={(e) => setPeriodStart(e.target.value)} className={selectCls}>
+          <select name="period_start" aria-label="Pay period" value={periodStart || data.period?.start || ""} onChange={(e) => setPeriodStart(e.target.value)} className={selectCls}>
             {data.periods.map((p, i) => <option key={p.start} value={p.start}>{i === 0 ? `This period (${periodLabel(p)})` : periodLabel(p)}</option>)}
           </select>
           {filtering && (

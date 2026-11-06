@@ -52,7 +52,7 @@ export function SearchBar({ value, onChange, placeholder = "Search", label = "Se
   return (
     <div className="relative">
       <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-      <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} aria-label={label} className={`${FIELD} pl-10`} />
+      <input name="search" type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} aria-label={label} className={`${FIELD} pl-10`} />
     </div>
   );
 }

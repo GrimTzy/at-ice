@@ -199,8 +199,9 @@ class LeaveRequestController extends Controller
     {
         $employee = $this->myEmployee($request);
 
+        // A login with no employee record simply has no requests, not an error.
         if (! $employee) {
-            return response()->json(['message' => 'No employee record linked to this login.'], 404);
+            return response()->json([]);
         }
 
         $leaves = LeaveRequest::with('approvedBy:id,name')
@@ -216,7 +217,7 @@ class LeaveRequestController extends Controller
     {
         $employee = $this->myEmployee($request);
         if (! $employee) {
-            return response()->json(['message' => 'No employee record linked to this login.'], 404);
+            return response()->json(['employee_linked' => false]);
         }
 
         return response()->json(LeaveCredits::for($employee) + [

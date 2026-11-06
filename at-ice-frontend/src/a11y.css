@@ -28,6 +28,14 @@
 :is(button, a).bg-emerald-500 { background-color: #047857; }
 :is(button, a).bg-emerald-500:not(:disabled):hover { background-color: #065f46; }
 
+/* A solid cyan quick-action card (QuickActions primary) looks the same in light
+   and night mode: dark title and hint, a white icon tile. The night palette in
+   lib/theme.js turns slate-800 and cyan-800 light with !important, so these
+   win by id specificity. */
+#root .qa-primary .qa-title { color: #0f172a !important; }
+#root .qa-primary .qa-hint { color: rgba(15, 23, 42, 0.8) !important; }
+#root .qa-primary .qa-icon { background-color: rgba(255, 255, 255, 0.7) !important; color: #0e7490 !important; }
+
 /* Clicked fields: no cyan ring or glow anywhere (pages still carry
    focus:ring-* / focus:border-cyan-* classes; these cancel them). */
 #root :is(input, select, textarea):focus {

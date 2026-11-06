@@ -106,6 +106,7 @@ export function ActivityFeed({ title = "Recent activity", subtitle, items, empty
 }
 
 // Buttons for the module's common jobs: [{ label, hint, icon, onClick, tone }]
+// primary: true gives the button the solid cyan of the primary buttons.
 export function QuickActions({ title = "Quick actions", actions }) {
   return (
     <InsightPanel title={title}>
@@ -114,11 +115,11 @@ export function QuickActions({ title = "Quick actions", actions }) {
           const t = TONES[a.tone] || TONES.cyan;
           return (
             <button key={a.label} type="button" onClick={a.onClick} data-no-confirm title={a.hint || a.label}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-black/[0.09] bg-white text-left cursor-pointer min-w-0 ${a.wide ? "sm:col-span-2" : ""}`}>
-              <span className={`w-7 h-7 rounded-lg grid place-items-center flex-shrink-0 ${t.badge}`}><KpiIcon name={a.icon || "chart"} /></span>
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left cursor-pointer min-w-0 ${a.primary ? "qa-primary bg-cyan-500 hover:bg-cyan-600 text-white" : "border border-black/[0.09] bg-white"} ${a.wide ? "sm:col-span-2" : ""}`}>
+              <span className={`w-7 h-7 rounded-lg grid place-items-center flex-shrink-0 ${a.primary ? "qa-icon bg-white/70 text-cyan-800" : t.badge}`}><KpiIcon name={a.icon || "chart"} /></span>
               <span className="min-w-0">
-                <span className="block text-[12px] font-semibold text-slate-800 truncate">{a.label}</span>
-                {a.hint && <span className="block text-[10.5px] text-slate-500 truncate">{a.hint}</span>}
+                <span className="qa-title block text-[12px] font-semibold text-slate-800 truncate">{a.label}</span>
+                {a.hint && <span className="qa-hint block text-[10.5px] text-slate-500 truncate">{a.hint}</span>}
               </span>
             </button>
           );

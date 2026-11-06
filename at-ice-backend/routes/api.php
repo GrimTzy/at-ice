@@ -52,7 +52,7 @@ use Illuminate\Support\Facades\Route;
 // are separate (the same request is not counted twice by two limits).
 //   login: 10 attempts per minute per IP (stops password guessing)
 //   kiosk: 30 per minute per IP (public Attendance Station routes)
-//   api:   120 per minute per logged-in user (all protected routes)
+//   api:   300 per minute per logged-in user (all protected routes)
 // A blocked request gets HTTP 429 "Too Many Attempts."
 
 // Public
@@ -89,7 +89,7 @@ Route::post('attendances', [AttendanceController::class, 'store'])->middleware([
 Route::get('live-feed', [LiveFeedController::class, 'index'])
     ->middleware(['auth:sanctum', 'password.changed', 'throttle:40,1,live']);
 
-Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->group(function () {
+Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);

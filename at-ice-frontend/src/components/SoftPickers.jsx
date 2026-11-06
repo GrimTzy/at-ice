@@ -184,7 +184,7 @@ function SelectList({ el, close }) {
   return (
     <div onKeyDown={onKeyDown} className="soft-searchable">
       <div className="soft-search-head">
-        <input
+        <input name="query"
         ref={searchRef}
         type="search"
         data-native

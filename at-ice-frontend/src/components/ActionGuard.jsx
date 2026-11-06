@@ -78,7 +78,12 @@ export default function ActionGuard() {
     const move = (el) => {
       // a disabled button gets no hover events, so its reason stays a browser title
       if (!el.title || el.disabled || el.closest(".leaflet-container")) return;
-      if (!el.dataset.tip) el.dataset.tip = el.title;
+      // a data-tip written by hand stays; one copied from a title follows the
+      // title when it changes (the night/light toggle swaps its text)
+      if (!el.dataset.tip || el.dataset.tipFromTitle) {
+        el.dataset.tip = el.title;
+        el.dataset.tipFromTitle = "1";
+      }
       if (!el.textContent.trim() && !el.getAttribute("aria-label")) el.setAttribute("aria-label", el.title);
       el.removeAttribute("title");
     };
@@ -110,7 +115,7 @@ export default function ActionGuard() {
       hide();
       if (!el || el.closest(".guard-host, [data-no-tip]") || el.disabled && !el.title) return;
       // the native tooltip would show on top of ours: keep its text as data-tip
-      if (el.title) { el.dataset.tip = el.title; el.removeAttribute("title"); }
+      if (el.title) { el.dataset.tip = el.title; el.dataset.tipFromTitle = "1"; el.removeAttribute("title"); }
       el.querySelectorAll("[title]").forEach((n) => n.removeAttribute("title"));
       const text = tipFor(el);
       if (!text) return;

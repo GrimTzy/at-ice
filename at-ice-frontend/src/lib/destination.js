@@ -56,27 +56,75 @@ export function runWhenInView(el, fn) {
   const from = scroller.scrollTop;
   const max = scroller.scrollHeight - scroller.clientHeight;
   const to = Math.max(0, Math.min(max, from + offset - 12));
-  if (Math.abs(to - from) < 2) return fn();
+  glide(scroller, to, fn);
+}
+
+function glide(scroller, to, done) {
+  const from = scroller.scrollTop;
+  if (Math.abs(to - from) < 2) return done();
   const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   // a hidden tab gets no animation frames: jump straight there
   if (reduce || document.hidden) {
     scroller.scrollTop = to;
-    return fn();
+    return done();
   }
   const start = performance.now();
   const step = (now) => {
     const t = Math.min(1, (now - start) / SCROLL_MS);
     scroller.scrollTop = from + (to - from) * easeOut(t);
     if (t < 1) requestAnimationFrame(step);
-    else fn();
+    else done();
   };
   requestAnimationFrame(step);
+}
+
+// Where a list lands: the top of its table, so the column header sits this far
+// under the page header and the first row comes right after it.
+const LIST_GAP = 16;
+
+// What to line up in a list: its table, or on phones the first card when the
+// table is hidden. The table, not its thead, because a sticky thead moves.
+function listAnchor(el) {
+  if (el.matches("table")) return el;
+  const shown = (n) => n.getClientRects().length > 0;
+  return [...el.querySelectorAll("table")].find(shown) || [...el.querySelectorAll("[data-row]")].find(shown) || el;
+}
+
+// How much of the scroll area a sticky page header covers (phone screens, where
+// the header scrolls with the page; on desktop it sits above the area).
+function coveredTop(box) {
+  let bottom = box.top;
+  document.querySelectorAll("header").forEach((h) => {
+    if (!["sticky", "fixed"].includes(getComputedStyle(h).position)) return;
+    const r = h.getBoundingClientRect();
+    if (r.top <= box.top + 1 && r.bottom > box.top) bottom = Math.max(bottom, r.bottom);
+  });
+  return bottom - box.top;
+}
+
+// Every card click lands the same way: the list moves up under the page header
+// even when it is already on screen. A page too short to scroll that far stops
+// at its end. Measured again at the end, in case the filter moved things.
+function runAtListTop(el, fn) {
+  const anchor = listAnchor(el);
+  const scroller = scrollerOf(el);
+  const isDoc = scroller === document.scrollingElement || scroller === document.documentElement;
+  const away = () => {
+    const box = isDoc ? { top: 0 } : scroller.getBoundingClientRect();
+    return anchor.getBoundingClientRect().top - box.top - coveredTop(box) - LIST_GAP;
+  };
+  const max = scroller.scrollHeight - scroller.clientHeight;
+  glide(scroller, Math.max(0, Math.min(max, scroller.scrollTop + away())), () => {
+    const off = away();
+    if (Math.abs(off) >= 2) scroller.scrollTop += off;
+    fn();
+  });
 }
 
 // Pulse the element once. Calling it again restarts the pulse.
 export function pulseDestination(el) {
   if (!el) return;
-  runWhenInView(el, () => {
+  runAtListTop(el, () => {
     el.removeAttribute("data-dest-pulse");
     void el.offsetWidth; // restart the animation
     el.setAttribute("data-dest-pulse", "");
@@ -105,11 +153,16 @@ export function rowsOf(el, rowKey) {
 // - one record (rowKey): only that row plays the entrance (glow.css
 //   data-row-pulse), the rest of the table stays still.
 // With no rows at all (not a table) the list itself pulses, as before.
-export function pulseRows(el, rowKey) {
+export function pulseRows(el, rowKey, enter = false) {
   if (!el) return;
   const rows = rowsOf(el, rowKey);
   if (!rows.length) return pulseDestination(el);
-  if (rowKey == null) return runWhenInView(el, () => recascade(el));
+  if (rowKey == null) {
+    return runAtListTop(el, () => {
+      if (enter) replayEnter(el);
+      recascade(el);
+    });
+  }
   const row = rows[0];
   runWhenInView(row, () => {
     row.removeAttribute("data-row-pulse");
@@ -126,13 +179,19 @@ export function recascade(el) {
   if (el) el.setAttribute("data-cascade", el.getAttribute("data-cascade") === "a" ? "b" : "a");
 }
 
+// Play the page-entrance animation (the one a menu click gives the content) on
+// the whole list card again. Same a/b trick as recascade.
+export function replayEnter(el) {
+  if (el) el.setAttribute("data-enter", el.getAttribute("data-enter") === "a" ? "b" : "a");
+}
+
 // Same page: the filter's list is committed by React before the next frame, so
 // on that frame scroll to the list and replay the cascade on the rows that are
 // left, once they are on screen (so the user sees it). An empty result still
 // cascades (its "no match" row is a row too). rowKey: only the row with that
 // data-row-key plays (a single record).
 export function focusDestination(id, rowKey) {
-  requestAnimationFrame(() => pulseRows(findDestination(id), rowKey));
+  requestAnimationFrame(() => pulseRows(findDestination(id), rowKey, true));
 }
 
 // One record: the page has already moved its pager to the record's page; wait

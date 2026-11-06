@@ -109,7 +109,7 @@ export default function Pagination({ pager, fixed = false, dock = false, dockBot
       {!fixed && (
         <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
           <span>Rows per page</span>
-          <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Rows per page"
+          <select name="page_size" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Rows per page"
             className="h-8 px-2 rounded-lg border border-black/[0.09] bg-white text-[12px] text-slate-700 outline-none focus:border-indigo-400">
             {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>

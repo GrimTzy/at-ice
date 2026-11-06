@@ -71,7 +71,7 @@ function TicketReply({ ticket, onSent }) {
 
   return (
     <div className="flex flex-col gap-2 pt-1">
-      <textarea
+      <textarea name="body"
         rows={2}
         value={body}
         maxLength={2000}
@@ -175,7 +175,7 @@ export default function CustomerSupport() {
 
             <label className="flex flex-col gap-1.5">
               <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-500">Inquiry Topic</span>
-              <select value={topic} onChange={(e) => setTopic(e.target.value)} className={`${fieldCls} cursor-pointer`}>
+              <select name="topic" value={topic} onChange={(e) => setTopic(e.target.value)} className={`${fieldCls} cursor-pointer`}>
                 {SUPPORT_TOPICS.map((t) => (
                   <option key={t.key} value={t.key}>{t.label}</option>
                 ))}
@@ -189,7 +189,7 @@ export default function CustomerSupport() {
 
             <label className="flex flex-col gap-1.5">
               <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-500">Message / Details</span>
-              <textarea
+              <textarea name="message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={4}

@@ -157,7 +157,7 @@ export default function CustomerDeliveries() {
           <div className="bg-white border border-black/[0.09] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-3">
             <FilterSelect label="Status" value={filter} onChange={setFilter}
               options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: counts[f.key] || 0 }))} />
-            <input
+            <input name="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search delivery number or driver"

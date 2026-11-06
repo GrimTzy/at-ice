@@ -216,8 +216,8 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
         {error && <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div className="text-[13px] text-slate-700">{storeName(delivery.customer)}</div>
         <div>
-          <label className={labelCls}>Driver</label>
-          <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className={inputCls}>
+          <label htmlFor="board-views-driver" className={labelCls}>Driver</label>
+          <select id="board-views-driver" name="driver_id" value={driverId} onChange={(e) => setDriverId(e.target.value)} className={inputCls}>
             <option value="">No driver yet</option>
             {drivers.map((dr) => {
               const blocked = isToday && dr.status !== "available" && String(dr.id) !== String(delivery.driver_id);
@@ -231,11 +231,11 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
           {isToday && <p className="text-[11px] text-slate-400 mt-1">Today only an available driver can be picked.</p>}
         </div>
         <div>
-          <label className={labelCls}>Items</label>
+          <div className={labelCls}>Items</div>
           <div className="flex flex-col gap-2">
             {items.map((it, i) => (
               <div key={i} className="grid grid-cols-[minmax(0,1fr)_72px_auto] sm:grid-cols-[1fr_100px_auto] gap-2">
-                <select value={it.product_type} aria-label={`Product ${i + 1}`} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, product_type: e.target.value } : x)))} className={inputCls}>
+                <select name="product_type" value={it.product_type} aria-label={`Product ${i + 1}`} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, product_type: e.target.value } : x)))} className={inputCls}>
                   <option value="">Select product…</option>
                   {PRODUCT_TYPES.map((p) => <option key={p.value} value={p.value} disabled={items.some((o, j) => j !== i && o.product_type === p.value)}>{p.label}</option>)}
                 </select>
@@ -249,8 +249,8 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
           )}
         </div>
         <div>
-          <label className={labelCls}>Notes</label>
-          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
+          <label htmlFor="board-views-notes" className={labelCls}>Notes</label>
+          <textarea id="board-views-notes" name="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
           <button type="button" onClick={onClose} className={btnGhost}>Close</button>
