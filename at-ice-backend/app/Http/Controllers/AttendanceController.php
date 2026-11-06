@@ -10,12 +10,24 @@ use App\Models\Holiday;
 use App\Models\LeaveRequest;
 use App\Support\Lateness;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AttendanceController extends Controller
 {
     // An open Time In older than this is treated as a missed Time Out and
     // is no longer matched by a new scan.
+    //
+    // Missed Time Out, step by step (the rules as they stand; tests in
+    // AttendanceShiftScenariosTest):
+    //  1. Within this many hours the person can still Time Out and the real time is kept.
+    //  2. After that the record stays open. It still counts as a day present with 0 hours
+    //     (PayrollCalculator::timesheet), App\Support\MemoEngine drafts one "no time out"
+    //     memo for HR, and the next date's Time In simply starts a new record.
+    //  3. HR cannot change times, only add a note (update()). On the SAME date the person
+    //     cannot Time In again (one open record per person and day): the kiosk answers
+    //     "missed_time_out" and tells them to inform HR; from the next date on they scan normally.
     private const MAX_SHIFT_HOURS = 16;
 
     // GET /api/attendances?date= | ?from=&to= [&employee_id=] : newest first.
@@ -142,7 +154,79 @@ class AttendanceController extends Controller
     // (config('atice.timezone')), never from the browser: the kiosk only sends how many
     // milliseconds ago the blink finished (a stopwatch, not its clock), and
     // the recorded time is the server time minus that, capped.
+    //
+    // Scans of ONE person are handled one at a time: the person's face_data row
+    // (it exists, it was validated above) is locked for the whole scan, so a
+    // double tap or a retry sees the record the first scan wrote instead of
+    // racing it. The database has the last word: attendances.open_key is unique
+    // per person and day while the record is open (migration 2026_11_06_000002),
+    // so a second open record cannot be stored even by a path that skips the lock.
+    // Live notices are sent after the commit and only for what was stored.
     public function store(Request $request)
+    {
+        $request->validate([
+            'face_data_id' => 'required|exists:face_data,id',
+            'type' => 'required|in:time_in,time_out',
+            'elapsed_ms' => 'nullable|integer|min:0|max:600000',
+        ]);
+        $faceId = (int) $request->input('face_data_id');
+        $this->pendingNotices = [];
+
+        try {
+            $response = DB::transaction(function () use ($request, $faceId) {
+                FaceData::whereKey($faceId)->lockForUpdate()->value('id');
+
+                return $this->scan($request);
+            });
+        } catch (UniqueConstraintViolationException $e) {
+            // Only the one-open-record rule is an expected conflict. Any other unique
+            // violation is a different problem and must not be shown as a duplicate scan.
+            if (! $this->isOpenRecordConflict($e)) {
+                throw $e;
+            }
+            $this->pendingNotices = [];
+
+            return $this->openRecordConflict(FaceData::select('id', 'worker_name', 'role', 'employee_id')->findOrFail($faceId));
+        }
+
+        foreach ($this->pendingNotices as $notice) {
+            $this->broadcastNotice(...$notice);
+        }
+
+        return $response;
+    }
+
+    // Live notices of the scan in progress, sent once the transaction has committed.
+    private array $pendingNotices = [];
+
+    // The unique index behind the one-open-record-per-person-and-day rule.
+    private const OPEN_KEY_INDEX = 'attendances_one_open_per_person_day_unique';
+
+    // MySQL names the index in its message; SQLite names the column instead.
+    private function isOpenRecordConflict(UniqueConstraintViolationException $e): bool
+    {
+        return str_contains($e->getMessage(), self::OPEN_KEY_INDEX) || str_contains($e->getMessage(), 'attendances.open_key');
+    }
+
+    // The database refused a second open record for this person and date. Either a
+    // scan of the same person won the race a moment ago (the usual case: a double tap),
+    // or the person has an open record of TODAY that is older than MAX_SHIFT_HOURS (a
+    // missed Time Out earlier the same date), which a scan cannot close: say which.
+    private function openRecordConflict(FaceData $faceData)
+    {
+        $open = Attendance::where('face_data_id', $faceData->id)->whereNull('time_out')
+            ->whereDate('date', now(config('atice.timezone'))->toDateString())->orderByDesc('id')->first();
+        if ($open) {
+            $since = Carbon::parse($open->date->toDateString().' '.$open->time_in, config('atice.timezone'));
+            if ($since->diffInHours(now(config('atice.timezone')), true) > self::MAX_SHIFT_HOURS) {
+                return $this->reject($faceData, 'missed_time_out', 'Your Time In earlier today has no Time Out. Please inform HR.');
+            }
+        }
+
+        return $this->reject($faceData, 'already_timed_in', 'Time In already recorded. Select Time Out at the end of your shift.');
+    }
+
+    private function scan(Request $request)
     {
         $request->validate([
             'face_data_id' => 'required|exists:face_data,id',
@@ -295,8 +379,14 @@ class AttendanceController extends Controller
         ], 409);
     }
 
-    // Live notification for HR and the Admin dashboard (Pusher)
+    // Queues the live notice; store() sends it after the commit.
     private function notify(FaceData $faceData, Attendance $attendance, string $type, string $message): void
+    {
+        $this->pendingNotices[] = [$faceData, $attendance, $type, $message];
+    }
+
+    // Live notification for HR and the Admin dashboard (Pusher)
+    private function broadcastNotice(FaceData $faceData, Attendance $attendance, string $type, string $message): void
     {
         try {
             broadcast(new AttendanceRecorded([

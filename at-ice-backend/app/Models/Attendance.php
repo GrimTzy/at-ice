@@ -24,6 +24,10 @@ class Attendance extends Model
         'notes',
     ];
 
+    // open_key is computed by the database (one open record per person and day,
+    // migration 2026_11_06_000002); it is not part of the API.
+    protected $hidden = ['open_key'];
+
     protected $casts = [
         'date' => 'date',
         'hours_worked' => 'decimal:2',
