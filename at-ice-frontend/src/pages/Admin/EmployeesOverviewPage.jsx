@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import { SkeletonTableRows } from "../../components/Skeleton";
 import { fullName, shiftLabel } from "../../lib/names";
@@ -42,7 +42,6 @@ export default function EmployeesOverviewPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [filter, setFilter]       = useState(NO_FILTER);
-  const listRef = useRef(null);
 
   const token = localStorage.getItem("token");
   const authHeaders = {
@@ -99,12 +98,10 @@ export default function EmployeesOverviewPage() {
   const byRole = roles.map((r) => ({ key: r || "none", label: ROLE_LABEL(r), count: employees.filter((e) => (displayRole(e) || "") === r).length, tone: roleTone(r) }));
   const byPosition = positions.map((p) => ({ key: p, label: p, count: employees.filter((e) => e.position === p).length, tone: roleTone(p) }));
 
-  // A card or chart row sets (or, when clicked again, clears) one filter, keeps the
-  // others, and scrolls the list into view inside the page's own scroll area.
+  // A card or chart row sets (or, when clicked again, clears) one filter and keeps
+  // the others. KpiCard and StatusBreakdown then bring the list up (lib/destination.js).
   const pick = (field, value) => {
-    const applying = filter[field] !== value;
     setFilter((f) => ({ ...f, [field]: f[field] === value ? "" : value }));
-    if (applying) requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   return (
@@ -122,7 +119,7 @@ export default function EmployeesOverviewPage() {
         <StatusBreakdown title="Staff by position" items={byPosition} onPick={(i) => pick("position", i.key)} active={filter.position} empty="No employees yet." />
       </div>
 
-      <div ref={listRef} className="bg-white border border-black/[0.09] rounded-xl">
+      <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.09]">
           <div>
             <div className="text-[15px] font-semibold text-slate-800">Employees</div>
@@ -136,7 +133,7 @@ export default function EmployeesOverviewPage() {
         <div role="search" aria-label="Filter employees" className="px-5 py-3 bg-slate-50 border-b border-black/[0.09] flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-500 flex-1 min-w-[200px] max-w-[280px] focus-within:border-cyan-500/60">
             <SearchIcon />
-            <input
+            <input name="q"
               type="search"
               value={filter.q}
               onChange={(e) => setFilter({ ...filter, q: e.target.value })}
@@ -145,15 +142,15 @@ export default function EmployeesOverviewPage() {
               className="bg-transparent outline-none w-full text-slate-700 placeholder:text-slate-500"
             />
           </div>
-          <select aria-label="Position" value={filter.position} onChange={(e) => setFilter({ ...filter, position: e.target.value })} className={selectCls}>
+          <select name="position" aria-label="Position" value={filter.position} onChange={(e) => setFilter({ ...filter, position: e.target.value })} className={selectCls}>
             <option value="">All positions ({employees.length})</option>
             {byPosition.map((p) => <option key={p.key} value={p.key}>{p.label} ({p.count})</option>)}
           </select>
-          <select aria-label="Role" value={filter.role} onChange={(e) => setFilter({ ...filter, role: e.target.value })} className={selectCls}>
+          <select name="role" aria-label="Role" value={filter.role} onChange={(e) => setFilter({ ...filter, role: e.target.value })} className={selectCls}>
             <option value="">All roles ({employees.length})</option>
             {byRole.map((r) => <option key={r.key} value={r.key}>{r.label} ({r.count})</option>)}
           </select>
-          <select aria-label="Shift" value={filter.shift} onChange={(e) => setFilter({ ...filter, shift: e.target.value })} className={selectCls}>
+          <select name="shift" aria-label="Shift" value={filter.shift} onChange={(e) => setFilter({ ...filter, shift: e.target.value })} className={selectCls}>
             <option value="">All shifts ({employees.length})</option>
             <option value="day">Day shift ({dayShift})</option>
             <option value="night">Night shift ({nightShift})</option>

@@ -50,6 +50,8 @@ function api(path, opts = {}) {
 }
 
 const NO_FILTER = { q: "", department: "", rating: "" };
+// Rating filter value for the Needs support card: any rating under 2.5
+const LOW_RATING = "__under-2.5";
 
 export default function PerformancePage() {
   const [data, setData] = useState({ rows: [], periods: [], labels: [], period: null });
@@ -77,7 +79,7 @@ export default function PerformancePage() {
   const filtered = data.rows.filter((r) =>
     (!q || `${r.code} ${r.name}`.toLowerCase().includes(q))
     && (!filter.department || (filter.department === "none" ? !r.department : r.department === filter.department))
-    && (!filter.rating || r.rating_label === filter.rating));
+    && (!filter.rating || (filter.rating === LOW_RATING ? r.rating != null && Number(r.rating) < 2.5 : r.rating_label === filter.rating)));
   const filtering = !!(filter.q || filter.department || filter.rating);
   const pager = usePagination(filtered);
 
@@ -103,7 +105,7 @@ export default function PerformancePage() {
       <KpiGrid cols={5}>
         <KpiCard label="Average rating" icon="star" tone="cyan" value={avg == null ? "—" : avg.toFixed(2)} sub={`${rated.length} of ${data.rows.length} rated this period`} bar={avg == null ? 0 : avg / 5} />
         <KpiCard label="Outstanding" icon="check" tone="emerald" value={top} sub="Rated 4.5 and up" bar={share(top)} onClick={() => setFilter((f) => ({ ...f, rating: f.rating === "Outstanding" ? "" : "Outstanding" }))} active={filter.rating === "Outstanding"} />
-        <KpiCard label="Needs support" icon="alert" tone="amber" value={low} sub="Rated under 2.5" bar={share(low)} />
+        <KpiCard label="Needs support" icon="alert" tone="amber" value={low} sub="Rated under 2.5" bar={share(low)} onClick={() => setFilter((f) => ({ ...f, rating: f.rating === LOW_RATING ? "" : LOW_RATING }))} active={filter.rating === LOW_RATING} />
         <KpiCard label="Published" icon="file" tone="violet" value={published} sub={`${data.rows.length - published} still drafts`} bar={share(published)} />
         <KpiCard label="Employees" icon="users" tone="slate" value={data.rows.length} sub={`${departments.length} departments`} />
       </KpiGrid>
@@ -130,20 +132,21 @@ export default function PerformancePage() {
         <div role="search" aria-label="Filter appraisals" className="px-5 py-3 bg-slate-50 border-b border-black/[0.09] flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-500 flex-1 min-w-[200px] max-w-[280px] focus-within:border-cyan-500/60">
             <SearchIcon />
-            <input type="search" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })}
+            <input name="q" type="search" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })}
               placeholder="Search employee ID or name" aria-label="Search by employee ID or name"
               className="bg-transparent outline-none w-full text-slate-700 placeholder:text-slate-500" />
           </div>
-          <select aria-label="Department" value={filter.department} onChange={(e) => setFilter({ ...filter, department: e.target.value })} className={selectCls}>
+          <select name="department" aria-label="Department" value={filter.department} onChange={(e) => setFilter({ ...filter, department: e.target.value })} className={selectCls}>
             <option value="">All Departments</option>
             {departments.map((d) => <option key={d} value={d}>{d}</option>)}
             <option value="none">No department</option>
           </select>
-          <select aria-label="Rating" value={filter.rating} onChange={(e) => setFilter({ ...filter, rating: e.target.value })} className={selectCls}>
+          <select name="rating" aria-label="Rating" value={filter.rating} onChange={(e) => setFilter({ ...filter, rating: e.target.value })} className={selectCls}>
             <option value="">All Ratings</option>
             {data.labels.map((l) => <option key={l} value={l}>{l}</option>)}
+            <option value={LOW_RATING}>Needs support (under 2.5)</option>
           </select>
-          <select aria-label="Pay period" value={periodStart || data.period?.start || ""} onChange={(e) => setPeriodStart(e.target.value)} className={selectCls}>
+          <select name="period_start" aria-label="Pay period" value={periodStart || data.period?.start || ""} onChange={(e) => setPeriodStart(e.target.value)} className={selectCls}>
             {data.periods.map((p, i) => <option key={p.start} value={p.start}>{i === 0 ? `This period (${periodLabel(p)})` : periodLabel(p)}</option>)}
           </select>
           {filtering && (
@@ -264,7 +267,7 @@ function ReviewModal({ row, period, onClose, onSaved }) {
   }
 
   const stat = (label, value, sub) => (
-    <div className="rounded-lg border border-black/[0.09] px-3 py-2">
+    <div className="stat-tile rounded-lg border border-black/[0.09] px-3 py-2">
       <div className="text-[10px] uppercase tracking-[0.06em] text-slate-400">{label}</div>
       <div className="text-[16px] font-semibold text-slate-800 tabular-nums">{value}</div>
       {sub && <div className="text-[11px] text-slate-400">{sub}</div>}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { handleUnauthorized } from "../lib/sessionExpiry";
+import { handleUnauthorized, isCurrentSession } from "../lib/sessionExpiry";
 
 // A recessed drop zone for several files (memo evidence, a signed copy):
 // drop files on it or click to pick them; the chosen files are listed with
@@ -51,7 +51,7 @@ export default function FileDropZone({ files, onChange, accept, label = "Drop fi
         <div className="text-[13px] font-medium text-slate-700">{label}</div>
         {hint && <div className="mt-0.5 text-[11px] text-slate-500">{hint}</div>}
       </button>
-      <input ref={input} type="file" multiple accept={accept} className="hidden" onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+      <input name="file" ref={input} type="file" multiple accept={accept} className="hidden" onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
       {error && <div className="text-[12px] text-red-600">{error}</div>}
       {progress !== null && <UploadBar progress={progress} error={uploadError} />}
       {files.length > 0 && (
@@ -100,12 +100,14 @@ export function FileUploadProgress({ file, url, field = "file", extra, onUploade
     const req = new XMLHttpRequest();
     req.open("POST", url);
     req.setRequestHeader("Accept", "application/json");
-    req.setRequestHeader("Authorization", `Bearer ${localStorage.getItem("token") || ""}`);
+    const token = localStorage.getItem("token");
+    req.setRequestHeader("Authorization", `Bearer ${token || ""}`);
     req.upload.onprogress = (e) => {
-      if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
+      if (isCurrentSession(token) && e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
     };
     req.onload = () => {
       sending.current = false;
+      if (!isCurrentSession(token)) return;
       let data = null;
       try { data = JSON.parse(req.responseText); } catch { /* not json */ }
       if (req.status >= 200 && req.status < 300) {
@@ -113,7 +115,7 @@ export function FileUploadProgress({ file, url, field = "file", extra, onUploade
         setStatus("done");
         latest.current.onUploaded?.(file, data);
       } else {
-        if (req.status === 401) handleUnauthorized(url, "POST");
+        if (req.status === 401) handleUnauthorized(url, "POST", false, token);
         const first = data?.errors ? Object.values(data.errors)[0]?.[0] : null;
         setStatus("error");
         setMessage(first || data?.message || `Upload failed (${req.status}).`);
@@ -121,6 +123,7 @@ export function FileUploadProgress({ file, url, field = "file", extra, onUploade
     };
     req.onerror = () => {
       sending.current = false;
+      if (!isCurrentSession(token)) return;
       setStatus("error");
       setMessage("Network error. Check the connection and try again.");
     };

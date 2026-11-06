@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "../../../lib/toast";
 import { useMaxQuantity } from "../../../lib/limits";
+import { QTY_INPUT_PROPS, cleanQty } from "../../../lib/quantity";
 import { api, todayStr, shortDate, timeOf, DAYS, daysLabel, PRODUCT_TYPES, productLabel, inputCls, labelCls, btnPrimary, btnGhost } from "./utils";
 import { Modal, StorePicker, PlusIcon } from "./shared";
 
@@ -13,7 +14,8 @@ const CONTRACT_BADGE = {
 // Contracts: one delivery schedule per customer (a whole chain such as SM, or
 // one store), a date range and delivery days. Approving it makes every
 // daily delivery, so nobody fills in a form each day.
-export default function ContractsTab({ stores, live, onChanged }) {
+// The page toolbar passes `search`, `type` (customer type) and `status`.
+export default function ContractsTab({ stores, live, onChanged, search = "", type = "", status = "all", onLoaded }) {
   const [contracts, setContracts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -31,6 +33,13 @@ export default function ContractsTab({ stores, live, onChanged }) {
     }
   }, []);
   useEffect(() => { load(); }, [load, live]);
+  useEffect(() => { onLoaded?.(contracts); }, [contracts, onLoaded]);
+
+  const shown = contracts.filter((c) =>
+    (status === "all" || c.status === status)
+    && (!type || (c.stores || []).some((s) => (s.customer_type || "dealer") === type))
+    && (!search || `${c.name} ${c.contract_no} ${c.chain || ""} ${(c.stores || []).map((s) => s.name).join(" ")}`.toLowerCase().includes(search)));
+  const narrowed = !!(search || type || status !== "all");
 
   async function act() {
     const { contract, action } = confirm;
@@ -75,8 +84,8 @@ export default function ContractsTab({ stores, live, onChanged }) {
           </thead>
           <tbody>
             {loading && contracts.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">Loading…</td></tr>}
-            {!loading && contracts.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">No contracts yet.</td></tr>}
-            {contracts.map((c) => (
+            {!loading && shown.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">{narrowed && contracts.length ? "No contracts match this filter." : "No contracts yet."}</td></tr>}
+            {shown.map((c) => (
               <tr key={c.id} className="border-t border-black/[0.06] align-top">
                 <td className="px-3 py-2.5">
                   <div className="text-slate-800 font-medium">{c.name}</div>
@@ -193,37 +202,37 @@ function ContractForm({ stores, onClose, onSaved }) {
         {error && <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>Customer chain</label>
-            <select value={form.chain} onChange={(e) => pickChain(e.target.value)} className={inputCls}>
+            <label htmlFor="contracts-tab-customer-chain" className={labelCls}>Customer chain</label>
+            <select id="contracts-tab-customer-chain" name="chain" value={form.chain} onChange={(e) => pickChain(e.target.value)} className={inputCls}>
               <option value="">— Pick stores by hand —</option>
               {chains.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>Contract name *</label>
-            <input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. SM September" className={inputCls} />
+            <label htmlFor="contracts-tab-contract-name" className={labelCls}>Contract name *</label>
+            <input id="contracts-tab-contract-name" name="name" value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. SM September" className={inputCls} />
           </div>
         </div>
         <div>
-          <label className={labelCls}>Stores *</label>
+          <div className={labelCls}>Stores *</div>
           <StorePicker stores={stores} value={form.store_ids} onChange={(ids) => set({ store_ids: ids })} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className={labelCls}>From *</label>
-            <input type="date" min={todayStr()} value={form.start_date} onChange={(e) => set({ start_date: e.target.value })} className={inputCls} />
+            <label htmlFor="contracts-tab-from" className={labelCls}>From *</label>
+            <input id="contracts-tab-from" name="start_date" type="date" min={todayStr()} value={form.start_date} onChange={(e) => set({ start_date: e.target.value })} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>To *</label>
-            <input type="date" min={form.start_date} value={form.end_date} onChange={(e) => set({ end_date: e.target.value })} className={inputCls} />
+            <label htmlFor="contracts-tab-to" className={labelCls}>To *</label>
+            <input id="contracts-tab-to" name="end_date" type="date" min={form.start_date} value={form.end_date} onChange={(e) => set({ end_date: e.target.value })} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Deliver by *</label>
-            <input type="time" value={form.delivery_time} onChange={(e) => set({ delivery_time: e.target.value })} className={inputCls} />
+            <label htmlFor="contracts-tab-deliver-by" className={labelCls}>Deliver by *</label>
+            <input id="contracts-tab-deliver-by" name="delivery_time" type="time" value={form.delivery_time} onChange={(e) => set({ delivery_time: e.target.value })} className={inputCls} />
           </div>
         </div>
         <div>
-          <label className={labelCls}>Delivery days *</label>
+          <div className={labelCls}>Delivery days *</div>
           <div className="flex flex-wrap items-center gap-1.5">
             {DAYS.map((d) => (
               <button key={d.value} type="button" aria-pressed={form.delivery_days.includes(d.value)} onClick={() => toggleDay(d.value)}
@@ -238,15 +247,15 @@ function ContractForm({ stores, onClose, onSaved }) {
           </div>
         </div>
         <div>
-          <label className={labelCls}>Items per store per delivery *</label>
+          <div className={labelCls}>Items per store per delivery *</div>
           <div className="flex flex-col gap-2">
             {form.items.map((it, i) => (
               <div key={i} className="grid grid-cols-[minmax(0,1fr)_72px_auto] sm:grid-cols-[1fr_110px_auto] gap-2">
-                <select value={it.product_type} aria-label={`Product ${i + 1}`} onChange={(e) => set({ items: form.items.map((x, j) => (j === i ? { ...x, product_type: e.target.value } : x)) })} className={inputCls}>
+                <select name="product_type" value={it.product_type} aria-label={`Product ${i + 1}`} onChange={(e) => set({ items: form.items.map((x, j) => (j === i ? { ...x, product_type: e.target.value } : x)) })} className={inputCls}>
                   <option value="">Select product…</option>
                   {PRODUCT_TYPES.map((p) => <option key={p.value} value={p.value} disabled={form.items.some((o, j) => j !== i && o.product_type === p.value)}>{p.label}</option>)}
                 </select>
-                <input type="number" min="1" max={maxQty} placeholder="Qty" aria-label={`Quantity ${i + 1}`} value={it.quantity} onChange={(e) => set({ items: form.items.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)) })} className={inputCls} />
+                <input {...QTY_INPUT_PROPS} name={`quantity-${i + 1}`} placeholder="Qty" aria-label={`Quantity ${i + 1}, at most ${maxQty}`} value={it.quantity} onChange={(e) => set({ items: form.items.map((x, j) => (j === i ? { ...x, quantity: cleanQty(e.target.value, maxQty) } : x)) })} className={inputCls} />
                 <button type="button" disabled={form.items.length === 1} onClick={() => set({ items: form.items.filter((_, j) => j !== i) })} className="px-2 rounded-md border border-black/[0.09] text-red-500 text-[12px] disabled:opacity-30">Remove</button>
               </div>
             ))}
@@ -257,8 +266,8 @@ function ContractForm({ stores, onClose, onSaved }) {
           <p className="text-[11px] text-slate-400 mt-1.5">Prices come from Customer Prices for each store. Admin can change one day's quantities later.</p>
         </div>
         <div>
-          <label className={labelCls}>Notes</label>
-          <textarea rows={3} value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={inputCls} />
+          <label htmlFor="contracts-tab-notes" className={labelCls}>Notes</label>
+          <textarea id="contracts-tab-notes" name="notes" rows={3} value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={inputCls} />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
           <button type="button" onClick={onClose} className={btnGhost}>Close</button>

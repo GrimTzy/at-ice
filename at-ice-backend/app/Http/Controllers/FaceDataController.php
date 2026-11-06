@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\FaceData;
+use App\Support\StoredFiles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -36,16 +37,20 @@ class FaceDataController extends Controller
             throw ValidationException::withMessages(['photo' => 'The face picture could not be read. Capture it again.']);
         }
         $path = 'face-photos/'.Str::uuid().'.jpg';
-        Storage::disk(self::PHOTO_DISK)->put($path, $bytes);
+        // A write that did not happen must not look like success (no record without its picture).
+        if (! Storage::disk(self::PHOTO_DISK)->put($path, $bytes)) {
+            throw new \RuntimeException('The face picture could not be stored.');
+        }
 
         return $path;
     }
 
+    // Removes an existing picture once the record change is committed (a rollback keeps it).
     private function deletePhoto(?string $path): void
     {
         if ($path) {
-            Storage::disk(self::PHOTO_DISK)->delete($path);
-            Storage::disk('public')->delete($path); // a picture saved before they moved to the private disk
+            StoredFiles::deleteAfterCommit(self::PHOTO_DISK, $path);
+            StoredFiles::deleteAfterCommit('public', $path); // a picture saved before they moved to the private disk
         }
     }
 
@@ -92,7 +97,15 @@ class FaceDataController extends Controller
 
         $photo = $validated['photo'] ?? null;
         unset($validated['photo']);
-        $faceData = FaceData::create($validated + ['photo_path' => $this->storePhoto($photo)]);
+        // The picture is written before the record: if saving fails the picture goes too.
+        $stored = new StoredFiles(self::PHOTO_DISK);
+        try {
+            $path = $this->storePhoto($photo);
+            $faceData = FaceData::create($validated + ['photo_path' => $path ? $stored->add($path) : null]);
+        } catch (\Throwable $e) {
+            $stored->discard();
+            throw $e;
+        }
 
         return response()->json([
             'message' => 'Face enrolled successfully.',
@@ -120,13 +133,23 @@ class FaceDataController extends Controller
         ]);
 
         $data = ['descriptor' => $validated['descriptor']];
-        if (! empty($validated['photo'])) {
-            // A new picture replaces the old one
-            $old = $faceData->photo_path;
-            $data['photo_path'] = $this->storePhoto($validated['photo']);
+        // A new picture replaces the old one, but the old one stays until the update has
+        // succeeded; a new picture that was written is removed if the update fails.
+        $stored = new StoredFiles(self::PHOTO_DISK);
+        $old = null;
+        try {
+            if (! empty($validated['photo'])) {
+                $old = $faceData->photo_path;
+                $data['photo_path'] = $stored->add($this->storePhoto($validated['photo']));
+            }
+            $faceData->update($data);
+        } catch (\Throwable $e) {
+            $stored->discard();
+            throw $e;
+        }
+        if ($old) {
             $this->deletePhoto($old);
         }
-        $faceData->update($data);
 
         return response()->json([
             'message' => 'Face data updated.',
@@ -148,8 +171,8 @@ class FaceDataController extends Controller
             ], 422);
         }
 
-        $this->deletePhoto($faceData->photo_path);
         $faceData->delete();
+        $this->deletePhoto($faceData->photo_path); // after the record change; the file goes once it is committed
 
         return response()->json(['message' => 'Face data deleted.']);
     }

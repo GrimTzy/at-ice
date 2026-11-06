@@ -13,7 +13,7 @@ import { formatDateTime } from "../../lib/time";
 const PAGES = [
   { key: "account", label: "Account", hint: "Your name, login email and password." },
   { key: "rates", label: "Rates and rules", hint: "Payroll, attendance, leave, kiosk and delivery rules, with holiday and overtime pay." },
-  { key: "admin-pin", label: "Admin PIN", hint: "The 6-digit PIN that unlocks a locked Attendance Station kiosk." },
+  { key: "admin-pin", label: "Admin PIN", hint: "The 4-digit PIN that unlocks a locked Attendance Station kiosk." },
   { key: "old-records", label: "Old records", hint: "Inactive employees and old attendance past the retention period." },
 ];
 
@@ -43,7 +43,7 @@ const TIPS = {
     { title: "Rates are dated", text: "Holiday and overtime rates apply from their effective date; past payrolls keep their rates.", tone: "cyan", icon: "calendar" },
   ],
   "admin-pin": [
-    { title: "Only for locked kiosks", text: "Type this 6-digit PIN on a kiosk locked after too many wrong HR PINs.", tone: "amber", icon: "key" },
+    { title: "Only for locked kiosks", text: "Type this 4-digit PIN on a kiosk locked after too many wrong HR PINs.", tone: "amber", icon: "key" },
     { title: "Keep it private", text: "HR has its own 4-digit PIN; this one is the Admin's override.", tone: "rose", icon: "shield" },
   ],
   "old-records": [

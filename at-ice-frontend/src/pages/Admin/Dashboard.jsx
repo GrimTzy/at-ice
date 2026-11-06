@@ -529,7 +529,7 @@ export default function Dashboard() {
                   {chartPeriod === "year" && <CalendarIconLocal />}
                   <span className="sr-only">Compare with</span>
                   {chartPeriod === "year" ? (
-                    <select
+                    <select name="picked_value"
                       value={salesChart?.period === "year" ? salesChart.picked_value : ""}
                       onChange={(e) => setChartValue(e.target.value)}
                       aria-label="Year to compare with this year"
@@ -539,7 +539,7 @@ export default function Dashboard() {
                         .map((y) => <option key={y} value={y}>{y}</option>)}
                     </select>
                   ) : (
-                    <input
+                    <input name="picked_value"
                       type={chartPeriod === "day" ? "date" : "month"}
                       value={salesChart?.period === chartPeriod ? salesChart.picked_value : ""}
                       max={salesChart?.period === chartPeriod ? salesChart.max_value : undefined}
@@ -780,7 +780,10 @@ export default function Dashboard() {
                     onClick={() => navigate("/admin/deliveries")}
                     title="Open deliveries"
                     cells={[
-                      <span key="n">{d.name}{d.vehicle_plate && <span className="ml-1.5 text-[10px] font-mono text-slate-400">{d.vehicle_plate}</span>}</span>,
+                      <span key="n" className="driver-cell">
+                        <span className="driver-cell-name">{d.name}</span>
+                        {d.vehicle_plate && <span className="plate-badge" title="Vehicle plate">{d.vehicle_plate}</span>}
+                      </span>,
                       d.time_in ? <StatusCell tone="done">{clock(d.time_in)}</StatusCell> : <StatusCell tone="stuck">Not in</StatusCell>,
                       d.time_out ? <StatusCell tone="idle">{clock(d.time_out)}</StatusCell> : <StatusCell tone={d.time_in ? "working" : "idle"}>{d.time_in ? "Working" : "—"}</StatusCell>,
                       <span key="dl" className="font-semibold text-slate-800">{d.delivered}</span>,

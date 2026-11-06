@@ -110,14 +110,14 @@ export default function AdjustmentRequestPanel({ delivery, onChanged }) {
             {ICE_PRODUCTS.map((p) => (
               <label key={p.value} className="flex flex-col gap-1">
                 <span className="text-[11px] font-medium text-slate-600">{p.label} <span className="text-slate-400">(now {current[p.value]})</span></span>
-                <input type="number" inputMode="numeric" min={0} max={maxQty} value={wanted[p.value] ?? ""}
+                <input name="wanted" type="number" inputMode="numeric" min={0} max={maxQty} value={wanted[p.value] ?? ""}
                   onChange={(e) => { setWanted({ ...wanted, [p.value]: e.target.value }); setError(""); }} className={inputCls} />
               </label>
             ))}
           </div>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-medium text-slate-600">Reason (required)</span>
-            <input value={reason} maxLength={200} onChange={(e) => { setReason(e.target.value); setError(""); }} placeholder="e.g. Heavy rain, slow sales today" className={inputCls} />
+            <input name="reason" value={reason} maxLength={200} onChange={(e) => { setReason(e.target.value); setError(""); }} placeholder="e.g. Heavy rain, slow sales today" className={inputCls} />
           </label>
           {error && <div className="text-[12px] text-red-600">{error}</div>}
           <div className="flex flex-wrap justify-end gap-2">

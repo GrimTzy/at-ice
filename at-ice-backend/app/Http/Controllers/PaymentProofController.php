@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\PaymentProof;
 use App\Models\Receipt;
 use App\Support\Audit;
+use App\Support\StoredFiles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -49,18 +50,25 @@ class PaymentProofController extends Controller
         }
 
         $file = $request->file('file');
-        $proof = PaymentProof::create([
-            'receipt_id' => $receipt->id,
-            'customer_id' => $customer->id,
-            'submitted_by' => $request->user()->id,
-            // Kept private: only Admin and this customer can open it.
-            'file_path' => $file->store('payment-proofs', 'local'),
-            'file_disk' => 'local',
-            'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
-            'method' => $data['method'] ?? null,
-            'reference_no' => isset($data['reference_no']) ? trim($data['reference_no']) ?: null : null,
-            'status' => 'pending',
-        ]);
+        // The file is written before the record: if saving fails the file goes too.
+        $stored = new StoredFiles('local');
+        try {
+            $proof = PaymentProof::create([
+                'receipt_id' => $receipt->id,
+                'customer_id' => $customer->id,
+                'submitted_by' => $request->user()->id,
+                // Kept private: only Admin and this customer can open it.
+                'file_path' => $stored->store($file, 'payment-proofs'),
+                'file_disk' => 'local',
+                'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
+                'method' => $data['method'] ?? null,
+                'reference_no' => isset($data['reference_no']) ? trim($data['reference_no']) ?: null : null,
+                'status' => 'pending',
+            ]);
+        } catch (\Throwable $e) {
+            $stored->discard();
+            throw $e;
+        }
 
         return response()->json($proof, 201);
     }

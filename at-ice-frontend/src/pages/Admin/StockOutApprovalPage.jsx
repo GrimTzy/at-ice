@@ -200,7 +200,7 @@ export default function StockOutApprovalPage() {
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-4 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
           <div className="min-w-0 mr-auto">
-            <h2 className="text-[14px] font-semibold text-slate-800">Stock-out requests</h2>
+            <h2 className="text-[15px] font-semibold text-slate-800">Stock-out requests</h2>
             <p className="text-[12px] text-slate-500">Filed by Maintenance. Approve, then release the items to take them out of stock.</p>
           </div>
           <button
@@ -299,11 +299,11 @@ export default function StockOutApprovalPage() {
                     <div className="mt-3">
                       {rejectingId === req.id ? (
                         <div className="flex flex-col gap-2">
-                          <textarea
+                          <textarea name="rejection_reason"
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
                             placeholder="Reason for rejection..."
-                            className="w-full text-sm border border-black/[0.09] rounded-lg px-3 py-2 resize-none"
+                            className="w-full text-sm border border-black/[0.09] rounded-lg px-3 py-2 resize-y"
                             rows={2}
                           />
                           <div className="flex gap-2">

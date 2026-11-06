@@ -8,6 +8,7 @@ use App\Models\EmployeeMemoFile;
 use App\Support\Audit;
 use App\Support\DriverAvailability;
 use App\Support\MemoEngine;
+use App\Support\StoredFiles;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -79,24 +80,30 @@ class EmployeeMemoController extends Controller
         ], ['files.*.mimes' => 'Files must be PDF, Word (.docx) or pictures (JPG, PNG, WebP).']);
 
         $offense = EmployeeMemo::nextOffenseNo($data['employee_id'], $data['violation']);
-        $memo = DB::transaction(function () use ($request, $data, $offense) {
-            $memo = EmployeeMemo::create([
-                'memo_no' => EmployeeMemo::nextMemoNo(),
-                'employee_id' => $data['employee_id'],
-                'violation' => $data['violation'],
-                'category' => EmployeeMemo::categoryOf($data['violation']),
-                'level' => $this->levelFor($data['violation'], $data['level'] ?? null, $offense),
-                'offense_no' => $offense,
-                'status' => 'draft',
-                'source' => 'manual',
-                'subject' => trim($data['subject']),
-                'body' => trim($data['body']),
-                'incident_date' => $data['incident_date'],
-            ]);
-            $this->storeFiles($request, $memo, 'attachment');
+        $stored = new StoredFiles('local');
+        try {
+            $memo = DB::transaction(function () use ($request, $data, $offense, $stored) {
+                $memo = EmployeeMemo::create([
+                    'memo_no' => EmployeeMemo::nextMemoNo(),
+                    'employee_id' => $data['employee_id'],
+                    'violation' => $data['violation'],
+                    'category' => EmployeeMemo::categoryOf($data['violation']),
+                    'level' => $this->levelFor($data['violation'], $data['level'] ?? null, $offense),
+                    'offense_no' => $offense,
+                    'status' => 'draft',
+                    'source' => 'manual',
+                    'subject' => trim($data['subject']),
+                    'body' => trim($data['body']),
+                    'incident_date' => $data['incident_date'],
+                ]);
+                $this->storeFiles($request, $memo, 'attachment', $stored);
 
-            return $memo;
-        });
+                return $memo;
+            });
+        } catch (\Throwable $e) {
+            $stored->discard(); // the transaction undid the records, not the files
+            throw $e;
+        }
         Audit::log('memo.create', $memo, null, $memo->only(['memo_no', 'employee_id', 'violation', 'level']));
 
         if ($request->boolean('send')) {
@@ -179,13 +186,23 @@ class EmployeeMemoController extends Controller
             return response()->json(['message' => 'Send the memo before uploading the signed copy.'], 422);
         }
 
-        $names = $this->storeFiles($request, $memo, $data['kind']);
-        if ($data['kind'] === 'signed_copy') {
-            $before = $memo->only(['status']);
-            $memo->update(['status' => 'archived', 'signed_at' => now()]);
-            Audit::log('memo.signed', $memo, $before, ['status' => 'archived', 'files' => $names]);
-        } else {
-            Audit::log('memo.attach', $memo, null, ['files' => $names]);
+        // All or nothing: the file records, the archive status and the audit entry are one
+        // transaction, and the files written by this request are removed if it fails.
+        $stored = new StoredFiles('local');
+        try {
+            DB::transaction(function () use ($request, $memo, $data, $stored) {
+                $names = $this->storeFiles($request, $memo, $data['kind'], $stored);
+                if ($data['kind'] === 'signed_copy') {
+                    $before = $memo->only(['status']);
+                    $memo->update(['status' => 'archived', 'signed_at' => now()]);
+                    Audit::log('memo.signed', $memo, $before, ['status' => 'archived', 'files' => $names]);
+                } else {
+                    Audit::log('memo.attach', $memo, null, ['files' => $names]);
+                }
+            });
+        } catch (\Throwable $e) {
+            $stored->discard();
+            throw $e;
         }
 
         return response()->json($this->fresh($memo));
@@ -262,7 +279,12 @@ class EmployeeMemoController extends Controller
     {
         abort_unless($file->employee_memo_id === $memo->id && Storage::disk('local')->exists($file->path), 404);
 
-        return Storage::disk('local')->response($file->path, $file->original_name, ['Content-Type' => $file->mime ?: 'application/octet-stream']);
+        // Same protective headers as every other private download.
+        return Storage::disk('local')->response($file->path, $file->original_name, [
+            'Content-Type' => $file->mime ?: 'application/octet-stream',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'inline');
     }
 
     // Zero-tolerance offenses are always a Notice to Explain; otherwise HR's
@@ -289,14 +311,15 @@ class EmployeeMemoController extends Controller
         Audit::log('memo.send', $memo, ['status' => 'draft'], ['status' => $status, 'level' => $memo->level]);
     }
 
-    private function storeFiles(Request $request, EmployeeMemo $memo, string $kind): array
+    private function storeFiles(Request $request, EmployeeMemo $memo, string $kind, StoredFiles $stored): array
     {
         $names = [];
         foreach ((array) $request->file('files', []) as $file) {
             $memo->files()->create([
                 'kind' => $kind,
-                'path' => $file->storeAs('employee-memos', Str::uuid().'.'.$file->extension(), 'local'),
-                'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
+                'path' => $stored->store($file, 'employee-memos', Str::uuid().'.'.$file->extension()),
+                // cleaned like every other upload name
+                'original_name' => mb_substr(preg_replace('/[^\pL\pN ._()-]/u', '_', $file->getClientOriginalName()), 0, 255),
                 'mime' => $file->getMimeType(),
                 'size' => (int) $file->getSize(),
                 'uploaded_by' => $request->user()->id,

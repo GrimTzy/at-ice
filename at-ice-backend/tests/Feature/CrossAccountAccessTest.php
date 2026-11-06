@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\Delivery;
 use App\Models\Employee;
 use App\Models\Payroll;
+use App\Models\StockOutRequest;
 use App\Models\SupportMessage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,6 +18,52 @@ use Tests\TestCase;
 class CrossAccountAccessTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_maintenance_stock_out_details_follow_the_same_ownership_as_the_list(): void
+    {
+        $owner = User::factory()->create(['role' => 'employee', 'sub_role' => 'maintenance']);
+        $other = User::factory()->create(['role' => 'employee', 'sub_role' => 'maintenance']);
+        $request = StockOutRequest::create([
+            'requested_by' => $owner->id, 'item_name' => 'Test part', 'quantity' => 1,
+            'purpose' => 'Owner-only maintenance request', 'status' => 'pending',
+        ]);
+
+        Sanctum::actingAs($owner);
+        $this->getJson('/api/stock-out-requests')->assertOk()->assertJsonPath('data.0.id', $request->id);
+        $this->getJson("/api/stock-out-requests/{$request->id}")->assertOk()->assertJsonPath('id', $request->id);
+
+        Sanctum::actingAs($other);
+        $this->getJson('/api/stock-out-requests')->assertOk()->assertJsonPath('data', []);
+        $this->getJson("/api/stock-out-requests/{$request->id}")->assertNotFound()->assertExactJson(['message' => 'Not found.']);
+        $this->getJson('/api/stock-out-requests/999999')->assertNotFound()->assertExactJson(['message' => 'Not found.']);
+    }
+
+    public function test_admin_retains_stock_out_list_and_detail_access(): void
+    {
+        $owner = User::factory()->create(['role' => 'employee', 'sub_role' => 'maintenance']);
+        $request = StockOutRequest::create([
+            'requested_by' => $owner->id, 'item_name' => 'Test part', 'quantity' => 1,
+            'purpose' => 'Maintenance request', 'status' => 'pending',
+        ]);
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+
+        $this->getJson('/api/stock-out-requests')->assertOk()->assertJsonPath('data.0.id', $request->id);
+        $this->getJson("/api/stock-out-requests/{$request->id}")->assertOk()->assertJsonPath('id', $request->id);
+    }
+
+    public function test_other_roles_remain_forbidden_from_stock_out_details(): void
+    {
+        $owner = User::factory()->create(['role' => 'employee', 'sub_role' => 'maintenance']);
+        $request = StockOutRequest::create([
+            'requested_by' => $owner->id, 'item_name' => 'Test part', 'quantity' => 1,
+            'purpose' => 'Maintenance request', 'status' => 'pending',
+        ]);
+        foreach ([['hr', null], ['customer', null], ['driver', null], ['employee', 'checker'], ['employee', 'salesman'], ['employee', null]] as [$role, $subRole]) {
+            Sanctum::actingAs(User::factory()->create(['role' => $role, 'sub_role' => $subRole]));
+            $this->getJson('/api/stock-out-requests')->assertForbidden();
+            $this->getJson("/api/stock-out-requests/{$request->id}")->assertForbidden();
+        }
+    }
 
     private function store(string $name, string $code): array
     {

@@ -22,11 +22,16 @@ export function StatusCell({ tone = "idle", children, className = "", title }) {
 }
 
 // A board group: colored title line, then a table whose rows each carry the
-// group color on their left edge. `columns` are { label, className } (the
-// first one is the item name). Children are <BoardRow>s.
-export function BoardGroup({ title, tone = "info", count, columns, children, footer, empty = "Nothing here." }) {
+// group color on their left edge. `columns` are { label, className, width }
+// (the first one is the item name). Children are <BoardRow>s.
+// width (e.g. "18%"): when the columns give widths, every group of the board
+// uses the same fixed column template, so the columns of stacked groups line
+// up from top to bottom whatever their contents. minWidth keeps that template
+// readable on a phone (the group scrolls sideways instead).
+export function BoardGroup({ title, tone = "info", count, columns, children, footer, empty = "Nothing here.", minWidth }) {
   const t = TONES[tone] || TONES.info;
   const rows = Array.isArray(children) ? children.filter(Boolean) : children ? [children] : [];
+  const fixed = columns.some((c) => c.width);
   return (
     <section className="min-w-0">
       <div className={`flex items-baseline gap-2 px-1 pb-1.5 text-[13px] font-semibold ${t.text}`}>
@@ -34,12 +39,20 @@ export function BoardGroup({ title, tone = "info", count, columns, children, foo
         {count != null && <span className="text-[11px] font-normal text-slate-400">{count} {count === 1 ? "item" : "items"}</span>}
       </div>
       <div className="overflow-x-auto rounded-md border border-black/[0.09] bg-white">
-        <table className="w-full border-collapse text-[12px]">
+        <table
+          className={`board-table w-full border-collapse text-[12px] ${fixed ? "table-fixed" : ""}`}
+          style={fixed && minWidth ? { minWidth } : undefined}
+        >
+          {fixed && (
+            <colgroup>
+              {columns.map((c, i) => <col key={i} style={c.width ? { width: c.width } : undefined} />)}
+            </colgroup>
+          )}
           <thead>
             <tr className="text-[10px] uppercase tracking-wider text-slate-400">
               {columns.map((c, i) => (
                 <th
-                  key={c.label}
+                  key={`${c.label}-${i}`}
                   className={`font-medium px-3 py-2 border-b border-black/[0.06] text-center ${c.className || ""}`}
                   style={i === 0 ? { boxShadow: `inset 4px 0 0 ${t.edge}` } : undefined}
                 >

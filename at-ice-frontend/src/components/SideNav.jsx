@@ -71,7 +71,19 @@ function currentSection(ids) {
   return current;
 }
 
-export default function SideNav({ items, onNavigate }) {
+// The blue count badge beside a menu link (lib/navCounts.js). Hidden at 0.
+function NavBadge({ count, of }) {
+  if (!count) return null;
+  return (
+    <span className="nav-badge rail-label" aria-label={`${count} waiting in ${of}`} title={`${count} waiting`}>
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+// counts: { "/hr/leave-requests": 3, ... } from useNavCounts. A group shows the
+// sum of its pages while it is closed, so nothing waiting is hidden.
+export default function SideNav({ items, onNavigate, counts = {} }) {
   const location = useLocation();
   const { pathname, hash, key: navKey } = location;
   const activeItem = items.find((item) => pagesOf(item).some((p) => onPath(pathname, splitTo(p.to).path)));
@@ -173,6 +185,12 @@ export default function SideNav({ items, onNavigate }) {
             >
               <span className="opacity-80 flex-shrink-0">{item.icon}</span>
               <span className="rail-label truncate flex-1">{item.label}</span>
+              <NavBadge
+                of={item.label}
+                count={item.children
+                  ? (open ? 0 : item.children.reduce((s, c) => s + (Number(counts[splitTo(c.to).path]) || 0), 0))
+                  : Number(counts[splitTo(item.to).path]) || 0}
+              />
             </Link>
               {item.children && (
                 <button
@@ -207,6 +225,7 @@ export default function SideNav({ items, onNavigate }) {
                             className={`sidenav-link rail-label${current ? " is-current" : ""}`}
                           >
                             {child.label}
+                            <NavBadge of={child.label} count={Number(counts[splitTo(child.to).path]) || 0} />
                           </Link>
                         </li>
                       );

@@ -81,24 +81,28 @@ function HolidayModal({ holiday, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={close}>
       <form role="dialog" aria-modal="true" aria-label={editing ? "Edit holiday" : "Add a holiday"} onSubmit={save} onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl w-full max-w-md p-5 flex flex-col gap-3.5">
-        <div>
+        className="modal-shell bg-white rounded-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="shrink-0 px-5 py-4 border-b border-black/[0.09]">
           <div className="text-[15px] font-semibold text-slate-800">{editing ? "Edit holiday" : "Add a holiday"}</div>
           <div className="text-[11px] text-slate-500 mt-0.5">Use the date and name from the official proclamation.</div>
         </div>
+        <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="p-5 flex flex-col gap-3.5">
         <DraftHint draft={draft} onDiscard={onClose} />
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Date</span>
-          <input type="date" required autoFocus value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inputCls} /></label>
+          <input name="date" type="date" required autoFocus value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inputCls} /></label>
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Holiday name</span>
-          <input required maxLength={255} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Eid'l Adha" className={inputCls} /></label>
+          <input name="name" required maxLength={255} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Eid'l Adha" className={inputCls} /></label>
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Type</span>
-          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={inputCls}>
+          <select name="type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={inputCls}>
             {TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select></label>
         <label className="flex items-center gap-1.5 text-[12px] text-slate-600">
-          <input type="checkbox" data-native checked={form.is_double} onChange={(e) => setForm({ ...form, is_double: e.target.checked })} /> Two holidays on this date
+          <input name="is_double" type="checkbox" data-native checked={form.is_double} onChange={(e) => setForm({ ...form, is_double: e.target.checked })} /> Two holidays on this date
         </label>
-        <div className="flex justify-end gap-2 pt-1">
+        </div>
+        </div>
+        <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] flex justify-end gap-2">
           <button type="button" onClick={close} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-xs text-slate-600 hover:bg-slate-50 cursor-pointer">Cancel</button>
           <button type="submit" disabled={busy} className="px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold disabled:opacity-50 cursor-pointer">
             {busy ? "Saving…" : editing ? "Save changes" : "Add holiday"}
@@ -192,23 +196,23 @@ export default function HolidaysPage({ admin = false }) {
 
         <div role="search" aria-label="Find holidays" className="px-[18px] py-3 bg-slate-50 border-b border-black/[0.09] flex flex-wrap items-end gap-2.5">
           <label className="flex flex-col gap-1"><span className={labelCls}>Year</span>
-            <select value={year} onChange={(e) => { setYear(Number(e.target.value)); setFilter((f) => ({ ...f, date: "" })); }} className={inputCls}>
+            <select name="year" value={year} onChange={(e) => { setYear(Number(e.target.value)); setFilter((f) => ({ ...f, date: "" })); }} className={inputCls}>
               {years.map((y) => <option key={y} value={y}>{y}</option>)}
             </select></label>
           <label className="flex flex-col gap-1 flex-1 min-w-[180px]"><span className={labelCls}>Name</span>
             <span className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-slate-500 focus-within:border-cyan-400">
               <SearchIcon />
-              <input type="search" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} placeholder="Search holidays by name" className="w-full bg-transparent outline-none text-xs text-slate-700 placeholder:text-slate-500" />
+              <input name="q" type="search" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} placeholder="Search holidays by name" className="w-full bg-transparent outline-none text-xs text-slate-700 placeholder:text-slate-500" />
             </span></label>
           <label className="flex flex-col gap-1"><span className={labelCls}>Month</span>
-            <select value={filter.month} onChange={(e) => setFilter({ ...filter, month: e.target.value })} className={`${inputCls} min-w-[140px]`}>
+            <select name="month" value={filter.month} onChange={(e) => setFilter({ ...filter, month: e.target.value })} className={`${inputCls} min-w-[140px]`}>
               <option value="">All months</option>
               {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
             </select></label>
           <label className="flex flex-col gap-1"><span className={labelCls}>Date</span>
-            <input type="date" value={filter.date} min={`${year}-01-01`} max={`${year}-12-31` < todayManila() ? `${year}-12-31` : todayManila()} onChange={(e) => setFilter({ ...filter, date: e.target.value })} className={inputCls} /></label>
+            <input name="date" type="date" value={filter.date} min={`${year}-01-01`} max={`${year}-12-31` < todayManila() ? `${year}-12-31` : todayManila()} onChange={(e) => setFilter({ ...filter, date: e.target.value })} className={inputCls} /></label>
           <label className="flex flex-col gap-1"><span className={labelCls}>Type</span>
-            <select value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })} className={inputCls}>
+            <select name="type" value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })} className={inputCls}>
               <option value="">All types ({all.length})</option>
               {TYPES.map(([k, l]) => <option key={k} value={k}>{l} ({countType(k)})</option>)}
             </select></label>

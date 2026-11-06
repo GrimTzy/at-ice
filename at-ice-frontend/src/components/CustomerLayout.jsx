@@ -116,7 +116,7 @@ export default function CustomerLayout({ pageTitle, breadcrumb, headerActions, c
         <header className="h-14 bg-white border-b border-black/[0.09] flex items-center px-4 sm:px-6 gap-3 flex-shrink-0 sticky top-0 z-10">
           <button
             onClick={() => setMobileOpen(true)}
-            className="lg:hidden text-slate-500 hover:text-slate-800 p-1 -ml-1"
+            className="lg:hidden grid place-items-center w-10 h-10 -ml-2 text-slate-500 hover:text-slate-800 cursor-pointer"
             aria-label="Open menu"
           >
             <MenuIcon />

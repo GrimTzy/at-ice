@@ -81,7 +81,7 @@ class StockOutRequestController extends Controller
 
         $validated = $request->validate([
             'product_id' => ['required', Rule::exists('products', 'id')->where('is_active', true)->whereNull('deleted_at')],
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'required|integer|min:1|max:'.config('atice.max_stock_quantity'),
             'purpose' => 'required|string|max:1000',
             // The project on Admin's board it is for (optional; only open projects).
             'project_id' => ['nullable', Rule::exists('projects', 'id')->whereIn('status', ['planned', 'working', 'stuck'])],
@@ -118,8 +118,16 @@ class StockOutRequestController extends Controller
     /**
      * Show one request.
      */
-    public function show(StockOutRequest $stockOutRequest)
+    public function show(Request $request, StockOutRequest $stockOutRequest)
     {
+        $user = $request->user();
+        abort_if(
+            $user->role === 'employee' && $user->sub_role === 'maintenance'
+                && (int) $stockOutRequest->requested_by !== (int) $user->id,
+            404,
+            'Not found.'
+        );
+
         return response()->json(
             $stockOutRequest->load(self::RELATIONS)
         );

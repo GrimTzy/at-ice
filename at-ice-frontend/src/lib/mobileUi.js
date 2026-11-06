@@ -25,7 +25,7 @@ export const toneFor = (status) => STATUS_TONE[String(status || "").toLowerCase(
 export const CARD = "bg-white border border-slate-200 rounded-xl p-4";
 export const CARD_BUTTON = `${CARD} w-full text-left active:scale-[0.98] transition-transform disabled:opacity-50 disabled:pointer-events-none`;
 export const FIELD = "w-full min-h-[44px] px-3 border border-slate-200 rounded-xl bg-white text-base text-slate-800 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20";
-export const TEXTAREA = "w-full min-h-[88px] px-3 py-2.5 border border-slate-200 rounded-xl bg-white text-base text-slate-800 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 resize-none";
+export const TEXTAREA = "w-full min-h-[88px] px-3 py-2.5 border border-slate-200 rounded-xl bg-white text-base text-slate-800 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 resize-y";
 export const LABEL = "block text-[13px] font-medium text-slate-600 mb-1.5";
 export const BTN = "inline-flex items-center justify-center gap-2 min-h-[44px] min-w-[44px] px-4 rounded-xl text-[15px] font-semibold active:scale-[0.98] transition-transform disabled:opacity-50 disabled:pointer-events-none cursor-pointer";
 export const BTN_PRIMARY = `${BTN} bg-cyan-500 text-white`;

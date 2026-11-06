@@ -7,6 +7,11 @@ return [
     // the Salesman's confirmation; the web app reads it from GET /api/limits.
     'max_product_quantity' => (int) env('MAX_PRODUCT_QUANTITY', 500),
 
+    // Most of one inventory item (parts, supplies) on one stock movement or
+    // stock-out request, when the item's own stock does not set a lower limit.
+    // The web app uses the same number (src/lib/quantity.js QTY_CEILING).
+    'max_stock_quantity' => (int) env('MAX_STOCK_QUANTITY', 9999),
+
     // Times typed into forms without a zone (e.g. Ice Loading "Loaded At") are
     // in this zone; "today" for the Ice Loading delivery list follows it too.
     'timezone' => env('ATICE_TIMEZONE', 'Asia/Manila'),

@@ -120,7 +120,8 @@ class PayrollController extends Controller
         $data = $request->validate(['ids' => 'required|array|min:1', 'ids.*' => 'integer|exists:payrolls,id']);
         $count = 0;
         DB::transaction(function () use ($data, $request, &$count) {
-            foreach (Payroll::whereIn('id', $data['ids'])->where('status', 'unpaid')->lockForUpdate()->get() as $payroll) {
+            // Ascending id: the lock order shared with TimesheetController::approve.
+            foreach (Payroll::whereIn('id', $data['ids'])->where('status', 'unpaid')->orderBy('id')->lockForUpdate()->get() as $payroll) {
                 $payroll->update(['status' => 'paid', 'paid_at' => now(), 'paid_by' => $request->user()->id]);
                 Audit::log('payroll.paid', $payroll, ['status' => 'unpaid'], ['status' => 'paid', 'net_pay' => (string) $payroll->net_pay]);
                 $count++;

@@ -28,37 +28,150 @@ export function findDestination(id) {
   return table ? table.closest(".rounded-xl, .insight-panel") || table : null;
 }
 
-// Run fn once the element is in view. If it is already in view, fn runs now;
-// otherwise the page scrolls and fn runs when the scroll ends (or after 900 ms
-// if no scroll event comes), so the animation never plays while the element
-// is still sliding through the viewport.
+// The element that scrolls the page around el: the layout's <main>
+// (overflow-y: auto), or the document on pages that scroll as a whole.
+function scrollerOf(el) {
+  for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight + 1) return n;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+
+const SCROLL_MS = 480;
+const easeOut = (t) => 1 - (1 - t) ** 3;
+
+// Run fn once the element is in view. The page scrolls the element to the top
+// of its scroll area (12px gap) unless it already sits in the upper third,
+// then fn runs, so the animation never plays while the element is still
+// sliding into view. The scroll is driven here frame by frame on the actual
+// scroller, because smooth scrollIntoView does not move the layout's <main>.
 export function runWhenInView(el, fn) {
-  const r = el.getBoundingClientRect();
-  // already well in view (top on screen with room to show rows): do not move the page
-  if (r.top >= 0 && r.top <= window.innerHeight - 160) return fn();
-  el.scrollIntoView({ behavior: "smooth", block: "start" });
-  let fired = false;
-  const go = () => {
-    if (fired) return;
-    fired = true;
-    window.removeEventListener("scrollend", go, true);
-    window.clearTimeout(backstop);
-    fn();
+  const scroller = scrollerOf(el);
+  const isDoc = scroller === document.scrollingElement || scroller === document.documentElement;
+  const box = isDoc ? { top: 0, height: window.innerHeight } : scroller.getBoundingClientRect();
+  const offset = el.getBoundingClientRect().top - box.top;
+  // already near the top of the scroll area: do not move the page
+  if (offset >= 0 && offset <= box.height * 0.33) return fn();
+  const from = scroller.scrollTop;
+  const max = scroller.scrollHeight - scroller.clientHeight;
+  const to = Math.max(0, Math.min(max, from + offset - 12));
+  return glide(scroller, to, fn);
+}
+
+function glide(scroller, to, done) {
+  const from = scroller.scrollTop;
+  if (Math.abs(to - from) < 2) return done();
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  // a hidden tab gets no animation frames: jump straight there
+  if (reduce || document.hidden) {
+    scroller.scrollTop = to;
+    return done();
+  }
+  const start = performance.now();
+  let frame;
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / SCROLL_MS);
+    scroller.scrollTop = from + (to - from) * easeOut(t);
+    if (t < 1) frame = requestAnimationFrame(step);
+    else done();
   };
-  const backstop = window.setTimeout(go, 900);
-  // capture: the page scrolls inside <main>, and scrollend does not bubble
-  window.addEventListener("scrollend", go, true);
+  frame = requestAnimationFrame(step);
+  return () => cancelAnimationFrame(frame);
+}
+
+// Where a list lands: the top of its table, so the column header sits this far
+// under the page header and the first row comes right after it.
+const LIST_GAP = 16;
+
+// What to line up in a list: its table, or on phones the first card when the
+// table is hidden. The table, not its thead, because a sticky thead moves.
+function listAnchor(el) {
+  if (el.matches("table")) return el;
+  const shown = (n) => n.getClientRects().length > 0;
+  return [...el.querySelectorAll("table")].find(shown) || [...el.querySelectorAll("[data-row]")].find(shown) || el;
+}
+
+// How much of the scroll area a sticky page header covers (phone screens, where
+// the header scrolls with the page; on desktop it sits above the area).
+function coveredTop(box) {
+  let bottom = box.top;
+  document.querySelectorAll("header").forEach((h) => {
+    if (!["sticky", "fixed"].includes(getComputedStyle(h).position)) return;
+    const r = h.getBoundingClientRect();
+    if (r.top <= box.top + 1 && r.bottom > box.top) bottom = Math.max(bottom, r.bottom);
+  });
+  return bottom - box.top;
+}
+
+// Every card click lands the same way: the list moves up under the page header
+// even when it is already on screen. A page too short to scroll that far stops
+// at its end. Measured again at the end, in case the filter moved things.
+function runAtListTop(el, fn) {
+  const anchor = listAnchor(el);
+  const scroller = scrollerOf(el);
+  const isDoc = scroller === document.scrollingElement || scroller === document.documentElement;
+  const away = () => {
+    const box = isDoc ? { top: 0 } : scroller.getBoundingClientRect();
+    return anchor.getBoundingClientRect().top - box.top - coveredTop(box) - LIST_GAP;
+  };
+  const max = scroller.scrollHeight - scroller.clientHeight;
+  return glide(scroller, Math.max(0, Math.min(max, scroller.scrollTop + away())), () => {
+    const off = away();
+    if (Math.abs(off) >= 2) scroller.scrollTop += off;
+    fn();
+  });
 }
 
 // Pulse the element once. Calling it again restarts the pulse.
 export function pulseDestination(el) {
   if (!el) return;
-  runWhenInView(el, () => {
+  return runAtListTop(el, () => {
     el.removeAttribute("data-dest-pulse");
     void el.offsetWidth; // restart the animation
     el.setAttribute("data-dest-pulse", "");
     window.clearTimeout(el._destTimer);
     el._destTimer = window.setTimeout(() => el.removeAttribute("data-dest-pulse"), PULSE_MS);
+  });
+}
+
+// The record rows inside a destination: table body rows, or list items that
+// mark themselves with data-row. The "no match" row of an empty table counts,
+// so an empty result still answers the click.
+const ROW_PULSE_MS = 400; // the row's entrance lasts 240 ms (glow.css fx-row-again)
+const ROW_PULSE_MAX = 10;
+export function rowsOf(el, rowKey) {
+  if (!el) return [];
+  if (rowKey != null) {
+    const one = el.querySelector(`[data-row-key="${CSS.escape(String(rowKey))}"]`);
+    return one ? [one] : [];
+  }
+  return [...el.querySelectorAll(":scope tbody > tr, :scope [data-row]")].slice(0, ROW_PULSE_MAX);
+}
+
+// Show the rows a card stands for, once the list is in view:
+// - a filter card (no rowKey): the list now holds only the matching rows, so
+//   the table's staggered cascade plays again on them (and only them);
+// - one record (rowKey): only that row plays the entrance (glow.css
+//   data-row-pulse), the rest of the table stays still.
+// With no rows at all (not a table) the list itself pulses, as before.
+export function pulseRows(el, rowKey, enter = false) {
+  if (!el) return;
+  const rows = rowsOf(el, rowKey);
+  if (!rows.length) return pulseDestination(el);
+  if (rowKey == null) {
+    return runAtListTop(el, () => {
+      if (enter) replayEnter(el);
+      recascade(el);
+    });
+  }
+  const row = rows[0];
+  return runWhenInView(row, () => {
+    row.removeAttribute("data-row-pulse");
+    void row.offsetWidth; // restart on a repeat click
+    row.setAttribute("data-row-pulse", "");
+    window.clearTimeout(row._rowTimer);
+    row._rowTimer = window.setTimeout(() => row.removeAttribute("data-row-pulse"), ROW_PULSE_MS);
   });
 }
 
@@ -68,15 +181,31 @@ export function recascade(el) {
   if (el) el.setAttribute("data-cascade", el.getAttribute("data-cascade") === "a" ? "b" : "a");
 }
 
+// Play the page-entrance animation (the one a menu click gives the content) on
+// the whole list card again. Same a/b trick as recascade.
+export function replayEnter(el) {
+  if (el) el.setAttribute("data-enter", el.getAttribute("data-enter") === "a" ? "b" : "a");
+}
+
 // Same page: the filter's list is committed by React before the next frame, so
-// restart the cascade on that frame, then scroll to the list and pulse it. An
-// empty result still cascades and pulses (its "no match" row is a row too).
-export function focusDestination(id) {
-  requestAnimationFrame(() => {
+// on that frame scroll to the list and replay the cascade on the rows that are
+// left, once they are on screen (so the user sees it). An empty result still
+// cascades (its "no match" row is a row too). rowKey: only the row with that
+// data-row-key plays (a single record).
+export function focusDestination(id, rowKey) {
+  requestAnimationFrame(() => pulseRows(findDestination(id), rowKey, true));
+}
+
+// One record: the page has already moved its pager to the record's page; wait
+// for that row to render, then scroll to it and pulse it alone.
+export function focusRecord(rowKey, id) {
+  let tries = 0;
+  const look = () => {
     const el = findDestination(id);
-    recascade(el);
-    pulseDestination(el);
-  });
+    if (el && rowsOf(el, rowKey).length) return pulseRows(el, rowKey);
+    if (++tries < 20) requestAnimationFrame(look);
+  };
+  requestAnimationFrame(look);
 }
 
 // Other page: wait (up to 5 seconds) for the list to exist and have rows.
@@ -86,12 +215,16 @@ function waitForDestination(id, done) {
     return el && !el.querySelector(".animate-pulse, [data-skeleton]") ? el : null;
   };
   const now = ready();
-  if (now) return done(now), () => {};
+  let stopPulse;
+  if (now) {
+    stopPulse = done(now);
+    return () => stopPulse?.();
+  }
   const watch = new MutationObserver(() => {
     const el = ready();
-    if (el) { cleanup(); done(el); }
+    if (el) { cleanup(); stopPulse = done(el); }
   });
-  const cleanup = () => { watch.disconnect(); window.clearTimeout(giveUp); };
+  const cleanup = () => { watch.disconnect(); window.clearTimeout(giveUp); stopPulse?.(); };
   const giveUp = window.setTimeout(cleanup, 5000);
   watch.observe(document.body, { childList: true, subtree: true });
   return cleanup;
@@ -103,10 +236,15 @@ export function DestinationWatcher() {
 
   useEffect(() => {
     if (!dest) return;
-    waitForDestination(dest, pulseDestination);
+    const cancel = waitForDestination(dest, (el) => pulseRows(el));
     // drop the state from the history entry so a reload or back does not replay it
     const h = window.history.state;
-    if (h?.usr) window.history.replaceState({ ...h, usr: null }, "");
+    if (h?.usr) {
+      const usr = { ...h.usr };
+      delete usr.dest;
+      window.history.replaceState({ ...h, usr: Object.keys(usr).length ? usr : null }, "");
+    }
+    return cancel;
   }, [dest, location.key]);
 
   return null;

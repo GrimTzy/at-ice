@@ -4,7 +4,7 @@ import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
 import PhoneInput from "../components/PhoneInput";
 import AddressFields from "../components/AddressFields";
-import { MOBILE_REGEX, MOBILE_MESSAGE, toStoredPhone } from "../lib/phone";
+import { MOBILE_REGEX, MOBILE_MESSAGE, mobileError, toStoredPhone } from "../lib/phone";
 import { PUBLIC_POSITIONS } from "../lib/positions";
 import { useDraft } from "../lib/useDraft";
 import DraftHint from "../components/DraftHint";
@@ -26,6 +26,9 @@ import { formatLicense, licenseError, expiryError, tomorrowStr } from "../lib/li
 const RESUME_ACCEPT = ".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const RESUME_MAX = 5 * 1024 * 1024;
 const FILE_MAX = 10 * 1024 * 1024;
+// All files of one application together. The proxy takes about 12 MB for the whole request
+// (nginx client_max_body_size), so the server (PublicApplicationController) allows 11 MB.
+const MAX_TOTAL_BYTES = 11 * 1024 * 1024;
 const isResumeFile = (file) => /\.(pdf|docx?)$/i.test(file.name);
 
 const labelCls = "text-[11px] font-semibold text-[var(--neu-muted)] tracking-widest uppercase";
@@ -63,7 +66,7 @@ function FilePick({ label, hint, accept, capture, multiple = false, files, onPic
     <div className="flex flex-col gap-2">
       <span className={labelCls}>{label}</span>
       <label className={`flex items-center gap-3 px-4 py-4 min-h-[64px] rounded-xl border-2 border-dashed cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-cyan-500/40 ${files.length ? "border-cyan-500/60 bg-cyan-50/40" : "border-[var(--neu-faint)]/50 hover:border-cyan-500/60"}`}>
-        <input type="file" accept={accept} capture={capture} multiple={multiple} className="sr-only"
+        <input name="file" type="file" accept={accept} capture={capture} multiple={multiple} className="sr-only"
           onChange={(e) => { const list = [...(e.target.files || [])]; e.target.value = ""; if (list.length) onPick(list); }} />
         <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true" className="text-cyan-600 flex-shrink-0">
           <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
@@ -129,6 +132,14 @@ export default function ApplyPage() {
       return;
     }
 
+    // The proxy accepts about 12 MB for the whole request, so all files together must fit in 11 MB.
+    const totalBytes = [resume, photo, ...documents].filter(Boolean).reduce((sum, f) => sum + f.size, 0);
+    if (totalBytes > MAX_TOTAL_BYTES) {
+      setError(`The files are too big together (${(totalBytes / 1048576).toFixed(1)} MB). All files together must be 11 MB or less: remove a file or use a smaller one.`);
+      document.querySelector("[data-apply-error]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
     setBusy(true);
     try {
       const body = new FormData();
@@ -162,7 +173,7 @@ export default function ApplyPage() {
         setTimeout(() => document.querySelector("[data-apply-error]")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
         return;
       }
-      if (err.status === 413) setError("The files are too large. Use smaller files and try again.");
+      if (err.status === 413) setError("The files are too big together. All files together must be 11 MB or less: remove a file or use a smaller one.");
       else if (err.status === 429) setError("Too many applications were sent from this network. Wait a few minutes and try again.");
       else setError(err.message);
     } finally {
@@ -170,6 +181,10 @@ export default function ApplyPage() {
     }
   };
 
+  // Live check while typing: a PH mobile number after +63 must start with 9
+  const liveStart = (digits) => (digits && digits[0] !== "9"
+    ? <span role="alert" className="text-[12px] text-red-600">{mobileError(digits)}</span>
+    : null);
   const err = (k) => {
     const list = errors[k] || Object.entries(errors).find(([key]) => key.startsWith(`${k}.`))?.[1];
     return list && <span data-apply-error className="text-[12px] text-red-600">{list[0]}</span>;
@@ -230,7 +245,7 @@ export default function ApplyPage() {
                   </ul>
                 )}
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5" style={{ width: 22, height: 22 }} />
+                  <input name="consent" type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5" style={{ width: 22, height: 22 }} />
                   <span className="text-[14px] font-medium text-slate-800">I agree and consent to Bella Erin ERP processing my personal data for employment purposes.</span>
                 </label>
                 {err("consent")}
@@ -240,12 +255,12 @@ export default function ApplyPage() {
                 <Section n={1} title="Personal information">
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Full Name *</span>
-                    <input value={form.name} onChange={set("name")} autoComplete="name" maxLength={255} placeholder="Juan Dela Cruz" className={fieldCls} />
+                    <input name="name" value={form.name} onChange={set("name")} autoComplete="name" maxLength={255} placeholder="Juan Dela Cruz" className={fieldCls} />
                     {err("name")}
                   </label>
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Position *</span>
-                    <select value={form.position_applied} onChange={set("position_applied")} className={fieldCls}>
+                    <select name="position_applied" value={form.position_applied} onChange={set("position_applied")} className={fieldCls}>
                       <option value="">Choose a position</option>
                       {PUBLIC_POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
@@ -254,43 +269,43 @@ export default function ApplyPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <label className="flex flex-col gap-2">
                       <span className={labelCls}>Date of Birth</span>
-                      <input type="date" value={form.birth_date} onChange={set("birth_date")} className={fieldCls} />
+                      <input name="birth_date" type="date" value={form.birth_date} onChange={set("birth_date")} className={fieldCls} />
                       {err("birth_date")}
                     </label>
                     <label className="flex flex-col gap-2">
                       <span className={labelCls}>Sex</span>
-                      <select value={form.sex} onChange={set("sex")} className={fieldCls}>
+                      <select name="sex" value={form.sex} onChange={set("sex")} className={fieldCls}>
                         <option value="">Choose</option>
                         {SEXES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                     </label>
                     <label className="flex flex-col gap-2">
                       <span className={labelCls}>Civil Status</span>
-                      <select value={form.civil_status} onChange={set("civil_status")} className={fieldCls}>
+                      <select name="civil_status" value={form.civil_status} onChange={set("civil_status")} className={fieldCls}>
                         <option value="">Choose</option>
                         {CIVIL_STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                     </label>
                     <label className="flex flex-col gap-2">
                       <span className={labelCls}>Nationality</span>
-                      <input value={form.nationality} onChange={set("nationality")} maxLength={50} className={fieldCls} />
+                      <input name="nationality" value={form.nationality} onChange={set("nationality")} maxLength={50} className={fieldCls} />
                     </label>
                   </div>
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Place of Birth</span>
-                    <input value={form.place_of_birth} onChange={set("place_of_birth")} maxLength={120} placeholder="City or municipality, province" className={fieldCls} />
+                    <input name="place_of_birth" value={form.place_of_birth} onChange={set("place_of_birth")} maxLength={120} placeholder="City or municipality, province" className={fieldCls} />
                   </label>
                 </Section>
 
                 <Section n={2} title="Contact" sub="So HR can reach you">
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Mobile Number *</span>
-                    <PhoneInput value={form.phone} onChange={(phone) => setForm((f) => ({ ...f, phone }))} className={fieldCls} invalid={!!form.phone && !MOBILE_REGEX.test(form.phone)} />
-                    {err("phone")}
+                    <PhoneInput value={form.phone} onChange={(phone) => setForm((f) => ({ ...f, phone }))} className={fieldCls} invalid={!!form.phone && !MOBILE_REGEX.test(form.phone)} aria-label="Mobile number" name="phone" />
+                    {err("phone") || liveStart(form.phone)}
                   </label>
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Email (optional)</span>
-                    <input type="email" inputMode="email" autoComplete="email" value={form.email} onChange={set("email")} maxLength={255} placeholder="name@example.com" className={fieldCls} />
+                    <input name="email" type="email" inputMode="email" autoComplete="email" value={form.email} onChange={set("email")} maxLength={255} placeholder="name@example.com" className={fieldCls} />
                     {err("email")}
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -298,24 +313,24 @@ export default function ApplyPage() {
                     <AddressFields value={form} onChange={handleAddress} errors={errors} inputClassName={fieldCls} labelClassName="text-[12px] text-[var(--neu-muted)]" />
                   </div>
                   <div className={labelCls}>In case of emergency</div>
-                  <input value={form.emergency_name} onChange={set("emergency_name")} maxLength={120} placeholder="Name" aria-label="Emergency contact name" className={fieldCls} />
-                  <input value={form.emergency_relationship} onChange={set("emergency_relationship")} maxLength={40} placeholder="Relationship (e.g. Mother)" aria-label="Emergency contact relationship" className={fieldCls} />
+                  <input name="emergency_name" value={form.emergency_name} onChange={set("emergency_name")} maxLength={120} placeholder="Name" aria-label="Emergency contact name" className={fieldCls} />
+                  <input name="emergency_relationship" value={form.emergency_relationship} onChange={set("emergency_relationship")} maxLength={40} placeholder="Relationship (e.g. Mother)" aria-label="Emergency contact relationship" className={fieldCls} />
                   <PhoneInput value={form.emergency_phone} onChange={(emergency_phone) => setForm((f) => ({ ...f, emergency_phone }))} className={fieldCls}
-                    invalid={!!form.emergency_phone && !MOBILE_REGEX.test(form.emergency_phone)} />
-                  {err("emergency_phone")}
+                    invalid={!!form.emergency_phone && !MOBILE_REGEX.test(form.emergency_phone)} aria-label="Emergency contact mobile number" name="emergency_phone" />
+                  {err("emergency_phone") || liveStart(form.emergency_phone)}
                 </Section>
 
                 {isDriver && (
                   <Section n={3} title="Driver's license" sub="Needed to screen Driver applicants">
                     <label className="flex flex-col gap-2">
                       <span className={labelCls}>License Number *</span>
-                      <input value={form.license_number} onChange={(e) => setForm((f) => ({ ...f, license_number: formatLicense(e.target.value) }))}
+                      <input name="license_number" value={form.license_number} onChange={(e) => setForm((f) => ({ ...f, license_number: formatLicense(e.target.value) }))}
                         placeholder="N01-23-456789" maxLength={13} autoCapitalize="characters" className={`${fieldCls} font-mono`} />
                       {err("license_number")}
                     </label>
                     <label className="flex flex-col gap-2">
                       <span className={labelCls}>Expiry Date *</span>
-                      <input type="date" min={tomorrowStr()} value={form.license_expiry} onChange={set("license_expiry")} className={fieldCls} />
+                      <input name="license_expiry" type="date" min={tomorrowStr()} value={form.license_expiry} onChange={set("license_expiry")} className={fieldCls} />
                       {err("license_expiry")}
                     </label>
                     <div className="flex flex-col gap-2">
@@ -323,7 +338,7 @@ export default function ApplyPage() {
                       <div className="grid grid-cols-1 gap-2">
                         {RESTRICTIONS.filter(([c]) => !/^\d$/.test(c)).map(([code, label]) => (
                           <label key={code} className="flex items-center gap-3 min-h-[44px] cursor-pointer">
-                            <input type="checkbox" checked={(form.license_restrictions || []).includes(code)} style={{ width: 22, height: 22 }}
+                            <input name="code" type="checkbox" checked={(form.license_restrictions || []).includes(code)} style={{ width: 22, height: 22 }}
                               onChange={(e) => setForm((f) => ({ ...f, license_restrictions: e.target.checked ? [...(f.license_restrictions || []), code] : (f.license_restrictions || []).filter((c) => c !== code) }))} />
                             <span className="text-[14px] text-slate-700"><b className="font-mono">{code}</b> · {label}</span>
                           </label>
@@ -336,25 +351,25 @@ export default function ApplyPage() {
                 <Section n={isDriver ? 4 : 3} title="Education and work">
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Highest Attainment</span>
-                    <select value={form.education_level} onChange={set("education_level")} className={fieldCls}>
+                    <select name="education_level" value={form.education_level} onChange={set("education_level")} className={fieldCls}>
                       <option value="">Choose</option>
                       {EDUCATION_LEVELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                     </select>
                   </label>
-                  <input value={form.school} onChange={set("school")} maxLength={160} placeholder="School" aria-label="School" className={fieldCls} />
+                  <input name="school" value={form.school} onChange={set("school")} maxLength={160} placeholder="School" aria-label="School" className={fieldCls} />
                   <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
-                    <input value={form.course} onChange={set("course")} maxLength={160} placeholder="Course or strand" aria-label="Course or strand" className={fieldCls} />
-                    <input type="number" inputMode="numeric" value={form.year_graduated} onChange={set("year_graduated")} placeholder="Year" aria-label="Year graduated" className={fieldCls} />
+                    <input name="course" value={form.course} onChange={set("course")} maxLength={160} placeholder="Course or strand" aria-label="Course or strand" className={fieldCls} />
+                    <input name="year_graduated" type="number" inputMode="numeric" value={form.year_graduated} onChange={set("year_graduated")} placeholder="Year" aria-label="Year graduated" className={fieldCls} />
                   </div>
                   {err("year_graduated")}
                   <div className={labelCls}>Work experience</div>
                   {work.map((w, i) => (
                     <div key={i} className="neu-inset rounded-2xl p-3 flex flex-col gap-3">
-                      <input value={w.company} onChange={setWork(i, "company")} placeholder="Company" aria-label="Company" className={fieldCls} />
-                      <input value={w.position} onChange={setWork(i, "position")} placeholder="Position" aria-label="Position" className={fieldCls} />
+                      <input name="company" value={w.company} onChange={setWork(i, "company")} placeholder="Company" aria-label="Company" className={fieldCls} />
+                      <input name="position" value={w.position} onChange={setWork(i, "position")} placeholder="Position" aria-label="Position" className={fieldCls} />
                       <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
-                        <input type="month" value={w.from} onChange={setWork(i, "from")} aria-label="From" className={fieldCls} />
-                        <input type="month" value={w.to} onChange={setWork(i, "to")} aria-label="To (blank: present)" className={fieldCls} />
+                        <input name="from" type="month" value={w.from} onChange={setWork(i, "from")} aria-label="From" className={fieldCls} />
+                        <input name="to" type="month" value={w.to} onChange={setWork(i, "to")} aria-label="To (blank: present)" className={fieldCls} />
                       </div>
                       <button type="button" onClick={() => setForm((f) => ({ ...f, work_history: (f.work_history || []).filter((_, j) => j !== i) }))}
                         className="self-end min-h-[44px] text-[13px] font-medium text-red-600 hover:underline cursor-pointer">Remove</button>
@@ -369,7 +384,7 @@ export default function ApplyPage() {
                   )}
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Message to HR (optional)</span>
-                    <textarea value={form.notes} onChange={set("notes")} rows={3} maxLength={1000} placeholder="e.g. when you can start" className={`${fieldCls} resize-none`} />
+                    <textarea name="notes" value={form.notes} onChange={set("notes")} rows={3} maxLength={1000} placeholder="e.g. when you can start" className={`${fieldCls} resize-y`} />
                   </label>
                 </Section>
 

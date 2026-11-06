@@ -43,9 +43,36 @@ export const PRINT_BASE_CSS = `
   }
 `;
 
+// One naming contract for every printout and export:
+//   <doc-type>_<id-or-scope>_<date-or-cutoff>
+// e.g. payslip_EMP-0001_CUTOFF-2026-10-26-to-2026-11-08. Empty parts are
+// skipped; characters a file system rejects become "-".
+export function docFileName(...parts) {
+  return parts
+    .map((p) => String(p ?? "").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""))
+    .filter(Boolean)
+    .join("_");
+}
+
+export const cutoffPart = (start, end) => (start && end ? `CUTOFF-${String(start).slice(0, 10)}-to-${String(end).slice(0, 10)}` : "");
+
+// The browser's "Save as PDF" names the file after the top page's title, so it
+// is swapped for the document name while the print dialog is open.
+export function setPrintTitle(fileName) {
+  if (!fileName) return () => {};
+  const previous = document.title;
+  document.title = fileName;
+  let restored = false;
+  return () => {
+    if (restored) return;
+    restored = true;
+    document.title = previous;
+  };
+}
+
 // Prints a full HTML document from a hidden iframe: no popup window, and the
-// page underneath is not affected.
-export function printDocument(html) {
+// page underneath is not affected. fileName pre-fills "Save as PDF".
+export function printDocument(html, fileName) {
   const frame = document.createElement("iframe");
   Object.assign(frame.style, { position: "fixed", right: "0", bottom: "0", width: "0", height: "0", border: "0" });
   document.body.appendChild(frame);
@@ -53,9 +80,11 @@ export function printDocument(html) {
   doc.open();
   doc.write(html);
   doc.close();
-  const cleanup = () => setTimeout(() => frame.remove(), 1000);
+  let restoreTitle = () => {};
+  const cleanup = () => { restoreTitle(); setTimeout(() => frame.remove(), 1000); };
   frame.contentWindow.onafterprint = cleanup;
   setTimeout(() => {
+    restoreTitle = setPrintTitle(fileName);
     frame.contentWindow.focus();
     frame.contentWindow.print();
     setTimeout(cleanup, 60000); // fallback if onafterprint does not fire

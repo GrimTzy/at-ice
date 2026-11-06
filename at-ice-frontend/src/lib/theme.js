@@ -1,6 +1,7 @@
 // Theme state and colors shared by every layout. Components that use them
 // (NightStyle, NightToggle, NightScope) are in components/NightMode.jsx.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import iceImage from "../assets/iceproduct.png";
 
 export const THEME_KEY = "atice-theme";
@@ -150,15 +151,29 @@ export const DARK_CSS = String.raw`
 `;
 
 // Remembers the choice on this device (shared by all staff modules).
-// Switching the theme fades colors over 300ms. The .theme-switching class
-// (see index.css) is only on <html> during the switch, so it never slows down
-// the hover and press transitions the rest of the time.
-let switchTimer;
-function fadeThemeSwitch() {
+// Switching the theme cross-fades one snapshot of the whole page (View
+// Transitions), so the browser does not animate the colors and shadows of every
+// element. .theme-switching (see index.css) keeps the elements' own hover and
+// press transitions from running during the swap. Browsers without View
+// Transitions, and people who asked for less motion, get the swap with no fade.
+let switchRun = 0;
+function runThemeSwitch(update) {
   const root = document.documentElement;
+  const run = ++switchRun;
+  const done = () => { if (run === switchRun) root.classList.remove("theme-switching"); };
   root.classList.add("theme-switching");
-  clearTimeout(switchTimer);
-  switchTimer = setTimeout(() => root.classList.remove("theme-switching"), 350);
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (!document.startViewTransition || reduce || document.hidden) {
+    flushSync(update);
+    void root.offsetWidth; // apply the new colors while transitions are still off
+    done();
+    return;
+  }
+  const fade = document.startViewTransition(() => flushSync(update));
+  // ready rejects when a second click replaces this switch, and never settles
+  // while the page draws no frames (tab sent to the back), hence the timer
+  fade.ready.catch(() => {}).finally(done);
+  setTimeout(done, 1000);
 }
 
 // Until someone presses the Night/Light button on this device, the theme
@@ -229,18 +244,21 @@ export function useNightMode(storageKey = THEME_KEY) {
     if (!media) return undefined;
     const follow = (e) => {
       if (savedTheme(storageKey)) return;
-      fadeThemeSwitch();
-      publishTheme(storageKey, e.matches, { persist: false });
-      setDark(e.matches);
+      runThemeSwitch(() => {
+        publishTheme(storageKey, e.matches, { persist: false });
+        setDark(e.matches);
+      });
     };
     media.addEventListener("change", follow);
     return () => media.removeEventListener("change", follow);
   }, [storageKey]);
   const switchTheme = useCallback((value) => {
     const next = typeof value === "function" ? value(darkRef.current) : value;
-    fadeThemeSwitch();
-    publishTheme(storageKey, next);
-    setDark(next);
+    darkRef.current = next; // a quick second click toggles from this value
+    runThemeSwitch(() => {
+      publishTheme(storageKey, next);
+      setDark(next);
+    });
   }, [storageKey]);
   return [dark, switchTheme];
 }
@@ -275,9 +293,7 @@ export function useLiveDark(probe = pageIsDark, active = true) {
 export const nightOverlay = (dark) => (dark ? "rgba(2,6,23,0.85)" : "rgba(248,250,252,0.80)");
 
 // Ice photo background with the theme tint. The tint is a flat gradient layer
-// whose color is the registered property --ambient-tint (index.css), which
-// fades with the theme on the same clock as every other color. (It used to be a
-// 9999px inset box-shadow, a huge shape to repaint on every frame of the fade.)
+// whose color is the property --ambient-tint (index.css).
 export const ambientStyle = (dark) => ({
   "--ambient-tint": nightOverlay(dark),
   backgroundImage: `linear-gradient(var(--ambient-tint), var(--ambient-tint)), url(${iceImage})`,

@@ -184,7 +184,7 @@ function SelectList({ el, close }) {
   return (
     <div onKeyDown={onKeyDown} className="soft-searchable">
       <div className="soft-search-head">
-        <input
+        <input name="query"
         ref={searchRef}
         type="search"
         data-native
@@ -430,11 +430,22 @@ export default function SoftPickers() {
     });
   }, []);
 
-  // Open on pointer down (mouse, touch or pen) instead of the native popup,
-  // and on the usual keys. The native popup is blocked twice: canceling
+  // Open on mouse down, on a real tap (touch or pen) and on the usual keys,
+  // instead of the native popup. The native popup is blocked twice: canceling
   // pointerdown stops the mouse events that open a desktop dropdown, and
   // canceling click stops the tap that opens a picker on touch screens.
+  // A finger that lands on a field may be starting a scroll, so touch and pen
+  // only open on the click that follows a tap: the browser sends no click
+  // after a scroll, and a press that moved 8px or more is ignored too.
   useEffect(() => {
+    let press = null; // { el, x, y } of the last touch/pen press on a field
+    const openFor = (el) => {
+      const isSelect = el.tagName === "SELECT";
+      setOpen((cur) => {
+        if (cur?.el === el) return isSelect ? null : cur;
+        return { el, kind: isSelect ? "select" : "date", run: Date.now(), host: findHost(el) };
+      });
+    };
     const onPointerDown = (e) => {
       if (e.button !== 0) return;
       const el = e.target.closest?.("select, input");
@@ -449,16 +460,25 @@ export default function SoftPickers() {
       // A date field keeps the caret for typing with a mouse; on touch it
       // would only pop up the keyboard, so it is not focused there.
       if (isSelect || e.pointerType !== "mouse") e.preventDefault();
-      if (isSelect || e.pointerType === "mouse") el.focus({ preventScroll: true });
-      setOpen((cur) => {
-        if (cur?.el === el) return isSelect ? null : cur;
-        return { el, kind: isSelect ? "select" : "date", run: Date.now(), host: findHost(el) };
-      });
+      if (e.pointerType !== "mouse") {
+        press = { el, x: e.clientX, y: e.clientY };
+        return; // touch / pen: wait for the tap's click
+      }
+      el.focus({ preventScroll: true });
+      openFor(el);
     };
     const onClick = (e) => {
       const el = e.target.closest?.("select, input");
       if (isSoftField(el)) {
         e.preventDefault();
+        const p = press;
+        press = null;
+        // a keyboard or assistive "click" has no pointer press: open too
+        const moved = p && p.el === el && Math.hypot(e.clientX - p.x, e.clientY - p.y) >= 8;
+        if (p ? p.el === el && !moved : e.detail === 0) {
+          if (el.tagName === "SELECT") el.focus({ preventScroll: true });
+          openFor(el);
+        }
       } else if (!popRef.current?.contains(e.target)) {
         setOpen(null); // a tap outside (touch taps never reach pointerdown's close)
       }
@@ -514,14 +534,36 @@ export default function SoftPickers() {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const h = pop.offsetHeight;
-      const w = kind === "date" ? Math.min(292, vw - 16) : Math.min(Math.max(r.width, 180), vw - 16);
+      let w = kind === "date" ? Math.min(292, vw - 16) : Math.min(Math.max(r.width, 180), vw - 16);
       // the part of the screen the popup may use: the host's visible box, within the window
       const hr = host === document.body ? { top: 0, bottom: vh } : host.getBoundingClientRect();
-      const topLimit = Math.max(0, hr.top);
-      const bottomLimit = Math.min(vh, hr.bottom);
-      const below = r.bottom + 8 + h <= bottomLimit || r.top - 8 - h < topLimit;
-      const viewTop = below ? r.bottom + 8 : r.top - 8 - h;
-      const viewLeft = Math.min(Math.max(8, r.left), vw - w - 8);
+      let topLimit = Math.max(0, hr.top);
+      let bottomLimit = Math.min(vh, hr.bottom);
+      // a sticky title bar or footer inside the host covers part of its box: stay clear of it
+      let leftLimit = 8;
+      let rightLimit = vw - 8;
+      if (host !== document.body) {
+        const mid = (hr.top + hr.bottom) / 2;
+        host.querySelectorAll(":scope > *, :scope > * > *").forEach((n) => {
+          if (getComputedStyle(n).position !== "sticky") return;
+          const nr = n.getBoundingClientRect();
+          if (nr.top >= mid) bottomLimit = Math.min(bottomLimit, nr.top);
+          else topLimit = Math.max(topLimit, nr.bottom);
+        });
+        // sideways it stays inside the host too, so the host never grows a scroll bar
+        leftLimit = Math.max(8, hr.left + host.clientLeft + 8);
+        rightLimit = Math.min(vw - 8, hr.left + host.clientLeft + host.clientWidth - 8);
+      }
+      const spaceBelow = bottomLimit - r.bottom - 8;
+      const spaceAbove = r.top - topLimit - 8;
+      // below when it fits; above when only that fits; else the side with more room
+      const below = h <= spaceBelow || (h > spaceAbove && spaceBelow >= spaceAbove);
+      // the popup scrolls inside itself when the room is short, but never gets smaller than this
+      const maxHeight = Math.max(140, (below ? spaceBelow : spaceAbove) - 8);
+      const shown = Math.min(h, maxHeight);
+      const viewTop = below ? r.bottom + 8 : r.top - 8 - shown;
+      w = Math.max(120, Math.min(w, rightLimit - leftLimit));
+      const viewLeft = Math.max(leftLimit, Math.min(r.left, rightLimit - w));
       // window coordinates -> coordinates inside the popup's containing block
       const cb = pop.offsetParent;
       let top;
@@ -534,7 +576,6 @@ export default function SoftPickers() {
         top = viewTop - cr.top - cb.clientTop + cb.scrollTop;
         left = viewLeft - cr.left - cb.clientLeft + cb.scrollLeft;
       }
-      const maxHeight = below ? bottomLimit - r.bottom - 16 : r.top - topLimit - 16;
       setPos((p) => (p && p.top === top && p.left === left && p.width === w && p.maxHeight === maxHeight ? p : { top, left, width: w, maxHeight }));
     };
     place();
@@ -561,7 +602,7 @@ export default function SoftPickers() {
       ref={popRef}
       data-soft-popover
       className={`soft-pop ${dark ? "neu-dark" : ""}`}
-      style={pos ? { top: pos.top, left: pos.left, width: pos.width, maxHeight: open.kind === "select" ? Math.min(300, pos.maxHeight) : undefined } : { visibility: "hidden" }}
+      style={pos ? { top: pos.top, left: pos.left, width: pos.width, maxHeight: open.kind === "select" ? Math.min(300, pos.maxHeight) : pos.maxHeight } : { visibility: "hidden" }}
     >
       {open.kind === "select"
         ? <SelectList key={open.run} el={open.el} close={close} />

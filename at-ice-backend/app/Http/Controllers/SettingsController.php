@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PayMultiplier;
+use App\Models\Payroll;
 use App\Support\Audit;
 use App\Support\PayPeriod;
 use App\Support\Settings;
@@ -25,6 +26,16 @@ class SettingsController extends Controller
         $key = $request->input('key');
         if ($error = Settings::validate($key, $request->input('value'))) {
             throw ValidationException::withMessages(['value' => [$error]]);
+        }
+        // These two decide where every pay period starts and ends. Changing them after a
+        // payroll exists would re-slice the periods, and a new period could overlap a
+        // payroll that was already made (the same days paid twice).
+        if (in_array($key, ['payroll.anchor', 'payroll.cutoff_days'], true)
+            && (string) Settings::cast($key, $request->input('value')) !== (string) Settings::get($key)
+            && Payroll::exists()) {
+            throw ValidationException::withMessages(['value' => [
+                'The pay period cannot change because payrolls already exist. Changing it would move every period and could pay the same days twice. Ask the developer to plan the change.',
+            ]]);
         }
         Settings::set($key, Settings::cast($key, $request->input('value')), $request->user()->id);
 

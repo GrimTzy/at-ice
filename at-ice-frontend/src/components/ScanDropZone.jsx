@@ -76,7 +76,7 @@ export default function ScanDropZone({ onScan, onRemove, kind = "resume", fills 
           : "border-cyan-500/40 bg-cyan-50/30 hover:bg-cyan-50/70 cursor-pointer"
       }`}
     >
-      <input
+      <input name="file"
         ref={inputRef}
         type="file"
         accept={SCAN_ACCEPT[kind]}

@@ -154,12 +154,15 @@ const addressLine = (a) =>
 function Modal({ title, onClose, children, width = "max-w-lg" }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className={`bg-white rounded-xl border border-black/[0.09] w-full ${width} max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-3.5 border-b border-black/[0.09] flex items-center justify-between">
+      {/* Shell: the title bar stays put and only the body scrolls (controls.css .modal-shell) */}
+      <div className={`modal-shell bg-white rounded-xl border border-black/[0.09] w-full ${width} max-h-[90vh] flex flex-col overflow-hidden`} onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 px-5 py-3.5 border-b border-black/[0.09] flex items-center justify-between">
           <div className="text-[14px] font-semibold text-slate-800">{title}</div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1"><XIcon /></button>
+          <button type="button" aria-label="Close" onClick={onClose} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1"><XIcon /></button>
         </div>
-        {children}
+        <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -214,7 +217,7 @@ function ApplyQrModal({ onClose }) {
         </p>
         <label className="w-full flex flex-col gap-1 text-left">
           <span className="text-[11px] text-slate-500">Referral QR for an employee (optional)</span>
-          <input value={referrer} onChange={(e) => setReferrer(e.target.value)} placeholder="Employee ID, e.g. EMP-0001"
+          <input name="referrer" value={referrer} onChange={(e) => setReferrer(e.target.value)} placeholder="Employee ID, e.g. EMP-0001"
             className="px-2.5 py-1.5 border border-black/[0.09] rounded-md text-xs font-mono" />
           <span className="text-[10px] text-slate-400">{code ? `Applicants who use this QR are recorded as referred by ${code}. Any referral bonus is added by Admin in payroll.` : "Leave blank for the general application QR."}</span>
         </label>
@@ -250,12 +253,13 @@ async function openResume(applicant) {
   }
 }
 
-function Field({ label, children }) {
+function Field({ label, children, as = "label" }) {
+  const Tag = as;
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-[11px] font-medium text-slate-500">{label}</label>
+    <Tag className="flex flex-col gap-1">
+      <span className="text-[11px] font-medium text-slate-500">{label}</span>
       {children}
-    </div>
+    </Tag>
   );
 }
 
@@ -553,7 +557,7 @@ export default function InterviewsPage() {
           <div className="flex-1" />
           <div className="flex items-center gap-2 px-2.5 py-1.5 border border-black/[0.09] rounded-md text-slate-400 w-full sm:w-60">
             <SearchIcon />
-            <input
+            <input name="search"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -692,7 +696,7 @@ export default function InterviewsPage() {
               </div>
             ) : null}
             <Field label="Full Name">
-              <input type="text" maxLength={255} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Juan Dela Cruz" />
+              <input name="name" type="text" maxLength={255} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Juan Dela Cruz" />
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -708,7 +712,7 @@ export default function InterviewsPage() {
                 )}
               </Field>
               <Field label="Email (optional)">
-                <input type="email" maxLength={255} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} placeholder="name@example.com" />
+                <input name="email" type="email" maxLength={255} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} placeholder="name@example.com" />
               </Field>
             </div>
 
@@ -724,7 +728,7 @@ export default function InterviewsPage() {
 
             <Field label="Position Applied">
               {/* Pick only: no typing, so every applicant uses the same position names */}
-              <select
+              <select name="position_applied"
                 value={form.position_applied}
                 onChange={(e) => setForm({ ...form, position_applied: e.target.value })}
                 className={inputClass}
@@ -740,7 +744,7 @@ export default function InterviewsPage() {
 
             <Field label="Interview Date and Time (optional, Philippine time)">
               <div className="grid grid-cols-[1fr_auto] gap-2">
-                <input
+                <input name="interview_date"
                   type="datetime-local"
                   value={form.interview_date}
                   min={canEditSchedule ? nowInputValue() : undefined}
@@ -748,7 +752,7 @@ export default function InterviewsPage() {
                   onChange={(e) => setForm({ ...form, interview_date: e.target.value })}
                   className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
                 />
-                <select
+                <select name="interview_minutes"
                   aria-label="Interview length"
                   value={form.interview_minutes}
                   disabled={!canEditSchedule}
@@ -772,7 +776,7 @@ export default function InterviewsPage() {
             </Field>
 
             {!isNew && (
-              <Field label="Status">
+              <Field label="Status" as="div">
                 <div className="flex items-center gap-2">
                   <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_CLASS[editing.status] || "bg-slate-100 text-slate-500"}`}>
                     {STATUS_LABEL[editing.status] || editing.status}
@@ -783,12 +787,12 @@ export default function InterviewsPage() {
             )}
 
             <Field label="HR Notes (optional)">
-              <textarea
+              <textarea name="notes"
                 rows={3}
                 maxLength={1000}
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                className={`${inputClass} resize-none`}
+                className={`${inputClass} resize-y`}
                 placeholder="Referral, requirements submitted, interview remarks"
               />
             </Field>
@@ -861,6 +865,7 @@ export default function InterviewsPage() {
       {viewing && (
         <Modal title="Applicant Details" onClose={() => setViewing(null)}>
           <div className="p-5 flex flex-col gap-2.5 text-xs">
+            <div className="detail-well">
             {[
               ["Name", viewing.name],
               ["Position Applied", viewing.position_applied],
@@ -911,11 +916,12 @@ export default function InterviewsPage() {
               ["Added On", fmtDateTime(viewing.created_at)],
               ["Last Updated", fmtDateTime(viewing.updated_at)],
             ].map(([label, value]) => (
-              <div key={label} className="grid grid-cols-[120px_1fr] gap-3 py-1 border-b border-black/[0.06] last:border-b-0">
+              <div key={label} className="grid grid-cols-[120px_1fr] gap-3">
                 <span className="text-slate-400">{label}</span>
                 <span className="text-slate-700 break-words whitespace-pre-line">{value}</span>
               </div>
             ))}
+            </div>
             {isFinal(viewing) && (
               <div className="text-[11px] text-slate-400 pt-1">This applicant is {STATUS_LABEL[viewing.status]}. The interview record is view only.</div>
             )}

@@ -61,6 +61,7 @@ function PickCell({ value, options, onPick, label }) {
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
       </StatusCell>
       <select
+        name="status"
         aria-label={label}
         value={value}
         onClick={(e) => e.stopPropagation()}
@@ -201,9 +202,10 @@ export default function ProjectsPage() {
     }
   };
 
+  // One column template for every status group, so the groups line up
   const columns = [
-    { label: "Project" }, { label: "Owner" }, { label: "Status", className: "w-[130px]" }, { label: "Priority", className: "w-[100px]" },
-    { label: "Timeline" }, { label: "Supplies" }, { label: "Cost / Budget" }, { label: "" },
+    { label: "Project", width: "18%" }, { label: "Owner", width: "12%" }, { label: "Status", width: "12%" }, { label: "Priority", width: "10%" },
+    { label: "Timeline", width: "14%" }, { label: "Supplies", width: "10%" }, { label: "Cost / Budget", width: "13%" }, { label: "Actions", width: "11%" },
   ];
 
   return (
@@ -233,7 +235,7 @@ export default function ProjectsPage() {
             <div className="text-[11px] text-slate-400">Maintenance adds projects from their portal. Set the owner, budget, dates, status and priority here. Click a project to see the supplies it used.</div>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <input
+            <input name="search"
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -249,7 +251,7 @@ export default function ProjectsPage() {
           const rows = filtered.filter((p) => p.status === key);
           if (key === "done" && !rows.length) return null;
           return (
-            <BoardGroup key={key} title={s.label} tone={s.tone} count={rows.length} columns={columns} empty={key === "planned" ? "No planned projects. Maintenance adds them from their portal." : "None."}>
+            <BoardGroup key={key} title={s.label} tone={s.tone} count={rows.length} columns={columns} minWidth="760px" empty={key === "planned" ? "No planned projects. Maintenance adds them from their portal." : "None."}>
               {rows.map((p) => (
                 <Fragment key={p.id}>
                   <BoardRow
@@ -257,7 +259,7 @@ export default function ProjectsPage() {
                     onClick={() => toggle(p.id)}
                     title="Show the supplies used"
                     cells={[
-                      <div key="n" className="min-w-[180px]">
+                      <div key="n" className="min-w-0">
                         <div className="flex items-center justify-center gap-1.5">
                           <span className={`text-[10px] text-slate-400 transition-transform ${open.has(p.id) ? "rotate-90" : ""}`} aria-hidden="true">▶</span>
                           {p.name}
@@ -279,7 +281,7 @@ export default function ProjectsPage() {
                         <b className="text-slate-800">{peso(p.materials_cost)}</b>
                         {p.budget != null && <span className={p.budget_left < 0 ? "text-[#b4233c]" : "text-slate-400"}> / {peso(p.budget)}</span>}
                       </span>,
-                      <span key="a" className="flex items-center justify-end gap-2 whitespace-nowrap">
+                      <span key="a" className="flex items-center justify-center gap-1.5 flex-wrap">
                         <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="px-2 py-1 text-[11px] rounded border border-black/[0.09] text-slate-600 hover:border-cyan-400 cursor-pointer">Edit</button>
                         <button data-no-confirm type="button" onClick={(e) => { e.stopPropagation(); setDeleting(p); }} className="px-2 py-1 text-[11px] rounded border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer">Delete</button>
                       </span>,
@@ -318,13 +320,14 @@ export default function ProjectsPage() {
 
       {editing && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !saving && setEditing(null)}>
-          <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="px-5 py-3.5 border-b border-black/[0.09] text-[14px] font-semibold text-slate-800">Edit project</div>
+          <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="modal-shell bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 px-5 py-3.5 border-b border-black/[0.09] text-[14px] font-semibold text-slate-800">Edit project</div>
+            <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="p-5 grid grid-cols-2 gap-3">
               <DraftHint draft={formDraft} className="col-span-2" />
               {formErrors._general && <div className="col-span-2 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-[12px] text-red-600">{formErrors._general[0]}</div>}
               {/* Set by Maintenance when they added the project: shown, not edited */}
-              <div className="col-span-2 rounded-lg border border-black/[0.07] bg-slate-50 px-3 py-2.5 flex flex-col gap-1.5">
+              <div className="col-span-2 detail-well">
                 <div className="text-[10.5px] uppercase tracking-wider text-slate-400">From Maintenance</div>
                 {[["Project name", editing.name], ["Description", editing.description], ["Location", editing.location]].map(([label, value]) => (
                   <div key={label} className="grid grid-cols-[100px_1fr] gap-2 text-[12.5px]">
@@ -341,7 +344,7 @@ export default function ProjectsPage() {
               ].map(([key, label, type, ph, wide]) => (
                 <label key={key} className={`flex flex-col gap-1 ${wide ? "col-span-2" : ""}`}>
                   <span className="text-[11px] text-slate-500">{label}</span>
-                  <input
+                  <input name={key}
                     type={type}
                     value={form[key]}
                     min={type === "number" ? 0 : key === "due_date" ? form.start_date || undefined : undefined}
@@ -355,13 +358,14 @@ export default function ProjectsPage() {
               {[["status", "Status", STATUS], ["priority", "Priority", PRIORITY]].map(([key, label, opts]) => (
                 <label key={key} className="flex flex-col gap-1">
                   <span className="text-[11px] text-slate-500">{label}</span>
-                  <select value={form[key]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} className="px-2.5 py-2 border border-black/[0.09] rounded-md text-[13px] outline-none focus:border-cyan-400">
+                  <select name={key} value={form[key]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} className="px-2.5 py-2 border border-black/[0.09] rounded-md text-[13px] outline-none focus:border-cyan-400">
                     {Object.entries(opts).map(([k, o]) => <option key={k} value={k}>{o.label}</option>)}
                   </select>
                 </label>
               ))}
             </div>
-            <div className="px-5 py-3 border-t border-black/[0.09] flex justify-end gap-2">
+            </div>
+            <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] flex justify-end gap-2">
               <button type="button" onClick={() => setEditing(null)} disabled={saving} className="px-3.5 py-2 rounded-md border border-black/[0.09] text-xs text-slate-600 cursor-pointer">Cancel</button>
               <button type="submit" disabled={saving} className="px-3.5 py-2 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold cursor-pointer disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
             </div>

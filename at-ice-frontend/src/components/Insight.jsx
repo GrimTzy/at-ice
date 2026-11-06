@@ -65,7 +65,8 @@ export function StatusBreakdown({ title = "Status breakdown", subtitle, items, e
 }
 
 // Latest records of the module: [{ id, title, meta, when, tone, icon }]
-export function ActivityFeed({ title = "Recent activity", subtitle, items, empty = "No recent activity yet.", max = 6 }) {
+// onPick(item): each item becomes a button that takes the user to that record.
+export function ActivityFeed({ title = "Recent activity", subtitle, items, empty = "No recent activity yet.", max = 6, onPick }) {
   const list = (items || []).slice(0, max);
   return (
     <InsightPanel title={title} subtitle={subtitle}>
@@ -75,14 +76,26 @@ export function ActivityFeed({ title = "Recent activity", subtitle, items, empty
         <ol className="flex flex-col">
           {list.map((i, n) => {
             const t = TONES[i.tone] || TONES.slate;
-            return (
-              <li key={i.id ?? n} className="flex gap-2.5 py-2 border-t first:border-t-0 border-black/[0.06]">
+            const body = (
+              <>
                 <span className={`w-7 h-7 rounded-lg grid place-items-center flex-shrink-0 ${t.badge}`}><KpiIcon name={i.icon || "clock"} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="text-[12px] font-medium text-slate-800 truncate">{i.title}</div>
                   {i.meta && <div className="text-[11px] text-slate-500 truncate">{i.meta}</div>}
                 </div>
                 {i.when && <span className="text-[10px] text-slate-400 whitespace-nowrap pt-0.5">{i.when}</span>}
+              </>
+            );
+            return (
+              <li key={i.id ?? n} className="border-t first:border-t-0 border-black/[0.06]">
+                {onPick ? (
+                  <button type="button" data-no-confirm onClick={() => onPick(i)} title={`Show ${i.title} in the list`}
+                    className="feed-pick w-full flex gap-2.5 py-2 px-1.5 -mx-1.5 rounded-lg text-left cursor-pointer">
+                    {body}
+                  </button>
+                ) : (
+                  <div className="flex gap-2.5 py-2">{body}</div>
+                )}
               </li>
             );
           })}
@@ -93,6 +106,7 @@ export function ActivityFeed({ title = "Recent activity", subtitle, items, empty
 }
 
 // Buttons for the module's common jobs: [{ label, hint, icon, onClick, tone }]
+// primary: true gives the button the solid cyan of the primary buttons.
 export function QuickActions({ title = "Quick actions", actions }) {
   return (
     <InsightPanel title={title}>
@@ -101,11 +115,11 @@ export function QuickActions({ title = "Quick actions", actions }) {
           const t = TONES[a.tone] || TONES.cyan;
           return (
             <button key={a.label} type="button" onClick={a.onClick} data-no-confirm title={a.hint || a.label}
-              className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-black/[0.09] bg-white text-left cursor-pointer min-w-0">
-              <span className={`w-7 h-7 rounded-lg grid place-items-center flex-shrink-0 ${t.badge}`}><KpiIcon name={a.icon || "chart"} /></span>
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left cursor-pointer min-w-0 ${a.primary ? "qa-primary bg-cyan-500 hover:bg-cyan-600 text-white" : "border border-black/[0.09] bg-white"} ${a.wide ? "sm:col-span-2" : ""}`}>
+              <span className={`w-7 h-7 rounded-lg grid place-items-center flex-shrink-0 ${a.primary ? "qa-icon bg-white/70 text-cyan-800" : t.badge}`}><KpiIcon name={a.icon || "chart"} /></span>
               <span className="min-w-0">
-                <span className="block text-[12px] font-semibold text-slate-800 truncate">{a.label}</span>
-                {a.hint && <span className="block text-[10.5px] text-slate-500 truncate">{a.hint}</span>}
+                <span className="qa-title block text-[12px] font-semibold text-slate-800 truncate">{a.label}</span>
+                {a.hint && <span className="qa-hint block text-[10.5px] text-slate-500 truncate">{a.hint}</span>}
               </span>
             </button>
           );

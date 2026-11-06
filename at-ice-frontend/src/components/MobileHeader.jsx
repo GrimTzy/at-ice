@@ -31,7 +31,7 @@ export default function MobileHeader({ role, title, back = null, status = null, 
       <div className="h-14 px-3 flex flex-nowrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {back && (
-            <button type="button" onClick={() => navigate(back)} aria-label="Back" className="flex-shrink-0 grid place-items-center w-9 h-10 -ml-1 text-slate-500 cursor-pointer">
+            <button type="button" onClick={() => navigate(back)} aria-label="Back" className="flex-shrink-0 grid place-items-center w-11 h-10 -ml-2 text-slate-500 cursor-pointer">
               <Icon name="chevronLeft" size={20} />
             </button>
           )}
@@ -112,7 +112,7 @@ function ProfileMenu({ name, email, role, initials }) {
           type="button"
           role="menuitem"
           onClick={() => { close(); askLogout(); }}
-          className="profile-item w-full flex items-center gap-3 min-h-[48px] px-3 text-[14px] font-medium text-red-600 text-left cursor-pointer"
+          className="profile-item is-danger w-full flex items-center gap-3 min-h-[48px] px-3 text-[14px] font-medium text-red-600 text-left cursor-pointer"
         >
           <Icon name="logout" size={17} />
           <span className="flex-1 min-w-0 truncate">Sign out</span>

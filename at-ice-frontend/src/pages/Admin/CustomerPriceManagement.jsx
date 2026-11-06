@@ -52,6 +52,7 @@ export default function CustomerPriceManagement() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [coverageFilter, setCoverageFilter] = useState(""); // "" | complete | partial | none
   // The row being edited and its typed prices survive a refresh.
   const priceDraft = useDraft("prices:edit", { editingId: null, draft: { bags: "", small_sack: "", big_sack: "" } }, { when: (v) => v.editingId != null });
   const { editingId, draft } = priceDraft.values;
@@ -158,22 +159,26 @@ export default function CustomerPriceManagement() {
     }
   }
 
-  const filteredRows = rows.filter((r) =>
-    (!typeFilter || (r.customer_type || "dealer") === typeFilter)
-    && `${r.customer_name} ${r.branch_code || ""}`.toLowerCase().includes(search.toLowerCase())
-  );
-
   const setCount = (row) =>
     PRODUCT_ORDER.filter((p) => row.prices[p] !== null && row.prices[p] !== undefined).length;
+  // complete | partial | none: how many of the products have a price
+  const coverageOf = (row) => {
+    const n = setCount(row);
+    return n === PRODUCT_ORDER.length ? "complete" : n > 0 ? "partial" : "none";
+  };
+
+  const filteredRows = rows.filter((r) =>
+    (!typeFilter || (r.customer_type || "dealer") === typeFilter)
+    && (!coverageFilter || coverageOf(r) === coverageFilter)
+    && `${r.customer_name} ${r.branch_code || ""}`.toLowerCase().includes(search.toLowerCase())
+  );
 
   const pager = usePagination(filteredRows);
 
   // Price coverage and averages for the KPI cards and panels
   const coverage = { complete: 0, partial: 0, none: 0 };
-  rows.forEach((r) => {
-    const n = setCount(r);
-    coverage[n === PRODUCT_ORDER.length ? "complete" : n > 0 ? "partial" : "none"] += 1;
-  });
+  rows.forEach((r) => { coverage[coverageOf(r)] += 1; });
+  const toggleCoverage = (key) => setCoverageFilter((f) => (f === key ? "" : key));
   const avgOf = (p) => {
     const vals = rows.map((r) => r.prices[p]).filter((v) => v !== null && v !== undefined).map(Number);
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
@@ -183,10 +188,10 @@ export default function CustomerPriceManagement() {
   return (
     <AdminLayout pageTitle="Customer Prices" breadcrumb="CRM / Customer Prices">
       <KpiGrid cols={5}>
-        <KpiCard label="Customers" icon="store" tone="cyan" value={rows.length} sub={`${coverage.complete} fully priced`} bar={share(coverage.complete)} />
-        <KpiCard label="Complete" icon="check" tone="emerald" value={coverage.complete} sub="All three products priced" bar={share(coverage.complete)} />
-        <KpiCard label="Partial" icon="clock" tone="amber" value={coverage.partial} sub="Some products priced" bar={share(coverage.partial)} />
-        <KpiCard label="Unpriced" icon="alert" tone="rose" value={coverage.none} sub="No price for any product" bar={share(coverage.none)} />
+        <KpiCard label="Customers" icon="store" tone="cyan" value={rows.length} sub={`${coverage.complete} fully priced`} bar={share(coverage.complete)} onClick={() => setCoverageFilter("")} active={coverageFilter === ""} />
+        <KpiCard label="Complete" icon="check" tone="emerald" value={coverage.complete} sub="All three products priced" bar={share(coverage.complete)} onClick={() => toggleCoverage("complete")} active={coverageFilter === "complete"} />
+        <KpiCard label="Partial" icon="clock" tone="amber" value={coverage.partial} sub="Some products priced" bar={share(coverage.partial)} onClick={() => toggleCoverage("partial")} active={coverageFilter === "partial"} />
+        <KpiCard label="Unpriced" icon="alert" tone="rose" value={coverage.none} sub="No price for any product" bar={share(coverage.none)} onClick={() => toggleCoverage("none")} active={coverageFilter === "none"} />
         <KpiCard label="Average bag price" icon="tag" tone="violet" value={avgOf("bags")} money sub={`${PRODUCT_LABELS.bags}`} />
       </KpiGrid>
 
@@ -194,10 +199,12 @@ export default function CustomerPriceManagement() {
         <StatusBreakdown
           title="Price coverage"
           items={[
-            { label: "Complete", count: coverage.complete, tone: "emerald" },
-            { label: "Partial", count: coverage.partial, tone: "amber" },
-            { label: "Unpriced", count: coverage.none, tone: "rose" },
+            { key: "complete", label: "Complete", count: coverage.complete, tone: "emerald" },
+            { key: "partial", label: "Partial", count: coverage.partial, tone: "amber" },
+            { key: "none", label: "Unpriced", count: coverage.none, tone: "rose" },
           ]}
+          onPick={(i) => toggleCoverage(i.key)}
+          active={coverageFilter}
           empty="No customers yet."
         />
         <MiniBars
@@ -223,14 +230,14 @@ export default function CustomerPriceManagement() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by customer type"
+          <select name="type_filter" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by customer type"
             className="bg-slate-50 border border-black/[0.09] rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500">
             <option value="">All types ({rows.length})</option>
             {Object.entries(CUSTOMER_TYPES).map(([v, t]) => <option key={v} value={v}>{t.label} ({rows.filter((r) => (r.customer_type || "dealer") === v).length})</option>)}
           </select>
           <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
             <SearchIcon />
-            <input
+            <input name="search"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -299,7 +306,7 @@ export default function CustomerPriceManagement() {
                           {isEditing ? (
                             <div className="flex items-center gap-1">
                               <span className="text-slate-400">₱</span>
-                              <input
+                              <input name="draft"
                                 type="number"
                                 min="0"
                                 step="0.01"
@@ -474,7 +481,7 @@ function ReferencePrices({ onChanged }) {
                       {on ? (
                         <div className="flex items-center gap-1">
                           <span className="text-slate-400">₱</span>
-                          <input type="number" min="0" step="0.01" value={draft[p] ?? ""} placeholder="—" aria-label={`${t.label} ${PRODUCT_LABELS[p]}`}
+                          <input name="draft" type="number" min="0" step="0.01" value={draft[p] ?? ""} placeholder="—" aria-label={`${t.label} ${PRODUCT_LABELS[p]}`}
                             onChange={(e) => setDraft({ ...draft, [p]: e.target.value })}
                             className="w-20 bg-slate-50 border border-black/[0.09] rounded-md px-2 py-1 text-[13px] font-mono outline-none focus:border-cyan-500" />
                         </div>

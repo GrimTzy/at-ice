@@ -2,6 +2,8 @@ import { useState } from "react";
 import { toast } from "../../../lib/toast";
 import { api, DRIVER_STATUS, storeName, timeOf, productLabel, PRODUCT_TYPES, inputCls, labelCls, btnPrimary, btnGhost } from "./utils";
 import { ReassignedTag, StatusCell, Modal } from "./shared";
+import { useMaxQuantity } from "../../../lib/limits";
+import { QTY_INPUT_PROPS, cleanQty } from "../../../lib/quantity";
 
 const OPEN = ["pending", "queued", "in_transit"];
 
@@ -91,21 +93,17 @@ export function DriverView({ board, loading, onView, onEdit, onCancel }) {
 }
 
 // Store View: one row per store with a delivery that day.
-export function StoreView({ board, loading, onView, onEdit, onCancel }) {
-  const [q, setQ] = useState("");
+// The toolbar (search, type, status) is on the page; `filtered` says it is narrowing the list.
+export function StoreView({ board, loading, filtered, onView, onEdit, onCancel }) {
   const deliveries = board?.deliveries || [];
   const regular = {};
   (board?.drivers || []).forEach((dr) => dr.stores.forEach((s) => { regular[s.id] = dr.name; }));
-  const needle = q.trim().toLowerCase();
-  const list = deliveries
-    .filter((d) => !needle || `${d.customer?.name || ""} ${d.customer?.branch_code || ""} ${d.customer?.chain || ""} ${d.driver?.name || ""}`.toLowerCase().includes(needle))
-    .sort((a, b) => (a.customer?.name || "").localeCompare(b.customer?.name || ""));
+  const list = [...deliveries].sort((a, b) => (a.customer?.name || "").localeCompare(b.customer?.name || ""));
 
   if (loading && !board) return <div className="p-6 text-[13px] text-slate-400">Loading…</div>;
 
   return (
     <div className="p-[18px] flex flex-col gap-3">
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search store, chain or driver…" aria-label="Search stores" className={`${inputCls} max-w-xs`} />
       <div className="overflow-x-auto lg:overflow-visible rounded-xl border border-black/[0.09]">
         <table className="w-full text-[13px]">
           <thead>
@@ -119,7 +117,7 @@ export function StoreView({ board, loading, onView, onEdit, onCancel }) {
             </tr>
           </thead>
           <tbody>
-            {list.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-slate-400">{needle ? "No store matches." : "No deliveries on this day."}</td></tr>}
+            {list.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-slate-400">{filtered ? "No store matches this filter." : "No deliveries on this day."}</td></tr>}
             {list.map((d) => (
               <tr key={d.id} className="border-t border-black/[0.06]">
                 <td className="px-3 py-2.5">
@@ -184,6 +182,7 @@ function RowActions({ d, onView, onEdit, onCancel }) {
 // Admin edits a delivery that has not started: Driver, quantities, notes.
 export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved }) {
   const [driverId, setDriverId] = useState(delivery.driver_id ? String(delivery.driver_id) : "");
+  const maxQty = useMaxQuantity();
   const [items, setItems] = useState((delivery.items || []).map((it) => ({ product_type: it.product_type, quantity_ordered: String(it.quantity_ordered) })));
   const [notes, setNotes] = useState(delivery.notes || "");
   const [saving, setSaving] = useState(false);
@@ -217,8 +216,8 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
         {error && <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div className="text-[13px] text-slate-700">{storeName(delivery.customer)}</div>
         <div>
-          <label className={labelCls}>Driver</label>
-          <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className={inputCls}>
+          <label htmlFor="board-views-driver" className={labelCls}>Driver</label>
+          <select id="board-views-driver" name="driver_id" value={driverId} onChange={(e) => setDriverId(e.target.value)} className={inputCls}>
             <option value="">No driver yet</option>
             {drivers.map((dr) => {
               const blocked = isToday && dr.status !== "available" && String(dr.id) !== String(delivery.driver_id);
@@ -232,15 +231,15 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
           {isToday && <p className="text-[11px] text-slate-400 mt-1">Today only an available driver can be picked.</p>}
         </div>
         <div>
-          <label className={labelCls}>Items</label>
+          <div className={labelCls}>Items</div>
           <div className="flex flex-col gap-2">
             {items.map((it, i) => (
               <div key={i} className="grid grid-cols-[minmax(0,1fr)_72px_auto] sm:grid-cols-[1fr_100px_auto] gap-2">
-                <select value={it.product_type} aria-label={`Product ${i + 1}`} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, product_type: e.target.value } : x)))} className={inputCls}>
+                <select name="product_type" value={it.product_type} aria-label={`Product ${i + 1}`} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, product_type: e.target.value } : x)))} className={inputCls}>
                   <option value="">Select product…</option>
                   {PRODUCT_TYPES.map((p) => <option key={p.value} value={p.value} disabled={items.some((o, j) => j !== i && o.product_type === p.value)}>{p.label}</option>)}
                 </select>
-                <input type="number" min="1" aria-label={`Quantity ${i + 1}`} value={it.quantity_ordered} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, quantity_ordered: e.target.value } : x)))} className={inputCls} />
+                <input {...QTY_INPUT_PROPS} name={`quantity-${i + 1}`} placeholder="Qty" aria-label={`Quantity ${i + 1}, at most ${maxQty}`} value={it.quantity_ordered} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, quantity_ordered: cleanQty(e.target.value, maxQty) } : x)))} className={inputCls} />
                 <button type="button" disabled={items.length === 1} onClick={() => setItems(items.filter((_, j) => j !== i))} className="px-2 rounded-md border border-black/[0.09] text-red-500 text-[12px] disabled:opacity-30">Remove</button>
               </div>
             ))}
@@ -250,8 +249,8 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
           )}
         </div>
         <div>
-          <label className={labelCls}>Notes</label>
-          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
+          <label htmlFor="board-views-notes" className={labelCls}>Notes</label>
+          <textarea id="board-views-notes" name="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
           <button type="button" onClick={onClose} className={btnGhost}>Close</button>

@@ -48,7 +48,7 @@ export default function TimesheetsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [approval, setApproval] = useState(""); // "", approved or not_approved: set by the cards
+  const [approval, setApproval] = useState(""); // "", approved, not_approved, absent or overtime: set by the cards
   const [selected, setSelected] = useState(() => new Set());
   // Overtime is paid only for the employees ticked here (R3)
   const [otOk, setOtOk] = useState(() => new Set());
@@ -73,7 +73,13 @@ export default function TimesheetsPage() {
   const ended = period ? period.end < todayLocal() : false;
   const q = search.trim().toLowerCase();
   const rows = useMemo(() => (data?.rows || [])
-    .filter((r) => !approval || (approval === "approved" ? ["unpaid", "paid"].includes(r.status) : r.status === "not_approved"))
+    .filter((r) => {
+      if (!approval) return true;
+      if (approval === "approved") return ["unpaid", "paid"].includes(r.status);
+      if (approval === "absent") return Number(r.absent_days || 0) > 0;
+      if (approval === "overtime") return r.ot_pending_minutes > 0;
+      return r.status === "not_approved";
+    })
     .map((r) => [r, !q ? 1 : String(r.employee_id).toLowerCase().includes(q) ? 2 : r.name.toLowerCase().includes(q) ? 1 : 0])
     .filter(([, rank]) => rank > 0)
     .sort((a, b) => b[1] - a[1])
@@ -114,8 +120,8 @@ export default function TimesheetsPage() {
         <KpiCard label="Employees" icon="users" tone="cyan" value={all.length} sub={period ? payPeriodLabel(period) : "This pay period"} onClick={() => setApproval("")} />
         <KpiCard label="Approved" icon="check" tone="emerald" value={done} sub={`${statusOf("paid")} already paid by Admin`} bar={all.length ? done / all.length : 0} onClick={() => setApproval((a) => (a === "approved" ? "" : "approved"))} active={approval === "approved"} />
         <KpiCard label="Not approved" icon="clock" tone="amber" value={statusOf("not_approved")} sub={ended ? "Ready for your approval" : "Period has not ended yet"} bar={all.length ? statusOf("not_approved") / all.length : 0} live={ended && statusOf("not_approved") > 0} onClick={() => setApproval((a) => (a === "not_approved" ? "" : "not_approved"))} active={approval === "not_approved"} />
-        <KpiCard label="Absences" icon="x" tone="rose" value={absences} sub={`${lateMin} late minutes in all`} />
-        <KpiCard label="Overtime to approve" icon="alert" tone="violet" value={otToApprove} sub="Tick it with the timesheet to pay it" />
+        <KpiCard label="Absences" icon="x" tone="rose" value={absences} sub={`${lateMin} late minutes in all`} onClick={() => setApproval((a) => (a === "absent" ? "" : "absent"))} active={approval === "absent"} />
+        <KpiCard label="Overtime to approve" icon="alert" tone="violet" value={otToApprove} sub="Tick it with the timesheet to pay it" onClick={() => setApproval((a) => (a === "overtime" ? "" : "overtime"))} active={approval === "overtime"} />
       </KpiGrid>
 
       <div className="bg-white border border-black/[0.09] rounded-xl px-[18px] py-3.5 flex flex-wrap items-center gap-3">
@@ -125,11 +131,11 @@ export default function TimesheetsPage() {
             {period ? payPeriodLabel(period) : "…"}
           </span>
           <button type="button" aria-label="Next pay period" title="Next pay period" disabled={!period} onClick={() => setDate(addDays(period.end, 1))} className={navBtn}>Next <Chevron /></button>
-          <input type="date" aria-label="Go to the pay period of a date" max={todayManila()} onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
+          <input name="date" type="date" aria-label="Go to the pay period of a date" max={todayManila()} onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
         </div>
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-slate-500 w-full sm:w-60">
           <SearchIcon />
-          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name"
+          <input name="search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name"
             className="w-full bg-transparent outline-none text-xs text-slate-800 placeholder:text-slate-500" />
         </div>
         <div className="flex-1" />
@@ -153,7 +159,7 @@ export default function TimesheetsPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-slate-400 border-b border-black/[0.09]">
-                  <th className="px-[18px] py-2.5"><input type="checkbox" data-native aria-label="Select all" checked={allOn} disabled={!ended}
+                  <th className="px-[18px] py-2.5"><input name="all_on" type="checkbox" data-native aria-label="Select all" checked={allOn} disabled={!ended}
                     onChange={() => setSelected(allOn ? new Set() : new Set(selectable.map((r) => r.id)))} /></th>
                   <th className="px-3 py-2.5 font-medium">Employee ID</th>
                   <th className="px-3 py-2.5 font-medium">Name</th>
@@ -171,7 +177,7 @@ export default function TimesheetsPage() {
               <tbody>
                 {pager.pageItems.map((r) => (
                   <tr key={r.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
-                    <td className="px-[18px] py-2.5"><input type="checkbox" data-native aria-label={`Select ${r.employee_id}`} disabled={!ended || r.status === "paid"} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>
+                    <td className="px-[18px] py-2.5"><input name="id" type="checkbox" data-native aria-label={`Select ${r.employee_id}`} disabled={!ended || r.status === "paid"} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>
                     <td className="px-3 py-2.5 font-mono text-slate-600">{r.employee_id}</td>
                     <td className="px-3 py-2.5 text-slate-800 font-medium whitespace-nowrap">
                       {r.name}
@@ -186,7 +192,7 @@ export default function TimesheetsPage() {
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       {r.ot_pending_minutes > 0 ? (
                         <label className="flex items-center gap-1.5 text-amber-700" title="Paid only if approved">
-                          <input type="checkbox" data-native disabled={!ended || r.status === "paid"} checked={otOk.has(r.id)}
+                          <input name="id" type="checkbox" data-native disabled={!ended || r.status === "paid"} checked={otOk.has(r.id)}
                             onChange={() => setOtOk((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })} />
                           {num(r.ot_pending_minutes / 60)} h to approve
                         </label>

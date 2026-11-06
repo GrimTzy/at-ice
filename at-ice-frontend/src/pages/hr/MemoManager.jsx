@@ -133,12 +133,12 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1 sm:col-span-2"><span className="text-[11px] font-medium text-slate-600">Employee</span>
-            <select value={form.employee_id} onChange={set("employee_id")} className={inputCls}>
+            <select name="employee_id" value={form.employee_id} onChange={set("employee_id")} className={inputCls}>
               <option value="">Choose an employee</option>
               {employees.map((e) => <option key={e.id} value={e.id}>{empLabel(e)}</option>)}
             </select></label>
           <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Violation</span>
-            <select value={form.violation} onChange={set("violation")} className={inputCls}>
+            <select name="violation" value={form.violation} onChange={set("violation")} className={inputCls}>
               <option value="">Choose a violation</option>
               {groups.map((g) => (
                 <optgroup key={g} label={g === "zero_tolerance" ? "Zero tolerance (goes straight to a Notice to Explain)" : CATEGORY_LABEL[g]}>
@@ -147,9 +147,9 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
               ))}
             </select></label>
           <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Incident date</span>
-            <input type="date" max={new Date().toISOString().slice(0, 10)} value={form.incident_date} onChange={set("incident_date")} className={inputCls} /></label>
+            <input name="incident_date" type="date" max={new Date().toISOString().slice(0, 10)} value={form.incident_date} onChange={set("incident_date")} className={inputCls} /></label>
           <label className="flex flex-col gap-1 sm:col-span-2"><span className="text-[11px] font-medium text-slate-600">Level</span>
-            <select value={form.level} onChange={set("level")} disabled={zero || !form.violation} className={inputCls}>
+            <select name="level" value={form.level} onChange={set("level")} disabled={zero || !form.violation} className={inputCls}>
               {levels.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}
             </select>
             {hint && (
@@ -159,9 +159,9 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
             )}
           </label>
           <label className="flex flex-col gap-1 sm:col-span-2"><span className="text-[11px] font-medium text-slate-600">Subject</span>
-            <input value={form.subject} maxLength={255} onChange={set("subject")} className={inputCls} /></label>
+            <input name="subject" value={form.subject} maxLength={255} onChange={set("subject")} className={inputCls} /></label>
           <label className="flex flex-col gap-1 sm:col-span-2"><span className="text-[11px] font-medium text-slate-600">Memo text</span>
-            <textarea rows={9} value={form.body} maxLength={10000} onChange={set("body")} className={`${inputCls} resize-y`} /></label>
+            <textarea name="body" rows={9} value={form.body} maxLength={10000} onChange={set("body")} className={`${inputCls} resize-y`} /></label>
         </div>
 
         <div className="flex flex-col gap-1">
@@ -272,8 +272,8 @@ function MemoPanel({ memo, onChanged, onClose }) {
           <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Letter</div>
           {draft ? (
             <>
-              <input value={subject} maxLength={255} onChange={(e) => setSubject(e.target.value)} className={inputCls} aria-label="Subject" />
-              <textarea rows={10} value={body} maxLength={10000} onChange={(e) => setBody(e.target.value)} className={`${inputCls} resize-y`} aria-label="Memo text" />
+              <input name="subject" value={subject} maxLength={255} onChange={(e) => setSubject(e.target.value)} className={inputCls} aria-label="Subject" />
+              <textarea name="body" rows={10} value={body} maxLength={10000} onChange={(e) => setBody(e.target.value)} className={`${inputCls} resize-y`} aria-label="Memo text" />
               {changed && (
                 <button type="button" disabled={busy === "save"} onClick={() => run("save", `/api/memos/${memo.id}`, { method: "PATCH", body: { subject, body } }, "Draft saved.")} title="Save the edited letter" className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-black/[0.09] text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50">
                   Save changes
@@ -327,7 +327,7 @@ function MemoPanel({ memo, onChanged, onClose }) {
         {mode === "cancel" && (
           <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="text-[12px] font-medium text-slate-700">Why is this memo cancelled? (required)</div>
-            <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. The kiosk was offline that evening" className={`${inputCls} resize-y`} />
+            <textarea name="reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. The kiosk was offline that evening" className={`${inputCls} resize-y`} />
             <div className="flex gap-2">
               <button type="button" disabled={busy === "cancel"} onClick={async () => (await run("cancel", `/api/memos/${memo.id}/cancel`, { method: "POST", body: { reason } }, "Memo cancelled.")) && setReason("")} title="Cancel the memo; it no longer counts as an offense" className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-rose-600 hover:bg-rose-700 text-white cursor-pointer disabled:opacity-50">Cancel memo</button>
               <button type="button" data-no-confirm onClick={() => setMode("")} className="px-3 py-1.5 rounded-lg text-[12px] border border-black/[0.09] text-slate-600 hover:bg-slate-50 cursor-pointer">Back</button>
@@ -338,7 +338,7 @@ function MemoPanel({ memo, onChanged, onClose }) {
         {mode === "investigation" && (
           <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="text-[12px] font-medium text-slate-700">Outcome of the investigation and hearing (required)</div>
-            <textarea rows={2} value={outcome} onChange={(e) => setOutcome(e.target.value)} placeholder="e.g. Hearing held Oct 25; explanation accepted, final warning stands" className={`${inputCls} resize-y`} />
+            <textarea name="outcome" rows={2} value={outcome} onChange={(e) => setOutcome(e.target.value)} placeholder="e.g. Hearing held Oct 25; explanation accepted, final warning stands" className={`${inputCls} resize-y`} />
             <div className="flex gap-2">
               <button type="button" disabled={busy === "investigation"} onClick={async () => (await run("investigation", `/api/memos/${memo.id}/close-investigation`, { method: "POST", body: { outcome } }, "Investigation closed.")) && setOutcome("")} title="Record the outcome and remove Pending investigation" className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer disabled:opacity-50">Close investigation</button>
               <button type="button" data-no-confirm onClick={() => setMode("")} className="px-3 py-1.5 rounded-lg text-[12px] border border-black/[0.09] text-slate-600 hover:bg-slate-50 cursor-pointer">Back</button>
@@ -476,7 +476,7 @@ export default function MemoManager() {
             <FilterSelect label="Employee" value={employee} onChange={setEmployee} options={[{ value: "all", label: "All employees", count: memos.filter((m) => m.status !== "cancelled").length }, ...employees.map((e) => ({ value: e.id, label: empLabel(e), count: memos.filter((m) => m.employee_id === e.id && m.status !== "cancelled").length }))]} />
             <label>
               <span>Search</span>
-              <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Memo no., employee or violation" className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700 outline-none focus:border-cyan-500/60" />
+              <input name="search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Memo no., employee or violation" className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700 outline-none focus:border-cyan-500/60" />
             </label>
           </div>
 

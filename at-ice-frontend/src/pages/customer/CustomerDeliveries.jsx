@@ -157,7 +157,7 @@ export default function CustomerDeliveries() {
           <div className="bg-white border border-black/[0.09] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-3">
             <FilterSelect label="Status" value={filter} onChange={setFilter}
               options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: counts[f.key] || 0 }))} />
-            <input
+            <input name="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search delivery number or driver"
@@ -214,8 +214,8 @@ export default function CustomerDeliveries() {
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-950/60" onClick={() => setSelected(null)} />
-          <div className="relative bg-white rounded-xl border border-black/[0.09] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
+          <div className="modal-shell relative bg-white rounded-xl border border-black/[0.09] shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold text-slate-800">{selected.delivery_no}</div>
                 <div className="mt-1"><Badge status={selected.status} /></div>
@@ -224,6 +224,7 @@ export default function CustomerDeliveries() {
                 &times;
               </button>
             </div>
+<div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
 
             <div className="px-5 py-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
               <div>
@@ -314,6 +315,7 @@ export default function CustomerDeliveries() {
                 </div>
               </div>
             )}
+</div>
           </div>
         </div>
       )}

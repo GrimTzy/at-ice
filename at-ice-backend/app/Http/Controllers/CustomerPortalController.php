@@ -26,7 +26,7 @@ class CustomerPortalController extends Controller
     {
         $customer = $this->resolveCustomer($request);
         if (! $customer) {
-            return response()->json(['message' => 'No customer account linked to this login.'], 404);
+            return response()->json(['customer_linked' => false]);
         }
 
         return response()->json([
@@ -49,7 +49,7 @@ class CustomerPortalController extends Controller
     {
         $customer = $this->resolveCustomer($request);
         if (! $customer) {
-            return response()->json(['message' => 'No customer account linked to this login.'], 404);
+            return response()->json([]);
         }
 
         return response()->json(
@@ -69,7 +69,7 @@ class CustomerPortalController extends Controller
     {
         $customer = $this->resolveCustomer($request);
         if (! $customer) {
-            return response()->json(['message' => 'No customer account linked to this login.'], 404);
+            return response()->json([]);
         }
 
         $deliveries = Delivery::with(['driver.employee', 'items.product', 'proofs.salesman', 'adjustmentRequests'])
@@ -184,7 +184,7 @@ class CustomerPortalController extends Controller
     {
         $customer = $this->resolveCustomer($request);
         if (! $customer) {
-            return response()->json(['message' => 'No customer account linked to this login.'], 404);
+            return response()->json([]);
         }
 
         Receipt::markOverdue();
@@ -203,7 +203,7 @@ class CustomerPortalController extends Controller
     {
         $customer = $this->resolveCustomer($request);
         if (! $customer) {
-            return response()->json(['message' => 'No customer account linked to this login.'], 404);
+            return response()->json([]);
         }
 
         $proofs = DeliveryProof::with(['delivery', 'salesman'])
@@ -219,7 +219,7 @@ class CustomerPortalController extends Controller
     {
         $customer = $this->resolveCustomer($request);
         if (! $customer) {
-            return response()->json(['message' => 'No customer account linked to this login.'], 404);
+            return response()->json(['customer_linked' => false, 'customer_name' => null, 'prices' => (object) []]);
         }
 
         $rows = CustomerPrice::where('customer_id', $customer->id)->get();

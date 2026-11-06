@@ -30,7 +30,7 @@ class SupportMessageController extends Controller
     {
         $customer = $this->myCustomer($request);
         if (! $customer) {
-            return response()->json(['message' => 'No customer account linked to this login.'], 404);
+            return response()->json([]);
         }
 
         return response()->json(

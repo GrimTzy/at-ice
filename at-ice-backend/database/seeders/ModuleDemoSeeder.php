@@ -308,11 +308,11 @@ class ModuleDemoSeeder extends Seeder
         Supplier::create(['supplier_code' => 'DEMO-S2', 'name' => 'Demo North Truck Parts', 'contact_person' => 'Rey Bautista', 'contact_number' => '+639171110002', 'email' => 'demo.parts@example.com', 'city' => 'Marilao', 'province' => 'Bulacan', 'status' => 'active']);
 
         $items = [
-            ['DEMO-P1', 'Demo ice bags 5kg (bundle of 100)', 'packaging', 'bundle', 180, 40, 15],
-            ['DEMO-P2', 'Demo sacks 30kg', 'packaging', 'pc', 12, 300, 100],
-            ['DEMO-P3', 'Demo brake pads (set)', 'truck_parts', 'set', 1450, 2, 3], // below minimum
-            ['DEMO-P4', 'Demo brake fluid 1L', 'truck_parts', 'bottle', 320, 6, 2],
-            ['DEMO-P5', 'Demo compressor oil 4L', 'machine_parts', 'can', 950, 5, 2],
+            ['DEMO-P1', 'Demo ice bags 5kg (bundle of 100)', 'Packaging', 'bundles', 180, 40, 15],
+            ['DEMO-P2', 'Demo sacks 30kg', 'Packaging', 'pcs', 12, 300, 100],
+            ['DEMO-P3', 'Demo brake pads (set)', 'Truck Parts', 'sets', 1450, 2, 3], // below minimum
+            ['DEMO-P4', 'Demo brake fluid 1L', 'Truck Parts', 'pcs', 320, 6, 2],
+            ['DEMO-P5', 'Demo compressor oil 4L', 'Machine Components', 'pcs', 950, 5, 2],
         ];
         $products = [];
         foreach ($items as [$code, $name, $cat, $unit, $price, $stock, $min]) {
@@ -345,7 +345,10 @@ class ModuleDemoSeeder extends Seeder
 
     private function others(array $s, User $checker): void
     {
-        SupportMessage::create(['customer_id' => $s['jolly']->id, 'user_id' => $s['jolly']->user_id, 'topic' => 'change_schedule', 'message' => 'Demo: can our delivery come at 9:00 AM instead of 10:00 AM starting next week?', 'status' => 'open']);
+        // a support message needs a customer login; the demo customers have none
+        if ($s['jolly']->user_id) {
+            SupportMessage::create(['customer_id' => $s['jolly']->id, 'user_id' => $s['jolly']->user_id, 'topic' => 'change_schedule', 'message' => 'Demo: can our delivery come at 9:00 AM instead of 10:00 AM starting next week?', 'status' => 'open']);
+        }
         PickupLog::create(['company_name' => 'Demo Walk-in: Aling Nena Store', 'product_type' => 'bags', 'quantity' => 10, 'recorded_by' => $checker->id, 'notes' => 'Picked up at the plant', 'pickup_date' => $this->today->toDateString()]);
         foreach ([['fuel', 4200], ['electricity', 18500], ['water', 2300]] as [$cat, $amount]) {
             Expense::create(['category' => $cat, 'amount' => $amount, 'expense_date' => $this->today->subDays(2)->toDateString(), 'notes' => '[Demo] '.ucfirst($cat).' this week']);

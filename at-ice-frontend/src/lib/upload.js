@@ -1,4 +1,4 @@
-import { handleUnauthorized } from "./sessionExpiry";
+import { assertCurrentSession, handleUnauthorized, isCurrentSession } from "./sessionExpiry";
 
 // POST a FormData body with real upload progress. Resolves with the parsed JSON,
 // rejects with the server's first validation message. A 401 follows the same
@@ -13,9 +13,10 @@ export function sendForm(url, body, { method = "POST", onProgress } = {}) {
     const token = localStorage.getItem("token");
     if (token) req.setRequestHeader("Authorization", `Bearer ${token}`);
     req.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
+      if (isCurrentSession(token) && e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
     };
     req.onload = () => {
+      try { assertCurrentSession(token); } catch (err) { reject(err); return; }
       let data = null;
       try { data = JSON.parse(req.responseText); } catch { /* not json */ }
       if (req.status >= 200 && req.status < 300) {
@@ -23,9 +24,11 @@ export function sendForm(url, body, { method = "POST", onProgress } = {}) {
         resolve(data ?? {});
         return;
       }
-      if (req.status === 401) handleUnauthorized(url, method);
+      if (req.status === 401) handleUnauthorized(url, method, false, token);
       const first = data?.errors ? Object.values(data.errors)[0]?.[0] : null;
-      const err = new Error(first || data?.message || `Request failed (${req.status}).`);
+      // The proxy refuses a body over about 12 MB with an HTML page, not JSON: say what to do.
+      const tooBig = req.status === 413 ? "The files are too big together. Everything sent at once must be 12 MB or less: remove a file or use a smaller one." : null;
+      const err = new Error(first || data?.message || tooBig || `Request failed (${req.status}).`);
       err.status = req.status;
       err.errors = data?.errors;
       reject(err);

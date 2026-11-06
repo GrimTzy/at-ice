@@ -18,7 +18,7 @@ class DeliveryContractController extends Controller
 {
     public function index()
     {
-        $contracts = DeliveryContract::with(['stores:customers.id,customers.name,customers.chain,customers.branch_code', 'approvedBy:id,name'])
+        $contracts = DeliveryContract::with(['stores:customers.id,customers.name,customers.chain,customers.branch_code,customers.customer_type', 'approvedBy:id,name'])
             ->withCount(['deliveries', 'deliveries as delivered_count' => fn ($q) => $q->where('status', 'delivered')])
             ->latest()
             ->get();

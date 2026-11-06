@@ -8,7 +8,8 @@ import { StorePicker } from "./shared";
 // Below: Drivers who are off today. Nobody marks this: a Driver still not
 // timed in a while after their shift starts, or on approved leave, is off and
 // their stops are reassigned (owner, 2026-10-20).
-export default function DriverStoresTab({ stores, drivers, live, onChanged }) {
+// The page toolbar passes `search` and `type` (customer type) to narrow "Stores per driver".
+export default function DriverStoresTab({ stores, drivers, live, onChanged, search = "", type = "" }) {
   const [assignments, setAssignments] = useState([]);
   const [form, setForm] = useState({ driver_id: "", store_ids: [], effective_from: nextMonday(), effective_to: "" });
   const [saving, setSaving] = useState(false);
@@ -61,8 +62,17 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged }) {
     }
   }
 
-  const offToday = drivers.filter((dr) => dr.status === "off");
-  const byDriver = drivers.map((dr) => ({ driver: dr, list: assignments.filter((a) => String(a.driver_id) === String(dr.id)) }));
+  const offToday = drivers.filter((dr) => dr.status === "off" && (!search || `${dr.name} ${dr.employee_id || ""}`.toLowerCase().includes(search)));
+  const narrowed = !!(search || type);
+  const byDriver = drivers
+    .map((dr) => {
+      const driverHit = !!search && `${dr.name} ${dr.employee_id || ""}`.toLowerCase().includes(search);
+      const list = assignments.filter((a) => String(a.driver_id) === String(dr.id)
+        && (!type || (a.store?.customer_type || "dealer") === type)
+        && (!search || driverHit || `${a.store?.name || ""} ${a.store?.chain || ""} ${a.store?.branch_code || ""}`.toLowerCase().includes(search)));
+      return { driver: dr, list, driverHit };
+    })
+    .filter((x) => !narrowed || x.list.length > 0 || (x.driverHit && !type));
 
   return (
     <div className="p-[18px] grid gap-4 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
@@ -73,24 +83,24 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged }) {
         </div>
         {error && <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div>
-          <label className={labelCls}>Driver *</label>
-          <select value={form.driver_id} onChange={(e) => { setForm({ ...form, driver_id: e.target.value }); setError(""); }} className={inputCls}>
+          <label htmlFor="driver-stores-tab-driver" className={labelCls}>Driver *</label>
+          <select id="driver-stores-tab-driver" name="driver_id" value={form.driver_id} onChange={(e) => { setForm({ ...form, driver_id: e.target.value }); setError(""); }} className={inputCls}>
             <option value="">Select driver…</option>
             {drivers.map((dr) => <option key={dr.id} value={dr.id}>{dr.name}{dr.employee_id ? ` · ${dr.employee_id}` : ""}</option>)}
           </select>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>From *</label>
-            <input type="date" min={today} value={form.effective_from} onChange={(e) => setForm({ ...form, effective_from: e.target.value })} className={inputCls} />
+            <label htmlFor="driver-stores-tab-from" className={labelCls}>From *</label>
+            <input id="driver-stores-tab-from" name="effective_from" type="date" min={today} value={form.effective_from} onChange={(e) => setForm({ ...form, effective_from: e.target.value })} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Until (optional)</label>
-            <input type="date" min={form.effective_from} value={form.effective_to} onChange={(e) => setForm({ ...form, effective_to: e.target.value })} className={inputCls} />
+            <label htmlFor="driver-stores-tab-until-optional" className={labelCls}>Until (optional)</label>
+            <input id="driver-stores-tab-until-optional" name="effective_to" type="date" min={form.effective_from} value={form.effective_to} onChange={(e) => setForm({ ...form, effective_to: e.target.value })} className={inputCls} />
           </div>
         </div>
         <div>
-          <label className={labelCls}>Stores *</label>
+          <div className={labelCls}>Stores *</div>
           <StorePicker stores={stores} value={form.store_ids} onChange={(ids) => { setForm({ ...form, store_ids: ids }); setError(""); }}
             note={(s) => (currentDriver[s.id] ? `now: ${currentDriver[s.id]}` : "no driver")} />
         </div>
@@ -100,7 +110,7 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged }) {
       <div className="flex flex-col gap-4 min-w-0">
         <div className="rounded-xl border border-black/[0.09]">
           <div className="px-4 py-2.5 border-b border-black/[0.09] bg-slate-50 rounded-t-xl text-[12.5px] font-semibold text-slate-700">Stores per driver</div>
-          {byDriver.length === 0 && <div className="px-4 py-6 text-[13px] text-slate-400">No drivers yet.</div>}
+          {byDriver.length === 0 && <div className="px-4 py-6 text-[13px] text-slate-400">{narrowed && drivers.length ? "No driver or store matches this filter." : "No drivers yet."}</div>}
           {byDriver.map(({ driver, list }) => (
             <div key={driver.id} className="px-4 py-3 border-t first:border-t-0 border-black/[0.06]">
               <div className="text-[13px] font-semibold text-slate-800">{driver.name} <span className="font-normal text-slate-400">· {list.length} {list.length === 1 ? "store" : "stores"}</span></div>

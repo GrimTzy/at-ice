@@ -57,9 +57,9 @@ class DeliveryController extends Controller
         $drivers = User::where('role', 'driver')->with('employee')
             ->orderBy('name')->get(['id', 'name']);
 
-        $assignments = DriverStoreAssignment::activeOn($date)->with('store:id,name,chain,branch_code')->get()->groupBy('driver_id');
+        $assignments = DriverStoreAssignment::activeOn($date)->with('store:id,name,chain,branch_code,customer_type')->get()->groupBy('driver_id');
 
-        $deliveries = Delivery::with(['customer:id,name,chain,branch_code,city', 'items', 'reassignedFrom:id,name', 'driver:id,name', 'contract:id,contract_no,name', 'proofs:id,delivery_id,photo_path,confirmed_at'])
+        $deliveries = Delivery::with(['customer:id,name,chain,branch_code,city,customer_type', 'items', 'reassignedFrom:id,name', 'driver:id,name', 'contract:id,contract_no,name', 'proofs:id,delivery_id,photo_path,confirmed_at'])
             ->whereDate('scheduled_date', $date)
             ->where('delivery_type', 'outbound')
             ->orderBy('ordered_at')->orderBy('id')
@@ -81,6 +81,7 @@ class DeliveryController extends Controller
                     'name' => $a->store?->name,
                     'branch_code' => $a->store?->branch_code,
                     'chain' => $a->store?->chain,
+                    'customer_type' => $a->store?->customer_type,
                     'effective_from' => $a->effective_from?->toDateString(),
                     'effective_to' => $a->effective_to?->toDateString(),
                 ])->values(),

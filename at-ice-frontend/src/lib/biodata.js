@@ -1,6 +1,9 @@
 // Biodata shared by Add/Edit Employee (HR), the public /apply form and the
 // printed biodata (owner, 2026-10-20). Same rules as App\Support\Biodata.
 
+import { manilaDate, todayManila } from "./time";
+import { assertCurrentSession, isCurrentSession } from "./sessionExpiry";
+
 export const SEXES = [["male", "Male"], ["female", "Female"]];
 export const CIVIL_STATUSES = [["single", "Single"], ["married", "Married"], ["widowed", "Widowed"], ["separated", "Separated"]];
 export const EDUCATION_LEVELS = [
@@ -49,13 +52,15 @@ export function govComplete(id, value) {
   return n === 0 || n === max || (id.key === "tin_no" && n === 9);
 }
 
-// Days from today to a date (negative when past), or null
+// Business-calendar days from today to a date (negative when past), or null.
+// Compare UTC day numbers so the device timezone and DST cannot shift a badge.
 export function daysUntil(date) {
   if (!date) return null;
-  const d = new Date(`${String(date).slice(0, 10)}T00:00:00`);
-  const t = new Date();
-  t.setHours(0, 0, 0, 0);
-  return Math.round((d - t) / 86400000);
+  const day = manilaDate(date);
+  const target = Date.parse(`${day}T00:00:00Z`);
+  if (!Number.isFinite(target) || new Date(target).toISOString().slice(0, 10) !== day) return null;
+  const today = Date.parse(`${todayManila()}T00:00:00Z`);
+  return Math.round((target - today) / 86400000);
 }
 export const EXPIRY_ALERT_DAYS = 60;
 
@@ -121,8 +126,9 @@ export function uploadWithProgress(url, formData, onProgress) {
     xhr.setRequestHeader("Accept", "application/json");
     const token = localStorage.getItem("token");
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100)); };
+    xhr.upload.onprogress = (e) => { if (isCurrentSession(token) && e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100)); };
     xhr.onload = () => {
+      try { assertCurrentSession(token); } catch (err) { reject(err); return; }
       let data = {};
       try { data = JSON.parse(xhr.responseText || "{}"); } catch { /* not JSON */ }
       if (xhr.status >= 200 && xhr.status < 300) resolve(data);

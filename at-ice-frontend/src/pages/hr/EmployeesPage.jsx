@@ -165,6 +165,9 @@ export default function EmployeesPage() {
   const [roleFilter, setRoleFilter]   = useState("all");
   const [statusView, setStatusView]   = useState("active"); // active | inactive (archived)
   const [unenrolledFirst, setUnenrolledFirst] = useState(false);
+  // Hero card filter: "" (all) | enrolled | unenrolled | probationary | license
+  const [cardFilter, setCardFilter] = useState("");
+  const toggleCard = (key) => setCardFilter((f) => (f === key ? "" : key));
 
   const token = localStorage.getItem("token");
   const authHeaders = {
@@ -202,6 +205,13 @@ export default function EmployeesPage() {
 
   const filtered = employees
     .filter((e) => roleFilter === "all" || displayRole(e) === roleFilter)
+    .filter((e) => {
+      if (cardFilter === "enrolled") return !!e.face_data;
+      if (cardFilter === "unenrolled") return !e.face_data;
+      if (cardFilter === "probationary") return e.employment_status === "probationary";
+      if (cardFilter === "license") { const d = daysUntil(e.license_expiry); return d != null && d <= EXPIRY_ALERT_DAYS; }
+      return true;
+    })
     .filter((e) => {
       const q = search.trim().toLowerCase();
       if (!q) return true;
@@ -622,11 +632,11 @@ export default function EmployeesPage() {
   return (
     <HrLayout pageTitle="Employees" breadcrumb="HRIS / Employees">
       <KpiGrid cols={5}>
-        <KpiCard label={statusView === "inactive" ? "Archived" : "Active staff"} icon="users" tone="cyan" value={employees.length} sub={`${Object.keys(roleCounts).length} roles`} />
-        <KpiCard label="Face enrolled" icon="check" tone="emerald" value={enrolledCount} sub="Can time in at the kiosk" bar={shareOf(enrolledCount)} />
-        <KpiCard label="Not enrolled" icon="alert" tone={unenrolledCount ? "rose" : "emerald"} value={unenrolledCount} sub={unenrolledCount ? "Enroll their face to time in" : "Everyone can time in"} bar={shareOf(unenrolledCount)} onClick={() => setUnenrolledFirst((v) => !v)} active={unenrolledFirst} />
-        <KpiCard label="Probationary" icon="clock" tone="amber" value={probationary} sub={`${employees.length - probationary} regular`} bar={shareOf(probationary)} />
-        <KpiCard label="Licenses expiring" icon="key" tone={licenseSoon ? "rose" : "violet"} value={licenseSoon} sub={`Within ${EXPIRY_ALERT_DAYS} days or already expired`} />
+        <KpiCard label={statusView === "inactive" ? "Archived" : "Active staff"} icon="users" tone="cyan" value={employees.length} sub={`${Object.keys(roleCounts).length} roles`} onClick={() => setCardFilter("")} active={cardFilter === ""} />
+        <KpiCard label="Face enrolled" icon="check" tone="emerald" value={enrolledCount} sub="Can time in at the kiosk" bar={shareOf(enrolledCount)} onClick={() => toggleCard("enrolled")} active={cardFilter === "enrolled"} />
+        <KpiCard label="Not enrolled" icon="alert" tone={unenrolledCount ? "rose" : "emerald"} value={unenrolledCount} sub={unenrolledCount ? "Enroll their face to time in" : "Everyone can time in"} bar={shareOf(unenrolledCount)} onClick={() => toggleCard("unenrolled")} active={cardFilter === "unenrolled"} />
+        <KpiCard label="Probationary" icon="clock" tone="amber" value={probationary} sub={`${employees.length - probationary} regular`} bar={shareOf(probationary)} onClick={() => toggleCard("probationary")} active={cardFilter === "probationary"} />
+        <KpiCard label="Licenses expiring" icon="key" tone={licenseSoon ? "rose" : "violet"} value={licenseSoon} sub={`Within ${EXPIRY_ALERT_DAYS} days or already expired`} onClick={() => toggleCard("license")} active={cardFilter === "license"} />
       </KpiGrid>
 
       <div className="bg-white border border-black/[0.09] rounded-xl">
@@ -640,7 +650,7 @@ export default function EmployeesPage() {
           <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-black/[0.09] rounded-md text-xs text-slate-500 w-[220px]">
               <SearchIcon />
-              <input
+              <input name="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Employee ID or name"
@@ -806,8 +816,8 @@ export default function EmployeesPage() {
       {/* ── ADD / EDIT MODAL: six steps (owner, 2026-10-20) ── */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-black/[0.09]">
+          <div className="modal-shell bg-white rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between gap-3 px-5 py-4 border-b border-black/[0.09]">
               <div className="text-xl font-bold text-slate-800">
                 {editingId ? `Edit Employee · ${[form.first_name, form.last_name].filter(Boolean).join(" ")}` : "Add Employee"}
               </div>
@@ -824,6 +834,7 @@ export default function EmployeesPage() {
                 </button>
               </div>
             </div>
+<div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
 
             {/* Step bar: Personal → Contact → Payroll → Technical → History → Attachments */}
             <nav aria-label="Form steps" className="px-5 pt-4">
@@ -871,19 +882,19 @@ export default function EmployeesPage() {
                   <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number, address, birthday, sex, civil status, emergency contact, highest attainment, school and work history" />
                   <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
                     <Field label="First Name" required error={formErrors.first_name}>
-                      <input required value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
+                      <input name="first_name" required value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
                     </Field>
                     <Field label="M.I." error={formErrors.middle_initial}>
-                      <input value={form.middle_initial} onChange={(e) => setForm((f) => ({ ...f, middle_initial: cleanInitial(e.target.value) }))}
+                      <input name="middle_initial" value={form.middle_initial} onChange={(e) => setForm((f) => ({ ...f, middle_initial: cleanInitial(e.target.value) }))}
                         maxLength={2} placeholder="e.g. D" aria-label="Middle initial" autoCapitalize="characters" className={inputCls} />
                     </Field>
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
                     <Field label="Last Name" required error={formErrors.last_name}>
-                      <input required value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
+                      <input name="last_name" required value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
                     </Field>
                     <Field label="Suffix" error={formErrors.suffix}>
-                      <select value={form.suffix} onChange={handleChange("suffix")} aria-label="Name suffix" className={inputCls}>
+                      <select name="suffix" value={form.suffix} onChange={handleChange("suffix")} aria-label="Name suffix" className={inputCls}>
                         <option value="">None</option>
                         {NAME_SUFFIXES.map((x) => <option key={x} value={x}>{x}</option>)}
                       </select>
@@ -891,16 +902,16 @@ export default function EmployeesPage() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Field label="Date of Birth" error={formErrors.birth_date}>
-                      <input type="date" max={addDaysStr(-15 * 365)} value={form.birth_date} onChange={handleChange("birth_date")} className={inputCls} />
+                      <input name="birth_date" type="date" max={addDaysStr(-15 * 365)} value={form.birth_date} onChange={handleChange("birth_date")} className={inputCls} />
                     </Field>
                     <Field label="Sex" error={formErrors.sex}>
-                      <select value={form.sex} onChange={handleChange("sex")} className={inputCls}>
+                      <select name="sex" value={form.sex} onChange={handleChange("sex")} className={inputCls}>
                         <option value="">Choose</option>
                         {SEXES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                     </Field>
                     <Field label="Civil Status" error={formErrors.civil_status}>
-                      <select value={form.civil_status} onChange={handleChange("civil_status")} className={inputCls}>
+                      <select name="civil_status" value={form.civil_status} onChange={handleChange("civil_status")} className={inputCls}>
                         <option value="">Choose</option>
                         {CIVIL_STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
@@ -908,10 +919,10 @@ export default function EmployeesPage() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Field label="Nationality" error={formErrors.nationality}>
-                      <input value={form.nationality} onChange={handleChange("nationality")} maxLength={50} className={inputCls} />
+                      <input name="nationality" value={form.nationality} onChange={handleChange("nationality")} maxLength={50} className={inputCls} />
                     </Field>
                     <Field label="Place of Birth" error={formErrors.place_of_birth}>
-                      <input value={form.place_of_birth} onChange={handleChange("place_of_birth")} maxLength={120} placeholder="City or municipality, province" className={inputCls} />
+                      <input name="place_of_birth" value={form.place_of_birth} onChange={handleChange("place_of_birth")} maxLength={120} placeholder="City or municipality, province" className={inputCls} />
                     </Field>
                   </div>
                 </>
@@ -923,7 +934,7 @@ export default function EmployeesPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {phoneField}
                     <Field label="Personal Email" error={formErrors.personal_email}>
-                      <input type="email" value={form.personal_email} onChange={handleChange("personal_email")} placeholder="name@gmail.com" className={inputCls} />
+                      <input name="personal_email" type="email" value={form.personal_email} onChange={handleChange("personal_email")} placeholder="name@gmail.com" className={inputCls} />
                       <span className="text-[10px] text-slate-400 mt-0.5 block">Not the login. The login email is made automatically.</span>
                     </Field>
                   </div>
@@ -946,10 +957,10 @@ export default function EmployeesPage() {
                   <div className="text-[12px] font-semibold text-slate-700 mt-1">Emergency contact</div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Field label="Name" error={formErrors.emergency_name}>
-                      <input value={form.emergency_name} onChange={handleChange("emergency_name")} maxLength={120} className={inputCls} />
+                      <input name="emergency_name" value={form.emergency_name} onChange={handleChange("emergency_name")} maxLength={120} className={inputCls} />
                     </Field>
                     <Field label="Relationship" error={formErrors.emergency_relationship}>
-                      <input value={form.emergency_relationship} onChange={handleChange("emergency_relationship")} maxLength={40} placeholder="e.g. Mother" className={inputCls} />
+                      <input name="emergency_relationship" value={form.emergency_relationship} onChange={handleChange("emergency_relationship")} maxLength={40} placeholder="e.g. Mother" className={inputCls} />
                     </Field>
                     <Field label="Mobile Number" error={formErrors.emergency_phone}>
                       <PhoneInput value={form.emergency_phone} onChange={(emergency_phone) => setForm((f) => ({ ...f, emergency_phone }))} className={inputCls}
@@ -966,7 +977,7 @@ export default function EmployeesPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {GOV_IDS.map((g) => (
                       <Field key={g.key} label={g.label} error={formErrors[g.key] || (!govComplete(g, form[g.key]) ? [`Enter all digits (${g.placeholder}).`] : null)}>
-                        <input value={form[g.key]} inputMode="numeric" placeholder={g.placeholder} maxLength={g.placeholder.length}
+                        <input name={g.key} value={form[g.key]} inputMode="numeric" placeholder={g.placeholder} maxLength={g.placeholder.length}
                           onChange={(e) => setForm((f) => ({ ...f, [g.key]: formatGov(g.groups, e.target.value) }))} className={`${inputCls} font-mono`} />
                       </Field>
                     ))}
@@ -974,20 +985,20 @@ export default function EmployeesPage() {
                   <span className="text-[10px] text-slate-400 -mt-1.5">Typed as digits; dashes are added for you. A 9-digit TIN gets the 000 branch code.</span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Field label="Pay Basis" required error={formErrors.pay_basis}>
-                      <select required value={form.pay_basis} onChange={handleChange("pay_basis")} className={inputCls}>
+                      <select name="pay_basis" required value={form.pay_basis} onChange={handleChange("pay_basis")} className={inputCls}>
                         <option value="daily">Daily rate</option>
                         <option value="monthly">Monthly rate</option>
                       </select>
                     </Field>
                     {form.pay_basis === "monthly" ? (
                       <Field label="Monthly Rate (₱)" required error={formErrors.monthly_rate}>
-                        <input required type="number" min="0" step="0.01" inputMode="decimal" value={form.monthly_rate}
+                        <input name="monthly_rate" required type="number" min="0" step="0.01" inputMode="decimal" value={form.monthly_rate}
                           onChange={handleChange("monthly_rate")} placeholder="e.g. 16000" className={inputCls} />
                         <span className="text-[10px] text-slate-400 mt-0.5 block">The daily rate is worked out from it (Admin Settings).</span>
                       </Field>
                     ) : (
                       <Field label="Daily Rate (₱)" required error={formErrors.daily_rate}>
-                        <input required type="number" min="0" step="0.01" inputMode="decimal" value={form.daily_rate}
+                        <input name="daily_rate" required type="number" min="0" step="0.01" inputMode="decimal" value={form.daily_rate}
                           onChange={handleChange("daily_rate")} placeholder="e.g. 610" className={inputCls} />
                       </Field>
                     )}
@@ -1000,9 +1011,9 @@ export default function EmployeesPage() {
                 <>
                   <Field label="Position" required error={formErrors.position}>
                     {editingId ? (
-                      <input readOnly value={form.position || "—"} className={`${inputCls} bg-slate-100 text-slate-500`} />
+                      <input name="position" readOnly value={form.position || "—"} className={`${inputCls} bg-slate-100 text-slate-500`} />
                     ) : (
-                      <select required value={form.position} onChange={handlePositionChange} className={inputCls}>
+                      <select name="position" required value={form.position} onChange={handlePositionChange} className={inputCls}>
                         <option value="">Select position</option>
                         {Object.keys(POSITION_ROLES).map((p) => <option key={p} value={p}>{p}</option>)}
                       </select>
@@ -1015,25 +1026,25 @@ export default function EmployeesPage() {
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Field label="Department" error={formErrors.department}>
-                      <select value={form.department} onChange={handleChange("department")} aria-label="Department" className={inputCls}>
+                      <select name="department" value={form.department} onChange={handleChange("department")} aria-label="Department" className={inputCls}>
                         <option value="">Choose a department</option>
                         {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
                         {form.department && !DEPARTMENTS.includes(form.department) && <option value={form.department}>{form.department} (old)</option>}
                       </select>
                     </Field>
                     <Field label="Employee Role (set from Position)" error={formErrors.sub_role}>
-                      <input readOnly className={`${inputCls} bg-slate-100 text-slate-500`}
+                      <input name="sub_role" readOnly className={`${inputCls} bg-slate-100 text-slate-500`}
                         value={roleLabel(form.sub_role || (form._userRole === "driver" ? "driver" : POSITION_ROLES[form.position] || ""))} />
                     </Field>
                     <Field label="Employment Status" required error={formErrors.employment_status}>
-                      <select required value={form.employment_status} onChange={handleChange("employment_status")} className={inputCls}>
+                      <select name="employment_status" required value={form.employment_status} onChange={handleChange("employment_status")} className={inputCls}>
                         <option value="probationary">Probationary</option>
                         <option value="regular">Regular</option>
                       </select>
                       <span className="text-[10px] text-slate-400 mt-0.5 block">Probationary staff cannot file leave; leave credits start once regular.</span>
                     </Field>
                     <Field label="Employment Type" required error={formErrors.employment_type}>
-                      <select required value={form.employment_type} onChange={handleChange("employment_type")} className={inputCls}>
+                      <select name="employment_type" required value={form.employment_type} onChange={handleChange("employment_type")} className={inputCls}>
                         <option value="regular">Regular</option>
                         <option value="contractual">Contractual</option>
                         <option value="part_time">Part-Time</option>
@@ -1051,7 +1062,7 @@ export default function EmployeesPage() {
                     </Field>
                     {!editingId && (
                       <Field label="Date Hired" required error={formErrors.date_hired}>
-                        <input required type="date" max={addDaysStr(14)} value={form.date_hired} onChange={handleChange("date_hired")} className={inputCls} />
+                        <input name="date_hired" required type="date" max={addDaysStr(14)} value={form.date_hired} onChange={handleChange("date_hired")} className={inputCls} />
                         <span className="text-[10px] text-slate-400 mt-0.5 block">Up to 14 days ahead. A future hire is left out of attendance, the kiosk and payroll until that date.</span>
                       </Field>
                     )}
@@ -1063,12 +1074,12 @@ export default function EmployeesPage() {
                       <ScanDropZone kind="license" onScan={handleLicenseScan} fills="license number, expiry date and restriction codes" />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field label="Driver's License No." required error={formErrors.license_number || (form.license_number && licenseError(form.license_number) ? [licenseError(form.license_number)] : null)}>
-                          <input required value={form.license_number} onChange={(e) => setForm((f) => ({ ...f, license_number: formatLicense(e.target.value) }))}
+                          <input name="license_number" required value={form.license_number} onChange={(e) => setForm((f) => ({ ...f, license_number: formatLicense(e.target.value) }))}
                             placeholder="e.g. N01-23-456789" maxLength={13} autoCapitalize="characters" className={`${inputCls} font-mono`} />
                           <span className="text-[10px] text-slate-400 mt-0.5 block">LTO format: office code (letter + 2 digits), year, 6-digit serial.</span>
                         </Field>
                         <Field label="License Expiry" required error={formErrors.license_expiry || (form.license_expiry && expiryError(form.license_expiry) ? [expiryError(form.license_expiry)] : null)}>
-                          <input required type="date" min={tomorrowStr()} value={form.license_expiry} onChange={handleChange("license_expiry")} className={inputCls} />
+                          <input name="license_expiry" required type="date" min={tomorrowStr()} value={form.license_expiry} onChange={handleChange("license_expiry")} className={inputCls} />
                           <ExpiryBadge date={form.license_expiry} />
                         </Field>
                       </div>
@@ -1076,7 +1087,7 @@ export default function EmployeesPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 pt-1">
                           {RESTRICTIONS.map(([code, label]) => (
                             <label key={code} className="flex items-center gap-2 text-[12px] text-slate-700 cursor-pointer">
-                              <input type="checkbox" checked={(form.license_restrictions || []).includes(code)}
+                              <input name="code" type="checkbox" checked={(form.license_restrictions || []).includes(code)}
                                 onChange={(e) => setForm((f) => ({ ...f, license_restrictions: e.target.checked ? [...(f.license_restrictions || []), code] : (f.license_restrictions || []).filter((c) => c !== code) }))} />
                               <span><b className="font-mono">{code}</b> · {label}</span>
                             </label>
@@ -1084,7 +1095,7 @@ export default function EmployeesPage() {
                         </div>
                       </Field>
                       <Field label="Vehicle Plate Number" error={formErrors.vehicle_plate}>
-                        <input value={form.vehicle_plate} onChange={handleChange("vehicle_plate")} placeholder="e.g. V7824" className={inputCls} />
+                        <input name="vehicle_plate" value={form.vehicle_plate} onChange={handleChange("vehicle_plate")} placeholder="e.g. V7824" className={inputCls} />
                         <span className="text-[10px] text-slate-400 mt-0.5 block">Optional. Shown to customers beside the driver's name.</span>
                       </Field>
                     </>
@@ -1098,20 +1109,20 @@ export default function EmployeesPage() {
                   <div className="text-[12px] font-semibold text-slate-700">Education</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Field label="Highest Attainment" error={formErrors.education_level}>
-                      <select value={form.education_level} onChange={handleChange("education_level")} className={inputCls}>
+                      <select name="education_level" value={form.education_level} onChange={handleChange("education_level")} className={inputCls}>
                         <option value="">Choose</option>
                         {EDUCATION_LEVELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                     </Field>
                     <Field label="Year Graduated" error={formErrors.year_graduated}>
-                      <input type="number" min="1950" max={new Date().getFullYear() + 6} inputMode="numeric" value={form.year_graduated}
+                      <input name="year_graduated" type="number" min="1950" max={new Date().getFullYear() + 6} inputMode="numeric" value={form.year_graduated}
                         onChange={handleChange("year_graduated")} placeholder="e.g. 2016" className={inputCls} />
                     </Field>
                     <Field label="School" error={formErrors.school}>
-                      <input value={form.school} onChange={handleChange("school")} maxLength={160} className={inputCls} />
+                      <input name="school" value={form.school} onChange={handleChange("school")} maxLength={160} className={inputCls} />
                     </Field>
                     <Field label="Course or Strand" error={formErrors.course}>
-                      <input value={form.course} onChange={handleChange("course")} maxLength={160} className={inputCls} />
+                      <input name="course" value={form.course} onChange={handleChange("course")} maxLength={160} className={inputCls} />
                     </Field>
                   </div>
                   <div className="flex items-center justify-between mt-1">
@@ -1128,11 +1139,11 @@ export default function EmployeesPage() {
                       // Company and position on one row, the dates and Remove under them,
                       // so long names and month names are never cut off
                       <div key={i} className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg border border-black/[0.09] p-2.5">
-                        <Field label="Company" error={formErrors[`work_history.${i}.company`]}><input value={w.company} onChange={set("company")} title={w.company} className={inputCls} /></Field>
-                        <Field label="Position"><input value={w.position} onChange={set("position")} title={w.position} className={inputCls} /></Field>
+                        <Field label="Company" error={formErrors[`work_history.${i}.company`]}><input name="company" value={w.company} onChange={set("company")} title={w.company} className={inputCls} /></Field>
+                        <Field label="Position"><input name="position" value={w.position} onChange={set("position")} title={w.position} className={inputCls} /></Field>
                         <div className="sm:col-span-2 grid grid-cols-1 min-[420px]:grid-cols-[1fr_1fr_auto] gap-2 items-end">
-                          <Field label="From"><input type="month" value={w.from} onChange={set("from")} className={inputCls} /></Field>
-                          <Field label="To"><input type="month" value={w.to} onChange={set("to")} className={inputCls} /></Field>
+                          <Field label="From"><input name="from" type="month" value={w.from} onChange={set("from")} className={inputCls} /></Field>
+                          <Field label="To"><input name="to" type="month" value={w.to} onChange={set("to")} className={inputCls} /></Field>
                           <button type="button" onClick={() => setForm((f) => ({ ...f, work_history: (f.work_history || []).filter((_, j) => j !== i) }))}
                             className="justify-self-end px-2.5 py-1.5 text-[11px] text-rose-700 hover:underline">Remove</button>
                         </div>
@@ -1193,6 +1204,7 @@ export default function EmployeesPage() {
                 </div>
               </div>
             </form>
+</div>
           </div>
         </div>
       )}
@@ -1240,7 +1252,7 @@ export default function EmployeesPage() {
             </p>
             <div className="mt-4 flex flex-col gap-2">
               {[["Email", createdAccount.email], ["Password", createdAccount.password]].map(([label, value]) => (
-                <div key={label} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-black/[0.09]">
+                <div key={label} className="neu-inset flex items-center gap-2 px-3 py-2 rounded-xl">
                   <div className="min-w-0 flex-1">
                     <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
                     <div className="font-mono text-[13px] text-slate-800 break-all select-all">{value}</div>
@@ -1382,8 +1394,8 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.09]">
+      <div className="modal-shell bg-white rounded-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-black/[0.09]">
           <div>
             <div className="text-[15px] font-semibold text-slate-800">
               {!enrolled ? "Enroll Face" : capturing ? "Re-enroll Face" : "Registered Face"}
@@ -1392,6 +1404,7 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
           </div>
           <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700 cursor-pointer"><XIcon /></button>
         </div>
+<div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
 
         <div className="px-5 py-4 flex flex-col gap-3">
           {enrolled && !capturing && (
@@ -1483,6 +1496,7 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
             </div>
           )}
         </div>
+</div>
       </div>
     </div>
   );

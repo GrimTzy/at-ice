@@ -226,7 +226,7 @@ function PayRates() {
       <h3 className="text-[11px] font-semibold tracking-wider uppercase text-slate-400">Holiday and overtime pay rates</h3>
       <p className="text-[12px] text-slate-500 mt-0.5">x the hourly rate. Client defaults; the DOLE rate is in each note. A change applies from the date below.</p>
       <label className="mt-2 flex items-center gap-2 text-[12px] text-slate-600">New rates apply from
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${inputCls} w-auto`} />
+        <input name="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${inputCls} w-auto`} />
       </label>
       {(rows || []).map((r) => (
         <div key={r.key} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_110px_auto] gap-2 sm:items-center py-2.5 border-b border-black/[0.06] last:border-b-0">
@@ -234,7 +234,7 @@ function PayRates() {
             <span className="block text-[12px] text-slate-700">{RATE_LABELS[r.key] || r.key} <span className="font-mono text-slate-400">({r.value.toFixed(2)})</span></span>
             <span className="block text-[10px] text-slate-400">{r.history[r.history.length - 1]?.note}</span>
           </div>
-          <input type="number" step="0.01" min="0" max="10" aria-label={RATE_LABELS[r.key]} value={draft[r.key] ?? r.value} onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))} className={inputCls} />
+          <input name="draft" type="number" step="0.01" min="0" max="10" aria-label={RATE_LABELS[r.key]} value={draft[r.key] ?? r.value} onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))} className={inputCls} />
           <button type="button" onClick={() => save(r.key)} disabled={draft[r.key] === undefined || Number(draft[r.key]) === r.value}
             className="px-3 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-40">Save</button>
         </div>

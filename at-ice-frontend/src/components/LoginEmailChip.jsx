@@ -65,8 +65,8 @@ export default function LoginEmailChip({ userId, email, onSaved }) {
             <p className="text-[12px] text-slate-500 mb-3">
               Fix a wrong login email. The password stays the same; they sign in with the new email from now on.
             </p>
-            <label className="text-[11px] text-slate-500 mb-1 block">New login email</label>
-            <input
+            <label htmlFor="login-email-chip-new-login-email" className="text-[11px] text-slate-500 mb-1 block">New login email</label>
+            <input id="login-email-chip-new-login-email" name="email"
               type="email"
               value={value}
               onChange={(e) => setValue(e.target.value)}

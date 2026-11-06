@@ -295,7 +295,7 @@ export default function ReceiptsPage() {
           </div>
           <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
             <SearchIcon />
-            <input
+            <input name="search"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -390,8 +390,8 @@ export default function ReceiptsPage() {
       {/* View receipt modal */}
       {viewing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[85vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
+          <div className="modal-shell bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-slate-800">{viewing.receipt_no}</h3>
               <div className="flex items-center gap-2">
                 <button onClick={() => printReceipt(viewing)} className="print-btn">
@@ -402,6 +402,7 @@ export default function ReceiptsPage() {
                 </button>
               </div>
             </div>
+            <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="p-5 flex flex-col gap-4 text-[13px]">
               <div className="detail-well">
               <Row label="Customer" value={viewing.customer?.name || "—"} />
@@ -479,6 +480,7 @@ export default function ReceiptsPage() {
                 )}
               </div>
             </div>
+            </div>
           </div>
         </div>
       )}
@@ -499,7 +501,7 @@ export default function ReceiptsPage() {
           <DraftHint draft={rejectDraft} className="mt-3" />
           <label className="guard-field">
             <span>Reason (shown to the customer) *</span>
-            <textarea
+            <textarea name="reject_reason"
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               required
@@ -521,8 +523,8 @@ export default function ReceiptsPage() {
             <p className="text-[12px] text-slate-500 mb-4">
               <span className="font-medium text-slate-700">{payTarget.receipt_no}</span> — {peso(payTarget.total_amount)}
             </p>
-            <label className="text-[11px] text-slate-500 mb-1 block">Payment Method</label>
-            <select
+            <label htmlFor="receipts-page-payment-method" className="text-[11px] text-slate-500 mb-1 block">Payment Method</label>
+            <select id="receipts-page-payment-method" name="pay_method"
               value={payMethod}
               onChange={(e) => setPayMethod(e.target.value)}
               className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 mb-4"

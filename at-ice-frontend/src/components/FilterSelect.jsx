@@ -14,6 +14,7 @@ export default function FilterSelect({ label = "Show", value, onChange, options,
     <label className={`inline-flex items-center gap-2 text-[12px] text-slate-500 ${className}`}>
       <span className={hideLabel ? "sr-only" : "font-medium whitespace-nowrap"}>{label}</span>
       <select
+        name={`filter_${String(label).toLowerCase().replace(/[^a-z0-9]+/g, "_")}`}
         value={key(value)}
         onChange={(e) => onChange(options.find((o) => key(o.value) === e.target.value)?.value)}
         className="min-w-[160px] max-w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700 outline-none focus:border-cyan-500/60 cursor-pointer"

@@ -44,13 +44,43 @@ function hasKioskHeader(input, init) {
 
 let redirecting = false;
 
+export const isCurrentSession = (token) => token === localStorage.getItem("token");
+
+export function assertCurrentSession(token) {
+  if (!isCurrentSession(token)) {
+    throw new DOMException("The session changed before the request completed.", "AbortError");
+  }
+}
+
+// Reading the body can finish after fetch itself, including on a cloned response.
+function guardResponse(response, token) {
+  const check = () => {
+    if (response.status === 401 && !localStorage.getItem("token")) return;
+    assertCurrentSession(token);
+  };
+  for (const method of ["json", "text", "blob", "arrayBuffer", "formData", "bytes"]) {
+    if (typeof response[method] !== "function") continue;
+    const read = response[method].bind(response);
+    response[method] = async (...args) => {
+      check();
+      const body = await read(...args);
+      check();
+      return body;
+    };
+  }
+  const clone = response.clone.bind(response);
+  response.clone = () => guardResponse(clone(), token);
+  return response;
+}
+
 // Called with the address and method of a request that came back 401. Ends the
 // session and goes to the login page, unless the request is one that is ignored
 // (see isIgnored), carries the kiosk token, or nobody is signed in. Shared by the
 // fetch wrapper below and by XMLHttpRequest uploads (lib/upload.js), which fetch
 // never sees.
-export function handleUnauthorized(rawUrl, method = "GET", kiosk = false) {
+export function handleUnauthorized(rawUrl, method = "GET", kiosk = false, token) {
   if (redirecting) return;
+  if (token !== undefined && !isCurrentSession(token)) return;
 
   try {
     const url = new URL(rawUrl, window.location.origin);
@@ -83,18 +113,26 @@ export function installSessionExpiryHandler() {
   const originalFetch = window.fetch.bind(window);
 
   window.fetch = async (input, init) => {
+    const rawUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const url = new URL(rawUrl, window.location.origin);
+    const headers = new Headers(init?.headers ?? (typeof input === "object" ? input.headers : undefined));
+    const token = url.origin === window.location.origin && url.pathname.startsWith("/api/")
+      ? headers.get("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]
+        ?? (hasKioskHeader(input, init) ? null : localStorage.getItem("token"))
+      : null;
     const response = await originalFetch(input, init);
 
-    if (response.status !== 401 || redirecting) return response;
+    if (token) assertCurrentSession(token);
 
-    try {
-      const rawUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      const method = String(init?.method || (typeof input === "object" && input.method) || "GET").toUpperCase();
-      handleUnauthorized(rawUrl, method, hasKioskHeader(input, init));
-    } catch {
-      // never break the original response because of this check
+    if (response.status === 401 && !redirecting) {
+      try {
+        const method = String(init?.method || (typeof input === "object" && input.method) || "GET").toUpperCase();
+        handleUnauthorized(rawUrl, method, hasKioskHeader(input, init), token ?? null);
+      } catch {
+        // never break the original response because of this check
+      }
     }
 
-    return response;
+    return token ? guardResponse(response, token) : response;
   };
 }

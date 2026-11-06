@@ -737,3 +737,21 @@ select:not([multiple], [size]:not([size="1"]), [data-native]) {
    page material: 5.6:1 and 5.8:1 in light, 10.8:1 and 9.2:1 in night mode. */
 :root { --neu-warn: #92400e; --neu-warn-strong: #9a3412; }
 :is(.cp-dark, .neu-dark) { --neu-warn: #fcd34d; --neu-warn-strong: #fdba74; }
+
+/* Phones: Android and iOS draw their own dropdown arrow on date fields next
+   to our calendar icon (two icons on a real phone, one in desktop DevTools).
+   Dropping the native appearance leaves only the theme icon. iOS then needs
+   the value kept left-aligned and the field kept its normal height. */
+input:is([type="date"], [type="month"], [type="datetime-local"], [type="time"]):not([data-native]) {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input:is([type="date"], [type="month"], [type="datetime-local"], [type="time"]):not([data-native])::-webkit-inner-spin-button,
+input:is([type="date"], [type="month"], [type="datetime-local"], [type="time"]):not([data-native])::-webkit-clear-button {
+  display: none;
+  -webkit-appearance: none;
+}
+input:is([type="date"], [type="month"], [type="datetime-local"], [type="time"]):not([data-native])::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 1.5em;
+}

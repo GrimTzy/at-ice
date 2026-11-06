@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useId, useState, useEffect, useCallback, useRef } from "react";
 import { CUSTOMER_TYPES, typeForChain } from "../../lib/customerTypes";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
@@ -18,6 +18,7 @@ import { formatDateShort } from "../../lib/time";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, ProgressRing, StatusBreakdown } from "../../components/Insight";
 import { Icon } from "../../components/icons";
+import { focusRecord } from "../../lib/destination";
 
 const API_BASE = "/api";
 
@@ -96,6 +97,7 @@ export default function CustomersPage() {
   const [error, setError]         = useState("");
   const [search, setSearch]       = useState("");
   const [typeFilter, setTypeFilter]   = useState("");
+  const [setupOnly, setSetupOnly]     = useState(false);
 
   // Add/Edit modal: kept as a draft while open, so a refresh reopens it as it was.
   const formDraft = useDraft("customers:form", { showForm: false, editingId: null, form: EMPTY_FORM }, { when: (v) => v.showForm });
@@ -312,17 +314,30 @@ export default function CustomersPage() {
     navigator.clipboard?.writeText(text).catch(() => {});
   }
 
+  // Needs setup: no portal login, no map pin, or no contact person
+  const needsSetup = (c) => !c.user || c.latitude == null || c.longitude == null || !c.contact_person;
   const filtered = customers.filter((c) => {
     if (typeFilter && (c.customer_type || "dealer") !== typeFilter) return false;
+    if (setupOnly && !needsSetup(c)) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     const haystack = `${c.name} ${c.invoice_code ?? ""} ${c.customer_code} ${c.branch_code ?? ""} ${c.city ?? ""}`.toLowerCase();
     return haystack.includes(q);
   });
-  const filtering = !!(search || typeFilter);
+  const filtering = !!(search || typeFilter || setupOnly);
   const filterCls = "bg-slate-50 border border-black/[0.09] rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500";
 
   const pager = usePagination(filtered);
+  // A Needs setup item: show that customer in the table (on its page) and pulse
+  // its row. Filters that would hide it are cleared first.
+  const showCustomer = (item) => {
+    const c = customers.find((x) => x.id === item.id);
+    if (!c) return;
+    if (typeFilter && (c.customer_type || "dealer") !== typeFilter) setTypeFilter("");
+    if (search) setSearch("");
+    pager.reveal((x) => x.id === c.id);
+    focusRecord(c.id);
+  };
 
   // Summary for the KPI cards and insight panels
   const typeCount = (t) => customers.filter((c) => (c.customer_type || "dealer") === t).length;
@@ -331,7 +346,7 @@ export default function CustomersPage() {
   const noContact = customers.filter((c) => !c.contact_person || !c.contact_number);
   const share = (n) => (customers.length ? n / customers.length : 0);
   const attention = customers
-    .filter((c) => !c.user || c.latitude == null || c.longitude == null || !c.contact_person)
+    .filter(needsSetup)
     .map((c) => ({
       id: c.id,
       title: c.name,
@@ -350,7 +365,7 @@ export default function CustomersPage() {
         {Object.entries(CUSTOMER_TYPES).map(([val, t], i) => (
           <KpiCard key={val} label={t.label} icon={i === 0 ? "users" : i === 1 ? "store" : "box"} tone={["emerald", "violet", "amber"][i] || "slate"} value={typeCount(val)} sub={`${Math.round(share(typeCount(val)) * 100)}% of customers`} bar={share(typeCount(val))} onClick={() => setTypeFilter(typeFilter === val ? "" : val)} active={typeFilter === val} />
         ))}
-        <KpiCard label="Needs setup" icon="alert" tone={attention.length ? "rose" : "emerald"} value={attention.length} sub={`${noPin.length} without a map pin · ${noContact.length} without a contact`} bar={share(attention.length)} />
+        <KpiCard label="Needs setup" icon="alert" tone={attention.length ? "rose" : "emerald"} value={attention.length} sub={`${noPin.length} without a map pin · ${noContact.length} without a contact`} bar={share(attention.length)} onClick={() => setSetupOnly((v) => !v)} active={setupOnly} />
       </KpiGrid>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
@@ -362,7 +377,7 @@ export default function CustomersPage() {
           empty="No customers yet."
           footer={<ProgressRing value={share(withLogin)} label="Portal logins" caption={`${withLogin} of ${customers.length} customers can sign in to the portal`} />}
         />
-        <ActivityFeed title="Needs setup" subtitle="Missing a login, map pin or contact" items={attention} empty="Every customer has a login, a map pin and a contact." max={5} />
+        <ActivityFeed title="Needs setup" subtitle="Missing a login, map pin or contact" items={attention} empty="Every customer has a login, a map pin and a contact." max={5} onPick={showCustomer} />
         <ActivityFeed title="Newest customers" items={newest} empty="Customers you add show up here." max={5} />
       </div>
 
@@ -375,13 +390,13 @@ export default function CustomersPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterCls} aria-label="Filter by customer type">
+            <select name="type_filter" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterCls} aria-label="Filter by customer type">
               <option value="">All types ({customers.length})</option>
               {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label} ({typeCount(val)})</option>)}
             </select>
             <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
               <SearchIcon />
-              <input
+              <input name="search"
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -426,7 +441,7 @@ export default function CustomersPage() {
                 </td></tr>
               )}
               {!loading && pager.pageItems.map((c) => (
-                <tr key={c.id} className="border-t border-black/[0.06]">
+                <tr key={c.id} data-row-key={c.id} className="border-t border-black/[0.06]">
                   <td className="px-[18px] py-2.5">
                     <div className="font-medium text-slate-800">{c.name}</div>
                     <div className="text-[11px] text-slate-400">{c.invoice_code && <span className="mr-1 px-1.5 py-px rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-semibold">{c.invoice_code}</span>}{c.customer_code}{c.branch_code ? ` · ${c.branch_code}` : ""}</div>
@@ -504,17 +519,17 @@ export default function CustomersPage() {
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           {/* Header and buttons stay put; only the fields scroll. */}
-          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+          <form onSubmit={submitForm} className="modal-shell bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
             <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-slate-800">
                 {editingId ? "Edit Customer" : "Add Customer"}
               </h3>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
+              <button type="button" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
                 <XIcon />
               </button>
             </div>
-            <form onSubmit={submitForm} className="flex flex-col min-h-0 flex-1">
-              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 flex flex-col gap-3">
+            <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
+              <div className="p-5 flex flex-col gap-3">
               <DraftHint draft={formDraft} />
               {formError && (
                 <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">
@@ -539,8 +554,8 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
-                  <select
+                  <label htmlFor="customers-page-customer-type" className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
+                  <select id="customers-page-customer-type" name="customer_type"
                     value={form.customer_type || "dealer"}
                     onChange={(e) => setForm((f) => ({ ...f, customer_type: e.target.value }))}
                     className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
@@ -575,8 +590,10 @@ export default function CustomersPage() {
                 )}
                 <Field label="Contact Person" value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required={need("contact_person")} />
                 <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Contact Number{need("contact_number") && <Req />}</label>
+                  <label htmlFor="customer-contact-number" className="text-[11px] text-slate-500 mb-1 block">Contact Number{need("contact_number") && <Req />}</label>
                   <PhoneInput
+                    id="customer-contact-number"
+                    name="contact_number"
                     value={form.contact_number}
                     onChange={(v) => setForm({ ...form, contact_number: v })}
                     placeholder="9171234567"
@@ -616,7 +633,7 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="text-[11px] text-slate-500 mb-1 block">Store location on the map</label>
+                  <div className="text-[11px] text-slate-500 mb-1 block">Store location on the map</div>
                   <PinPickerMap
                     latitude={form.latitude}
                     longitude={form.longitude}
@@ -642,7 +659,8 @@ export default function CustomersPage() {
                 </div>
               </div>
               </div>
-              <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] bg-white flex items-center justify-end gap-2">
+            </div>
+            <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] bg-white flex items-center justify-end gap-2">
                 <span className="mr-auto text-[11px] text-slate-400"><span className="text-red-500">*</span> Required</span>
                 <button type="button" onClick={() => setShowForm(false)} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 text-[12px]">
                   Cancel
@@ -651,8 +669,7 @@ export default function CustomersPage() {
                   {saving ? "Saving…" : editingId ? "Save Changes" : "Add Customer"}
                 </button>
               </div>
-            </form>
-          </div>
+          </form>
         </div>
       )}
 
@@ -738,10 +755,13 @@ export default function CustomersPage() {
 
 function Field({ label, value, onChange, required, disabled, placeholder, inputMode, type = "text", multiline = false }) {
   const Tag = multiline ? "textarea" : "input";
+  const id = useId();
   return (
     <div>
-      <label className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
+      <label htmlFor={id} className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
       <Tag
+        id={id}
+        name={String(label).toLowerCase().replace(/[^a-z0-9]+/g, "_")}
         {...(multiline ? { rows: 3 } : {})}
         type={multiline ? undefined : type}
         value={value}
@@ -811,8 +831,8 @@ function MapLinkField({ value, onChange, onPlace, onName }) {
 
   return (
     <div>
-      <label className="text-[11px] text-slate-500 mb-1 block">Map Link</label>
-      <input
+      <label htmlFor="customers-page-map-link" className="text-[11px] text-slate-500 mb-1 block">Map Link</label>
+      <input id="customers-page-map-link" name="map_link"
         type="text"
         value={value}
         onChange={(e) => typed(e.target.value)}
@@ -875,8 +895,8 @@ function EmailDomainField({ label, value, onChange, required, savedEmail = "" })
 
   return (
     <div>
-      <label className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
-      <input
+      <label htmlFor="customer-contact-email" className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
+      <input id="customer-contact-email" name="login_email"
         type="email"
         value={value}
         onChange={(e) => onChange(e.target.value)}

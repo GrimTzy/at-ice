@@ -19,7 +19,7 @@ import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 import { payPeriodLabel } from "../../lib/payPeriod";
-import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
+import { PRINT_BASE_CSS, cutoffPart, docFileName, printDocument } from "../../lib/printDocument";
 import { COMPANY } from "../../lib/company";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
@@ -81,7 +81,7 @@ function printPayslip(p) {
     ${n(p.carry_over_out) ? `<p>Deductions were ${peso(p.carry_over_out)} more than the pay; this is deducted on the next cut-off.</p>` : ""}
     ${n(p.employer_shouldered) ? `<p>Deductions were ${peso(p.employer_shouldered)} more than the pay; the employer pays this.</p>` : ""}
     <p class="muted" style="margin-top:18px">Gross ${peso(p.gross_pay)} · Taxable income ${peso(p.taxable_income)} · Hourly rate ${peso(p.hourly_rate)}</p>
-  </div></body></html>`);
+  </div></body></html>`, docFileName("payslip", e.employee_id, cutoffPart(p.period_start, p.period_end)));
 }
 
 const Chevron = ({ left }) => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><polyline points={left ? "15 18 9 12 15 6" : "9 18 15 12 9 6"} /></svg>;
@@ -122,8 +122,10 @@ function AdjustModal({ payroll, onClose, onChanged }) {
   };
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={close}>
-      <div role="dialog" aria-label="Earnings adjustments" className="bg-white rounded-xl w-full max-w-md p-5 flex flex-col gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
-        <div className="text-[14px] font-semibold text-slate-800">Earnings adjustments</div>
+      <div role="dialog" aria-label="Earnings adjustments" className="modal-shell bg-white rounded-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden text-xs" onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] text-[14px] font-semibold text-slate-800">Earnings adjustments</div>
+        <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="p-5 flex flex-col gap-3">
         <DraftHint draft={draft} />
         <ul className="flex flex-col gap-1">
           {(payroll.adjustments || []).length === 0 && <li className="text-slate-400">None yet.</li>}
@@ -135,14 +137,18 @@ function AdjustModal({ payroll, onClose, onChanged }) {
           ))}
         </ul>
         <form onSubmit={add} className="grid grid-cols-2 gap-2">
-          <select aria-label="Kind" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} className="px-2 py-1.5 border border-black/[0.09] rounded-md">
+          <select name="label" aria-label="Kind" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} className="px-2 py-1.5 border border-black/[0.09] rounded-md">
             {["Bonus", "Incentive", "Referral bonus", "Allowance", "Other earning"].map((l) => <option key={l}>{l}</option>)}
           </select>
-          <input aria-label="Amount" type="number" min="0.01" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Amount" className="px-2 py-1.5 border border-black/[0.09] rounded-md" />
-          <label className="flex items-center gap-2 col-span-2"><input type="checkbox" data-native checked={form.taxable} onChange={(e) => setForm({ ...form, taxable: e.target.checked })} /> Taxable</label>
+          <input name="amount" aria-label="Amount" type="number" min="0.01" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Amount" className="px-2 py-1.5 border border-black/[0.09] rounded-md" />
+          <label className="flex items-center gap-2 col-span-2"><input name="taxable" type="checkbox" data-native checked={form.taxable} onChange={(e) => setForm({ ...form, taxable: e.target.checked })} /> Taxable</label>
           <button type="submit" disabled={busy || !form.amount} className="col-span-2 px-3 py-1.5 rounded-md bg-cyan-500 text-white font-semibold disabled:opacity-50 cursor-pointer">{busy ? "Adding…" : "Add earning"}</button>
         </form>
-        <button onClick={close} className="self-end text-slate-500 cursor-pointer">Close</button>
+        </div>
+        </div>
+        <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] flex justify-end">
+          <button onClick={close} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 cursor-pointer">Close</button>
+        </div>
       </div>
     </div>
   );
@@ -156,7 +162,7 @@ function ThirteenthMonth() {
     <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
       <div className="px-[18px] py-3 border-b border-black/[0.09] flex flex-wrap items-center gap-3 text-xs">
         <div className="text-[13px] font-semibold text-slate-800">13th month pay</div>
-        <select aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))} className="px-2 py-1 border border-black/[0.09] rounded-md">
+        <select name="year" aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))} className="px-2 py-1 border border-black/[0.09] rounded-md">
           {[0, 1, 2].map((i) => new Date().getFullYear() - i).map((y) => <option key={y}>{y}</option>)}
         </select>
         <span className="text-slate-400">(Basic earned − unpaid absences, leave and tardiness) ÷ 12 · credit date {data?.credit_date || "—"}</span>
@@ -265,13 +271,13 @@ export default function PayrollRecordsPage() {
               <button type="button" aria-label="Previous pay period" title="Previous pay period" disabled={!period} onClick={() => setDate(addDays(period.start, -1))} className={navBtn}><Chevron left /> Previous</button>
               <span className="period-well px-3 rounded-md bg-slate-50 text-xs text-slate-800 font-semibold min-w-[180px] text-center" title="Start and end are fixed by the pay period">{period ? payPeriodLabel(period) : "…"}</span>
               <button type="button" aria-label="Next pay period" title="Next pay period" disabled={!period} onClick={() => setDate(addDays(period.end, 1))} className={navBtn}>Next <Chevron /></button>
-              <input type="date" aria-label="Go to the pay period of a date" title="Go to the pay period of a date" max={todayManila()} onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700" />
+              <input name="date" type="date" aria-label="Go to the pay period of a date" title="Go to the pay period of a date" max={todayManila()} onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700" />
             </div>
             <FilterSelect label="Status" value={status} onChange={setStatus}
               options={[["all", "All"], ["unpaid", "Unpaid (Approved)"], ["paid", "Paid"]].map(([k, l]) => ({ value: k, label: l, count: data ? (data.rows || []).filter((r) => r.payroll && (k === "all" || r.payroll.status === k)).length : null }))} />
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-slate-500 w-full sm:w-60 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500/20">
               <SearchIcon />
-              <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name" className="w-full bg-transparent outline-none text-xs text-slate-800 placeholder:text-slate-500" />
+              <input name="search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name" className="w-full bg-transparent outline-none text-xs text-slate-800 placeholder:text-slate-500" />
             </div>
             <div className="flex-1" />
             <span className="text-[11px] text-slate-400">Pay day {period?.pay_day || "—"} · SSS, PhilHealth, Pag-IBIG this pay day: {data ? `${Math.round(data.gov_share * 100)}%` : "—"}</span>
@@ -290,7 +296,7 @@ export default function PayrollRecordsPage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-left text-slate-400 border-b border-black/[0.09]">
-                      <th className="px-[18px] py-2.5"><input type="checkbox" data-native aria-label="Select all unpaid" checked={allOn} onChange={() => setSelected(allOn ? new Set() : new Set(payable.map((r) => r.payroll.id)))} /></th>
+                      <th className="px-[18px] py-2.5"><input name="all_on" type="checkbox" data-native aria-label="Select all unpaid" checked={allOn} onChange={() => setSelected(allOn ? new Set() : new Set(payable.map((r) => r.payroll.id)))} /></th>
                       <th className="px-3 py-2.5 font-medium">Employee ID</th>
                       <th className="px-3 py-2.5 font-medium">Name</th>
                       <th className="px-3 py-2.5 font-medium text-right">Basic</th>
@@ -309,7 +315,7 @@ export default function PayrollRecordsPage() {
                       const p = r.payroll;
                       return (
                         <tr key={r.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
-                          <td className="px-[18px] py-2.5">{p?.status === "unpaid" && <input type="checkbox" data-native aria-label={`Select ${r.employee_id}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} />}</td>
+                          <td className="px-[18px] py-2.5">{p?.status === "unpaid" && <input name="id" type="checkbox" data-native aria-label={`Select ${r.employee_id}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} />}</td>
                           <td className="px-3 py-2.5 font-mono text-slate-600">{r.employee_id}</td>
                           <td className="px-3 py-2.5 text-slate-800 font-medium whitespace-nowrap">{r.name}</td>
                           {p ? (

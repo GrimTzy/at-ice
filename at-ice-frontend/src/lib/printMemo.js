@@ -1,4 +1,4 @@
-import { PRINT_BASE_CSS, printDocument } from "./printDocument";
+import { PRINT_BASE_CSS, docFileName, printDocument } from "./printDocument";
 import { COMPANY } from "./company";
 import { fullName } from "./names";
 
@@ -44,5 +44,5 @@ export function printMemo(memo) {
       <div>Human Resources</div>
     </div>
   </div></body></html>`;
-  printDocument(html);
+  printDocument(html, docFileName("memo", memo.memo_no, emp.employee_id, String(issued || "").slice(0, 10)));
 }

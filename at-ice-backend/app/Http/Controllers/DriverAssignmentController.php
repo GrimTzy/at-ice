@@ -23,7 +23,7 @@ class DriverAssignmentController extends Controller
     public function index()
     {
         return response()->json(
-            DriverStoreAssignment::with(['driver:id,name', 'store:id,name,chain,branch_code'])
+            DriverStoreAssignment::with(['driver:id,name', 'store:id,name,chain,branch_code,customer_type'])
                 ->where(fn ($q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', DriverAvailability::today()))
                 ->orderBy('effective_from')
                 ->get()

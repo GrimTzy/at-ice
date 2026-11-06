@@ -8,6 +8,7 @@ use App\Models\LeaveRequest;
 use App\Support\Audit;
 use App\Support\LeaveCredits;
 use App\Support\Settings;
+use App\Support\StoredFiles;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -179,8 +180,8 @@ class LeaveRequestController extends Controller
             return response()->json(['message' => 'Only pending requests can be cancelled.'], 403);
         }
 
-        $this->deleteAttachment($leave);
         $leave->delete();
+        $this->deleteAttachment($leave); // after the record change; the file goes once it is committed
 
         return response()->json(['message' => 'Leave request cancelled.'], 200);
     }
@@ -198,8 +199,9 @@ class LeaveRequestController extends Controller
     {
         $employee = $this->myEmployee($request);
 
+        // A login with no employee record simply has no requests, not an error.
         if (! $employee) {
-            return response()->json(['message' => 'No employee record linked to this login.'], 404);
+            return response()->json([]);
         }
 
         $leaves = LeaveRequest::with('approvedBy:id,name')
@@ -215,7 +217,7 @@ class LeaveRequestController extends Controller
     {
         $employee = $this->myEmployee($request);
         if (! $employee) {
-            return response()->json(['message' => 'No employee record linked to this login.'], 404);
+            return response()->json(['employee_linked' => false]);
         }
 
         return response()->json(LeaveCredits::for($employee) + [
@@ -299,21 +301,28 @@ class LeaveRequestController extends Controller
         }
 
         // Kept private: only HR and the employee can open it (attachment routes).
-        $path = $request->hasFile('attachment') ? $request->file('attachment')->store('leave-attachments', 'local') : null;
+        // The file is written before the record: if saving fails the file goes too.
+        $stored = new StoredFiles('local');
+        try {
+            $path = $request->hasFile('attachment') ? $stored->store($request->file('attachment'), 'leave-attachments') : null;
 
-        $leave = LeaveRequest::create([
-            'employee_id' => $employee->id,
-            'leave_type' => $type,
-            'start_date' => $start->toDateString(),
-            'end_date' => $end->toDateString(),
-            'total_days' => $type === 'emergency' ? round($days, 2) : $days,
-            'hours' => $type === 'emergency' ? $request->hours : null,
-            'is_half_day' => $half,
-            'reason' => $request->reason,
-            'status' => 'pending',
-            'attachment_path' => $path,
-            'attachment_disk' => 'local',
-        ]);
+            $leave = LeaveRequest::create([
+                'employee_id' => $employee->id,
+                'leave_type' => $type,
+                'start_date' => $start->toDateString(),
+                'end_date' => $end->toDateString(),
+                'total_days' => $type === 'emergency' ? round($days, 2) : $days,
+                'hours' => $type === 'emergency' ? $request->hours : null,
+                'is_half_day' => $half,
+                'reason' => $request->reason,
+                'status' => 'pending',
+                'attachment_path' => $path,
+                'attachment_disk' => 'local',
+            ]);
+        } catch (\Throwable $e) {
+            $stored->discard();
+            throw $e;
+        }
 
         return response()->json([
             'message' => $credits['available'] >= $days
@@ -343,8 +352,8 @@ class LeaveRequestController extends Controller
             return response()->json(['message' => 'Only pending requests can be cancelled.'], 403);
         }
 
-        $this->deleteAttachment($leave);
         $leave->delete();
+        $this->deleteAttachment($leave); // after the record change; the file goes once it is committed
 
         return response()->json(['message' => 'Leave request cancelled.'], 200);
     }
@@ -374,7 +383,7 @@ class LeaveRequestController extends Controller
     private function deleteAttachment(LeaveRequest $leave): void
     {
         if ($leave->attachment_path) {
-            Storage::disk($leave->attachment_disk ?: 'public')->delete($leave->attachment_path);
+            StoredFiles::deleteAfterCommit($leave->attachment_disk ?: 'public', $leave->attachment_path);
         }
     }
 }

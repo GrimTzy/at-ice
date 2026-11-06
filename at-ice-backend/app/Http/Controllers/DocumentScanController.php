@@ -84,8 +84,11 @@ class DocumentScanController extends Controller
 
     public function scan(Request $request)
     {
-        // The model can take a while; PHP's default 30 seconds is too short.
-        set_time_limit(75);
+        // The model can take a while; PHP's default 30 seconds is too short. Web
+        // requests only: in the console this would cap the whole test run.
+        if (! app()->runningInConsole()) {
+            set_time_limit(75);
+        }
 
         $request->validate([
             'kind' => 'required|in:resume,license',

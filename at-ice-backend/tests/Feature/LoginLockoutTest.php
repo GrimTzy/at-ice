@@ -139,6 +139,8 @@ class LoginLockoutTest extends TestCase
 
     public function test_guessing_one_account_from_many_ips_is_still_stopped(): void
     {
+        $this->freezeSecond(); // retry_after_seconds below is exact
+
         // 4 tries from each of 5 IPs: no single IP reaches 5, but the account sees 20
         foreach (range(1, 5) as $n) {
             $this->wrong('ana@atice.cloud', 4, "198.51.100.{$n}");

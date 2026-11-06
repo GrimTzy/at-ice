@@ -24,6 +24,7 @@ use App\Http\Controllers\IceLoadingController;
 use App\Http\Controllers\InventoryAlertController;
 use App\Http\Controllers\KioskController;
 use App\Http\Controllers\LeaveRequestController;
+use App\Http\Controllers\NavCountController;
 use App\Http\Controllers\LiveFeedController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PasswordResetController;
@@ -51,7 +52,7 @@ use Illuminate\Support\Facades\Route;
 // are separate (the same request is not counted twice by two limits).
 //   login: 10 attempts per minute per IP (stops password guessing)
 //   kiosk: 30 per minute per IP (public Attendance Station routes)
-//   api:   120 per minute per logged-in user (all protected routes)
+//   api:   300 per minute per logged-in user (all protected routes)
 // A blocked request gets HTTP 429 "Too Many Attempts."
 
 // Public
@@ -88,7 +89,7 @@ Route::post('attendances', [AttendanceController::class, 'store'])->middleware([
 Route::get('live-feed', [LiveFeedController::class, 'index'])
     ->middleware(['auth:sanctum', 'password.changed', 'throttle:40,1,live']);
 
-Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->group(function () {
+Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
@@ -124,6 +125,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
+        // Side menu badges: items waiting for the Admin (NavCountController)
+        Route::get('nav-counts/admin', [NavCountController::class, 'admin']);
         // Performance appraisals: draft ratings from the records, Admin overrides and publishes
         Route::get('performance', [PerformanceController::class, 'index']);
         Route::put('performance/{employee}', [PerformanceController::class, 'update']);
@@ -279,6 +282,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     // HR ROUTES
     Route::middleware('role:hr')->group(function () {
+        // Side menu badges: items waiting for HR (NavCountController)
+        Route::get('nav-counts/hr', [NavCountController::class, 'hr']);
 
         // Disciplinary memos (HR > Memos, EmployeeMemoController): drafts from
         // missed Time Outs, memos issued by hand, files, signed copies.

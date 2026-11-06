@@ -60,29 +60,29 @@
 @media (prefers-reduced-motion: reduce) {
   .splash-breathe { animation: none; }
 }
-/* Motion tokens: one clock for the theme switch (every surface fades together)
+/* Motion tokens: one clock for the theme switch (the whole page fades together)
    and one for hover and press. */
 :root {
-  --theme-fade-duration: 300ms;
+  --theme-fade-duration: 200ms;
   --theme-fade-ease: cubic-bezier(0.4, 0, 0.2, 1);
   --ui-fast-duration: 160ms;
   --ui-fast-ease: ease-out;
 }
-/* Theme switch fade. lib/theme.js adds .theme-switching to <html> for 350ms. */
+/* Theme switch: lib/theme.js cross-fades a snapshot of the page. The elements'
+   own transitions stay off while the colors swap under it. */
 .theme-switching,
 .theme-switching *,
 .theme-switching *::before,
 .theme-switching *::after {
-  transition-property: background-color, border-color, color, fill, stroke, box-shadow,
-    outline-color, text-decoration-color, caret-color, scrollbar-color, accent-color,
-    --ambient-tint !important;
-  transition-duration: var(--theme-fade-duration) !important;
-  transition-timing-function: var(--theme-fade-ease) !important;
-  transition-delay: 0s !important;
+  transition: none !important;
 }
-/* The tint over the ice photo (lib/theme.js ambientStyle). A registered color
-   can be transitioned, so it fades on the same clock as every other surface
-   without the full-screen inset box-shadow it used to need. */
+::view-transition { pointer-events: none; }
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--theme-fade-duration);
+  animation-timing-function: var(--theme-fade-ease);
+}
+/* The tint over the ice photo (lib/theme.js ambientStyle). */
 @property --ambient-tint {
   syntax: "<color>";
   inherits: false;
@@ -844,7 +844,6 @@ header .topbar-avatar { width: 40px !important; height: 40px !important; }
    the placeholder never clips, grows only downward */
 textarea.leave-textarea {
   min-height: 100px !important;
-  height: auto !important;
   padding-top: 8px !important;
   padding-bottom: 8px !important;
   font-size: 16px !important;
@@ -959,7 +958,7 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
 .guard-field { display: block; margin-top: 14px; }
 .guard-field > span { display: block; margin-bottom: 6px; font-size: 11.5px; font-weight: 600; color: var(--neu-muted); }
 .guard-field textarea {
-  width: 100%; min-height: 84px; padding: 10px 12px; resize: none;
+  width: 100%; min-height: 84px; max-height: 40vh; padding: 10px 12px; resize: vertical; overflow-y: auto;
   border: 0; border-radius: var(--neu-radius-sm); outline: none;
   font: inherit; font-size: 13px; color: var(--neu-text);
   background: var(--neu-bg); box-shadow: var(--neu-inset);
