@@ -6,6 +6,7 @@ use App\Models\Applicant;
 use App\Services\AddressFormatter;
 use App\Services\PhoneFormatter;
 use App\Support\Audit;
+use App\Support\StoredFiles;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -60,7 +61,8 @@ class ApplicantController extends Controller
 
     // A resume or CV HR attaches (PDF or Word), kept on the private disk like the
     // ones applicants send from /apply. Returns the columns to save.
-    private function storeResume(Request $request): array
+    // The new file is registered in $stored so the caller can remove it if saving fails.
+    private function storeResume(Request $request, StoredFiles $stored): array
     {
         $file = $request->file('resume');
         if (! $file) {
@@ -68,7 +70,7 @@ class ApplicantController extends Controller
         }
 
         return [
-            'resume_path' => $file->store('resumes', 'local'),
+            'resume_path' => $stored->store($file, 'resumes'),
             'resume_name' => mb_substr(preg_replace('/[^\pL\pN ._()-]/u', '_', $file->getClientOriginalName()), 0, 255),
         ];
     }
@@ -208,16 +210,23 @@ class ApplicantController extends Controller
             $this->assertFreeSlot($interviewDate, $minutes);
         }
 
-        $applicant = Applicant::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'position_applied' => $request->position_applied,
-            'interview_date' => $interviewDate,
-            'interview_minutes' => $minutes,
-            'status' => 'pending',
-            'notes' => $request->notes,
-        ] + $this->storeResume($request) + $request->only(array_keys(AddressFormatter::OPTIONAL_RULES)));
+        // A file is written before the record: if saving fails the file goes too.
+        $stored = new StoredFiles('local');
+        try {
+            $applicant = Applicant::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'phone' => $request->phone,
+                'position_applied' => $request->position_applied,
+                'interview_date' => $interviewDate,
+                'interview_minutes' => $minutes,
+                'status' => 'pending',
+                'notes' => $request->notes,
+            ] + $this->storeResume($request, $stored) + $request->only(array_keys(AddressFormatter::OPTIONAL_RULES)));
+        } catch (\Throwable $e) {
+            $stored->discard();
+            throw $e;
+        }
 
         return response()->json([
             'message' => 'Applicant added successfully!',
@@ -288,18 +297,27 @@ class ApplicantController extends Controller
         }
 
         // A new resume replaces the old file; remove_resume drops it.
-        $resume = $this->storeResume($request);
-        $removed = ! $resume && $request->boolean('remove_resume') && $applicant->resume_path
-            ? (string) $applicant->resume_name
-            : null;
-        if ($removed !== null) {
-            $resume = ['resume_path' => null, 'resume_name' => null];
-        }
-        if ($resume && $applicant->resume_path) {
-            Storage::disk('local')->delete($applicant->resume_path);
-        }
+        // The old file stays until the update has succeeded; a new file that was written is
+        // removed if the update fails.
+        $stored = new StoredFiles('local');
+        $oldPath = $applicant->resume_path;
+        try {
+            $resume = $this->storeResume($request, $stored);
+            $removed = ! $resume && $request->boolean('remove_resume') && $applicant->resume_path
+                ? (string) $applicant->resume_name
+                : null;
+            if ($removed !== null) {
+                $resume = ['resume_path' => null, 'resume_name' => null];
+            }
 
-        $applicant->update($data + $resume);
+            $applicant->update($data + $resume);
+        } catch (\Throwable $e) {
+            $stored->discard();
+            throw $e;
+        }
+        if ($resume && $oldPath && $oldPath !== ($resume['resume_path'] ?? null)) {
+            StoredFiles::deleteAfterCommit('local', $oldPath);
+        }
 
         if ($removed !== null) {
             Audit::log('applicant.resume_removed', $applicant, ['resume_name' => $removed], ['resume_name' => null]);

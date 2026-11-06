@@ -26,5 +26,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prependToPriorityList(\Illuminate\Routing\Middleware\SubstituteBindings::class, \App\Http\Middleware\RoleMiddleware::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // A missing record or route answers with a plain 404. Laravel's own text names the
+        // internal model class and the id ("No query results for model [App\Models\...] 5").
+        // Only that lookup text is replaced. An intentional abort(404, '...') message and an
+        // unknown route keep Laravel's normal answer, so the API format does not change.
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, \Illuminate\Http\Request $request) {
+            if ($e->getPrevious() instanceof \Illuminate\Database\Eloquent\ModelNotFoundException && ($request->is('api/*') || $request->expectsJson())) {
+                return response()->json(['message' => 'Not found.'], 404);
+            }
+        });
     })->create();

@@ -6,7 +6,9 @@ use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Support\Audit;
 use App\Support\Biodata;
+use App\Support\StoredFiles;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -39,16 +41,27 @@ class EmployeeDocumentController extends Controller
         ]);
 
         $file = $request->file('file');
-        $doc = EmployeeDocument::create([
-            'employee_id' => $employee->id,
-            'type' => $type,
-            'path' => $file->storeAs('employee-documents', Str::uuid().'.'.$file->extension(), 'local'),
-            'original_name' => mb_substr(preg_replace('/[^\pL\pN ._()-]/u', '_', $file->getClientOriginalName()), 0, 255),
-            'mime' => $file->getMimeType() ?: 'application/octet-stream',
-            'size' => $file->getSize(),
-            'uploaded_by' => $request->user()->id,
-        ]);
-        Audit::log('employee_document.added', $employee, null, ['type' => $type, 'name' => $doc->original_name]);
+        // The file is written before the record: if saving (or the audit entry) fails the file goes too.
+        $stored = new StoredFiles('local');
+        try {
+            $doc = DB::transaction(function () use ($file, $employee, $type, $request, $stored) {
+                $doc = EmployeeDocument::create([
+                    'employee_id' => $employee->id,
+                    'type' => $type,
+                    'path' => $stored->store($file, 'employee-documents', Str::uuid().'.'.$file->extension()),
+                    'original_name' => mb_substr(preg_replace('/[^\pL\pN ._()-]/u', '_', $file->getClientOriginalName()), 0, 255),
+                    'mime' => $file->getMimeType() ?: 'application/octet-stream',
+                    'size' => $file->getSize(),
+                    'uploaded_by' => $request->user()->id,
+                ]);
+                Audit::log('employee_document.added', $employee, null, ['type' => $type, 'name' => $doc->original_name]);
+
+                return $doc;
+            });
+        } catch (\Throwable $e) {
+            $stored->discard();
+            throw $e;
+        }
 
         return response()->json(['message' => "{$doc->original_name} attached.", 'document' => $doc], 201);
     }
@@ -57,15 +70,20 @@ class EmployeeDocumentController extends Controller
     {
         abort_unless($document->employee_id === $employee->id && Storage::disk('local')->exists($document->path), 404);
 
-        return Storage::disk('local')->response($document->path, $document->original_name, ['Content-Type' => $document->mime]);
+        // Same protective headers as every other private download.
+        return Storage::disk('local')->response($document->path, $document->original_name, [
+            'Content-Type' => $document->mime,
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'inline');
     }
 
     public function destroy(Employee $employee, EmployeeDocument $document)
     {
         abort_unless($document->employee_id === $employee->id, 404);
-        Storage::disk('local')->delete($document->path);
         $document->delete();
         Audit::log('employee_document.removed', $employee, ['type' => $document->type, 'name' => $document->original_name], null);
+        StoredFiles::deleteAfterCommit('local', $document->path); // only once the record change is committed
 
         return response()->json(['message' => "{$document->original_name} removed."]);
     }

@@ -9,7 +9,9 @@ use App\Services\AddressFormatter;
 use App\Services\DriverLicense;
 use App\Services\PhoneFormatter;
 use App\Support\Biodata;
+use App\Support\StoredFiles;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -31,6 +33,9 @@ use Illuminate\Validation\ValidationException;
 // over to Add Employee when HR hires the applicant.
 class PublicApplicationController extends Controller
 {
+    // All files of one application together; the proxy body limit is 12 MB (nginx client_max_body_size).
+    private const MAX_TOTAL_BYTES = 11 * 1024 * 1024;
+
     public function store(Request $request)
     {
         // Bots fill every field, including the hidden one. Look successful so
@@ -106,51 +111,71 @@ class PublicApplicationController extends Controller
             ]);
         }
 
-        // Kept on the private disk: only HR can open it (ApplicantController@resume).
-        $resume = $request->file('resume');
-        $resumePath = $resume?->store('resumes', 'local');
-        $resumeName = $resume ? mb_substr(preg_replace('/[^\pL\pN ._()-]/u', '_', $resume->getClientOriginalName()), 0, 255) : null;
-
-        // Referral: recorded only (no automatic bonus; Admin adds one in payroll).
-        $referrer = filled($data['referral'] ?? null)
-            ? Employee::where('employee_id', strtoupper(trim($data['referral'])))->where('is_active', true)->value('id')
-            : null;
-
-        $applicant = Applicant::create([
-            'name' => trim($data['name']),
-            'phone' => $data['phone'],
-            'email' => $data['email'] ?? null,
-            'position_applied' => $data['position_applied'],
-            // What the applicant wrote goes in the notes, marked as theirs.
-            'notes' => filled($data['notes'] ?? null) ? 'From the applicant: '.trim($data['notes']) : null,
-            'status' => 'pending',
-            'source' => 'qr',
-            'referred_by_employee_id' => $referrer,
-            'resume_path' => $resumePath ?: null,
-            'resume_name' => $resumePath ? $resumeName : null,
-            'consented_at' => now(),
-            'consent_ip' => $request->ip(),
-            'license_number' => $driver ? ($data['license_number'] ?? null) : null,
-            'license_expiry' => $driver ? ($data['license_expiry'] ?? null) : null,
-        ] + array_intersect_key($data, AddressFormatter::OPTIONAL_RULES) + array_intersect_key($data, array_flip(Biodata::FIELDS)));
-        if (! $driver) {
-            $applicant->update(['license_restrictions' => null]);
+        // Everything sent together must fit the request-body limit of the proxy (nginx
+        // client_max_body_size 12m) with room for the form fields. A clear message here, and
+        // before anything is stored; the browser also checks this before sending (ApplyPage).
+        $total = collect([$request->file('resume'), $request->file('photo'), ...$request->file('documents', [])])->filter()->sum(fn ($f) => $f->getSize());
+        if ($total > self::MAX_TOTAL_BYTES) {
+            throw ValidationException::withMessages([
+                'documents' => ['The files are too big together ('.round($total / 1048576, 1).' MB). All files together must be 11 MB or less: remove a file or use a smaller one.'],
+            ]);
         }
 
-        // 2x2 photo and other documents, private like the resume
-        $files = array_merge(
-            $request->file('photo') ? [['photo', $request->file('photo')]] : [],
-            array_map(fn ($f) => ['other', $f], $request->file('documents', [])),
-        );
-        foreach ($files as [$type, $file]) {
-            ApplicantDocument::create([
-                'applicant_id' => $applicant->id,
-                'type' => $type,
-                'path' => $file->storeAs('applicant-documents', Str::uuid().'.'.$file->extension(), 'local'),
-                'original_name' => mb_substr(preg_replace('/[^\pL\pN ._()-]/u', '_', $file->getClientOriginalName()), 0, 255),
-                'mime' => $file->getMimeType() ?: 'application/octet-stream',
-                'size' => $file->getSize(),
-            ]);
+        // Files go to the private disk (only HR opens them: ApplicantController@resume). The
+        // application and its files are all-or-nothing: if any step fails the records are rolled
+        // back AND the files this request wrote are removed (a transaction does not undo files).
+        $stored = new StoredFiles('local');
+        try {
+            DB::transaction(function () use ($request, $data, $driver, $stored) {
+                $resume = $request->file('resume');
+                $resumePath = $resume ? $stored->store($resume, 'resumes') : null;
+                $resumeName = $resume ? mb_substr(preg_replace('/[^\pL\pN ._()-]/u', '_', $resume->getClientOriginalName()), 0, 255) : null;
+
+                // Referral: recorded only (no automatic bonus; Admin adds one in payroll).
+                $referrer = filled($data['referral'] ?? null)
+                    ? Employee::where('employee_id', strtoupper(trim($data['referral'])))->where('is_active', true)->value('id')
+                    : null;
+
+                $applicant = Applicant::create([
+                    'name' => trim($data['name']),
+                    'phone' => $data['phone'],
+                    'email' => $data['email'] ?? null,
+                    'position_applied' => $data['position_applied'],
+                    // What the applicant wrote goes in the notes, marked as theirs.
+                    'notes' => filled($data['notes'] ?? null) ? 'From the applicant: '.trim($data['notes']) : null,
+                    'status' => 'pending',
+                    'source' => 'qr',
+                    'referred_by_employee_id' => $referrer,
+                    'resume_path' => $resumePath ?: null,
+                    'resume_name' => $resumePath ? $resumeName : null,
+                    'consented_at' => now(),
+                    'consent_ip' => $request->ip(),
+                    'license_number' => $driver ? ($data['license_number'] ?? null) : null,
+                    'license_expiry' => $driver ? ($data['license_expiry'] ?? null) : null,
+                ] + array_intersect_key($data, AddressFormatter::OPTIONAL_RULES) + array_intersect_key($data, array_flip(Biodata::FIELDS)));
+                if (! $driver) {
+                    $applicant->update(['license_restrictions' => null]);
+                }
+
+                // 2x2 photo and other documents, private like the resume
+                $files = array_merge(
+                    $request->file('photo') ? [['photo', $request->file('photo')]] : [],
+                    array_map(fn ($f) => ['other', $f], $request->file('documents', [])),
+                );
+                foreach ($files as [$type, $file]) {
+                    ApplicantDocument::create([
+                        'applicant_id' => $applicant->id,
+                        'type' => $type,
+                        'path' => $stored->store($file, 'applicant-documents', Str::uuid().'.'.$file->extension()),
+                        'original_name' => mb_substr(preg_replace('/[^\pL\pN ._()-]/u', '_', $file->getClientOriginalName()), 0, 255),
+                        'mime' => $file->getMimeType() ?: 'application/octet-stream',
+                        'size' => $file->getSize(),
+                    ]);
+                }
+            });
+        } catch (\Throwable $e) {
+            $stored->discard();
+            throw $e;
         }
 
         return response()->json(['message' => 'Application sent.'], 201);

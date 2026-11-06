@@ -8,7 +8,6 @@ use App\Models\LeaveRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -75,7 +74,7 @@ class ArchiveExpiry
         DB::transaction(function () use ($employee) {
             FaceData::where('employee_id', $employee->id)->delete();
             foreach (LeaveRequest::where('employee_id', $employee->id)->whereNotNull('attachment_path')->get() as $leave) {
-                Storage::disk($leave->attachment_disk ?: 'public')->delete($leave->attachment_path);
+                StoredFiles::deleteAfterCommit($leave->attachment_disk ?: 'public', $leave->attachment_path);
                 $leave->forceFill(['attachment_path' => null])->save();
             }
             if ($employee->user) {
@@ -109,8 +108,8 @@ class ArchiveExpiry
             ] + array_fill_keys(array_merge(\App\Support\Biodata::FIELDS, \App\Support\Biodata::GOV_FIELDS), null))->save();
             // attached biodata files go too (private disk)
             foreach ($employee->documents()->get() as $doc) {
-                \Illuminate\Support\Facades\Storage::disk('local')->delete($doc->path);
                 $doc->delete();
+                StoredFiles::deleteAfterCommit('local', $doc->path); // only once the transaction has committed
             }
         });
         Audit::log('retention.anonymized', $employee, ['employee' => $label], ['auto' => $auto]);
@@ -121,11 +120,11 @@ class ArchiveExpiry
         $label = "{$employee->employee_id} {$employee->full_name}";
         DB::transaction(function () use ($employee) {
             FaceData::where('employee_id', $employee->id)->delete();
-            foreach ($employee->documents()->get() as $doc) {
-                \Illuminate\Support\Facades\Storage::disk('local')->delete($doc->path);
-            }
-            // Attendance, leave, payroll and document rows go with it (foreign keys cascade).
+            // Attendance, leave, payroll and document rows go with it (foreign keys cascade); the
+            // files go only once the whole transaction has committed.
+            $paths = $employee->documents()->pluck('path')->all();
             $employee->delete();
+            StoredFiles::deleteAfterCommit('local', $paths);
         });
         Audit::log('retention.deleted', null, ['employee' => $label], ['auto' => $auto]);
     }

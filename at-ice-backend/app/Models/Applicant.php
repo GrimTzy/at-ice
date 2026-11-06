@@ -5,11 +5,13 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class Applicant extends Model
 {
     use HasFactory;
+
+    // Document file paths read just before a delete (see booted()); not a database column.
+    public array $filesToRemove = [];
 
     // Positions people can apply for (same list as the frontend, src/lib/positions.js).
     public const POSITIONS = ['Checker', 'Salesman', 'Maintenance', 'Driver', 'Guard', 'Bagger', 'Admin Staff'];
@@ -143,11 +145,17 @@ class Applicant extends Model
 
     protected static function booted(): void
     {
-        // A deleted applicant's resume file goes too.
+        // A deleted applicant's files go too: the resume and every document (2x2 photo, IDs,
+        // other files). The document rows are removed by the foreign key cascade, so their
+        // paths are read BEFORE the delete, and the files are removed only AFTER the record is
+        // really gone (a failed delete keeps every file). Only this applicant's files are
+        // touched: files that were orphaned before are left alone.
+        static::deleting(function (Applicant $applicant) {
+            $applicant->filesToRemove = $applicant->documents()->pluck('path')->all();
+        });
         static::deleted(function (Applicant $applicant) {
-            if ($applicant->resume_path) {
-                Storage::disk('local')->delete($applicant->resume_path);
-            }
+            $paths = array_filter(array_merge($applicant->filesToRemove ?? [], [$applicant->resume_path]));
+            \App\Support\StoredFiles::deleteAfterCommit('local', $paths);
         });
     }
 }

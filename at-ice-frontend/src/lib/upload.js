@@ -25,7 +25,9 @@ export function sendForm(url, body, { method = "POST", onProgress } = {}) {
       }
       if (req.status === 401) handleUnauthorized(url, method);
       const first = data?.errors ? Object.values(data.errors)[0]?.[0] : null;
-      const err = new Error(first || data?.message || `Request failed (${req.status}).`);
+      // The proxy refuses a body over about 12 MB with an HTML page, not JSON: say what to do.
+      const tooBig = req.status === 413 ? "The files are too big together. Everything sent at once must be 12 MB or less: remove a file or use a smaller one." : null;
+      const err = new Error(first || data?.message || tooBig || `Request failed (${req.status}).`);
       err.status = req.status;
       err.errors = data?.errors;
       reject(err);

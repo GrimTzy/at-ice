@@ -26,6 +26,9 @@ import { formatLicense, licenseError, expiryError, tomorrowStr } from "../lib/li
 const RESUME_ACCEPT = ".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const RESUME_MAX = 5 * 1024 * 1024;
 const FILE_MAX = 10 * 1024 * 1024;
+// All files of one application together. The proxy takes about 12 MB for the whole request
+// (nginx client_max_body_size), so the server (PublicApplicationController) allows 11 MB.
+const MAX_TOTAL_BYTES = 11 * 1024 * 1024;
 const isResumeFile = (file) => /\.(pdf|docx?)$/i.test(file.name);
 
 const labelCls = "text-[11px] font-semibold text-[var(--neu-muted)] tracking-widest uppercase";
@@ -129,6 +132,14 @@ export default function ApplyPage() {
       return;
     }
 
+    // The proxy accepts about 12 MB for the whole request, so all files together must fit in 11 MB.
+    const totalBytes = [resume, photo, ...documents].filter(Boolean).reduce((sum, f) => sum + f.size, 0);
+    if (totalBytes > MAX_TOTAL_BYTES) {
+      setError(`The files are too big together (${(totalBytes / 1048576).toFixed(1)} MB). All files together must be 11 MB or less: remove a file or use a smaller one.`);
+      document.querySelector("[data-apply-error]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
     setBusy(true);
     try {
       const body = new FormData();
@@ -162,7 +173,7 @@ export default function ApplyPage() {
         setTimeout(() => document.querySelector("[data-apply-error]")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
         return;
       }
-      if (err.status === 413) setError("The files are too large. Use smaller files and try again.");
+      if (err.status === 413) setError("The files are too big together. All files together must be 11 MB or less: remove a file or use a smaller one.");
       else if (err.status === 429) setError("Too many applications were sent from this network. Wait a few minutes and try again.");
       else setError(err.message);
     } finally {
