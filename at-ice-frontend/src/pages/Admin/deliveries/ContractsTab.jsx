@@ -202,37 +202,37 @@ function ContractForm({ stores, onClose, onSaved }) {
         {error && <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>Customer chain</label>
-            <select value={form.chain} onChange={(e) => pickChain(e.target.value)} className={inputCls}>
+            <label htmlFor="contracts-tab-customer-chain" className={labelCls}>Customer chain</label>
+            <select id="contracts-tab-customer-chain" name="chain" value={form.chain} onChange={(e) => pickChain(e.target.value)} className={inputCls}>
               <option value="">— Pick stores by hand —</option>
               {chains.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>Contract name *</label>
-            <input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. SM September" className={inputCls} />
+            <label htmlFor="contracts-tab-contract-name" className={labelCls}>Contract name *</label>
+            <input id="contracts-tab-contract-name" name="name" value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. SM September" className={inputCls} />
           </div>
         </div>
         <div>
-          <label className={labelCls}>Stores *</label>
+          <div className={labelCls}>Stores *</div>
           <StorePicker stores={stores} value={form.store_ids} onChange={(ids) => set({ store_ids: ids })} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className={labelCls}>From *</label>
-            <input type="date" min={todayStr()} value={form.start_date} onChange={(e) => set({ start_date: e.target.value })} className={inputCls} />
+            <label htmlFor="contracts-tab-from" className={labelCls}>From *</label>
+            <input id="contracts-tab-from" name="start_date" type="date" min={todayStr()} value={form.start_date} onChange={(e) => set({ start_date: e.target.value })} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>To *</label>
-            <input type="date" min={form.start_date} value={form.end_date} onChange={(e) => set({ end_date: e.target.value })} className={inputCls} />
+            <label htmlFor="contracts-tab-to" className={labelCls}>To *</label>
+            <input id="contracts-tab-to" name="end_date" type="date" min={form.start_date} value={form.end_date} onChange={(e) => set({ end_date: e.target.value })} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Deliver by *</label>
-            <input type="time" value={form.delivery_time} onChange={(e) => set({ delivery_time: e.target.value })} className={inputCls} />
+            <label htmlFor="contracts-tab-deliver-by" className={labelCls}>Deliver by *</label>
+            <input id="contracts-tab-deliver-by" name="delivery_time" type="time" value={form.delivery_time} onChange={(e) => set({ delivery_time: e.target.value })} className={inputCls} />
           </div>
         </div>
         <div>
-          <label className={labelCls}>Delivery days *</label>
+          <div className={labelCls}>Delivery days *</div>
           <div className="flex flex-wrap items-center gap-1.5">
             {DAYS.map((d) => (
               <button key={d.value} type="button" aria-pressed={form.delivery_days.includes(d.value)} onClick={() => toggleDay(d.value)}
@@ -247,11 +247,11 @@ function ContractForm({ stores, onClose, onSaved }) {
           </div>
         </div>
         <div>
-          <label className={labelCls}>Items per store per delivery *</label>
+          <div className={labelCls}>Items per store per delivery *</div>
           <div className="flex flex-col gap-2">
             {form.items.map((it, i) => (
               <div key={i} className="grid grid-cols-[minmax(0,1fr)_72px_auto] sm:grid-cols-[1fr_110px_auto] gap-2">
-                <select value={it.product_type} aria-label={`Product ${i + 1}`} onChange={(e) => set({ items: form.items.map((x, j) => (j === i ? { ...x, product_type: e.target.value } : x)) })} className={inputCls}>
+                <select name="product_type" value={it.product_type} aria-label={`Product ${i + 1}`} onChange={(e) => set({ items: form.items.map((x, j) => (j === i ? { ...x, product_type: e.target.value } : x)) })} className={inputCls}>
                   <option value="">Select product…</option>
                   {PRODUCT_TYPES.map((p) => <option key={p.value} value={p.value} disabled={form.items.some((o, j) => j !== i && o.product_type === p.value)}>{p.label}</option>)}
                 </select>
@@ -266,8 +266,8 @@ function ContractForm({ stores, onClose, onSaved }) {
           <p className="text-[11px] text-slate-400 mt-1.5">Prices come from Customer Prices for each store. Admin can change one day's quantities later.</p>
         </div>
         <div>
-          <label className={labelCls}>Notes</label>
-          <textarea rows={3} value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={inputCls} />
+          <label htmlFor="contracts-tab-notes" className={labelCls}>Notes</label>
+          <textarea id="contracts-tab-notes" name="notes" rows={3} value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={inputCls} />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
           <button type="button" onClick={onClose} className={btnGhost}>Close</button>

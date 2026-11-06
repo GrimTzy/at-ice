@@ -29,6 +29,7 @@ export default function PasswordInput({ className = "", style, ...props }) {
   return (
     <div className="relative w-full">
       <input
+        name="password"
         {...props}
         type={revealed ? "text" : "password"}
         className={className}

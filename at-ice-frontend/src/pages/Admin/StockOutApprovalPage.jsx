@@ -299,7 +299,7 @@ export default function StockOutApprovalPage() {
                     <div className="mt-3">
                       {rejectingId === req.id ? (
                         <div className="flex flex-col gap-2">
-                          <textarea
+                          <textarea name="rejection_reason"
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
                             placeholder="Reason for rejection..."

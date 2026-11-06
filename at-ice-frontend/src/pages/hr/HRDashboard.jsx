@@ -167,7 +167,7 @@ export default function HRDashboard() {
             { label: "Attendance", hint: "Today and history", icon: "clock", tone: "emerald", onClick: () => navigate("/hr/attendance") },
             { label: "Leave requests", hint: `${pendingLeaves.length} to review`, icon: "calendar", tone: "violet", onClick: () => navigate("/hr/leave-requests") },
             { label: "Timesheets", hint: "Approve the pay period", icon: "file", tone: "amber", onClick: () => navigate("/hr/timesheets") },
-            { label: "Enroll a worker's face", hint: "Employees › Face", icon: "scan", tone: "cyan", wide: true, onClick: () => navigate("/hr/employees") },
+            { label: "Enroll a worker's face", hint: "Employees › Face", icon: "scan", tone: "cyan", primary: true, wide: true, onClick: () => navigate("/hr/employees") },
           ]} />
         </div>
         </div>

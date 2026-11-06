@@ -131,11 +131,11 @@ export default function TimesheetsPage() {
             {period ? payPeriodLabel(period) : "…"}
           </span>
           <button type="button" aria-label="Next pay period" title="Next pay period" disabled={!period} onClick={() => setDate(addDays(period.end, 1))} className={navBtn}>Next <Chevron /></button>
-          <input type="date" aria-label="Go to the pay period of a date" max={todayManila()} onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
+          <input name="date" type="date" aria-label="Go to the pay period of a date" max={todayManila()} onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
         </div>
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-slate-500 w-full sm:w-60">
           <SearchIcon />
-          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name"
+          <input name="search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name"
             className="w-full bg-transparent outline-none text-xs text-slate-800 placeholder:text-slate-500" />
         </div>
         <div className="flex-1" />
@@ -159,7 +159,7 @@ export default function TimesheetsPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-slate-400 border-b border-black/[0.09]">
-                  <th className="px-[18px] py-2.5"><input type="checkbox" data-native aria-label="Select all" checked={allOn} disabled={!ended}
+                  <th className="px-[18px] py-2.5"><input name="all_on" type="checkbox" data-native aria-label="Select all" checked={allOn} disabled={!ended}
                     onChange={() => setSelected(allOn ? new Set() : new Set(selectable.map((r) => r.id)))} /></th>
                   <th className="px-3 py-2.5 font-medium">Employee ID</th>
                   <th className="px-3 py-2.5 font-medium">Name</th>
@@ -177,7 +177,7 @@ export default function TimesheetsPage() {
               <tbody>
                 {pager.pageItems.map((r) => (
                   <tr key={r.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
-                    <td className="px-[18px] py-2.5"><input type="checkbox" data-native aria-label={`Select ${r.employee_id}`} disabled={!ended || r.status === "paid"} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>
+                    <td className="px-[18px] py-2.5"><input name="id" type="checkbox" data-native aria-label={`Select ${r.employee_id}`} disabled={!ended || r.status === "paid"} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>
                     <td className="px-3 py-2.5 font-mono text-slate-600">{r.employee_id}</td>
                     <td className="px-3 py-2.5 text-slate-800 font-medium whitespace-nowrap">
                       {r.name}
@@ -192,7 +192,7 @@ export default function TimesheetsPage() {
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       {r.ot_pending_minutes > 0 ? (
                         <label className="flex items-center gap-1.5 text-amber-700" title="Paid only if approved">
-                          <input type="checkbox" data-native disabled={!ended || r.status === "paid"} checked={otOk.has(r.id)}
+                          <input name="id" type="checkbox" data-native disabled={!ended || r.status === "paid"} checked={otOk.has(r.id)}
                             onChange={() => setOtOk((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })} />
                           {num(r.ot_pending_minutes / 60)} h to approve
                         </label>

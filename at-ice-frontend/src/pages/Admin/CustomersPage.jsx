@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useId, useState, useEffect, useCallback, useRef } from "react";
 import { CUSTOMER_TYPES, typeForChain } from "../../lib/customerTypes";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
@@ -390,13 +390,13 @@ export default function CustomersPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterCls} aria-label="Filter by customer type">
+            <select name="type_filter" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterCls} aria-label="Filter by customer type">
               <option value="">All types ({customers.length})</option>
               {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label} ({typeCount(val)})</option>)}
             </select>
             <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
               <SearchIcon />
-              <input
+              <input name="search"
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -554,8 +554,8 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
-                  <select
+                  <label htmlFor="customers-page-customer-type" className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
+                  <select id="customers-page-customer-type" name="customer_type"
                     value={form.customer_type || "dealer"}
                     onChange={(e) => setForm((f) => ({ ...f, customer_type: e.target.value }))}
                     className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
@@ -590,8 +590,10 @@ export default function CustomersPage() {
                 )}
                 <Field label="Contact Person" value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required={need("contact_person")} />
                 <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Contact Number{need("contact_number") && <Req />}</label>
+                  <label htmlFor="customer-contact-number" className="text-[11px] text-slate-500 mb-1 block">Contact Number{need("contact_number") && <Req />}</label>
                   <PhoneInput
+                    id="customer-contact-number"
+                    name="contact_number"
                     value={form.contact_number}
                     onChange={(v) => setForm({ ...form, contact_number: v })}
                     placeholder="9171234567"
@@ -631,7 +633,7 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="text-[11px] text-slate-500 mb-1 block">Store location on the map</label>
+                  <div className="text-[11px] text-slate-500 mb-1 block">Store location on the map</div>
                   <PinPickerMap
                     latitude={form.latitude}
                     longitude={form.longitude}
@@ -753,10 +755,13 @@ export default function CustomersPage() {
 
 function Field({ label, value, onChange, required, disabled, placeholder, inputMode, type = "text", multiline = false }) {
   const Tag = multiline ? "textarea" : "input";
+  const id = useId();
   return (
     <div>
-      <label className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
+      <label htmlFor={id} className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
       <Tag
+        id={id}
+        name={String(label).toLowerCase().replace(/[^a-z0-9]+/g, "_")}
         {...(multiline ? { rows: 3 } : {})}
         type={multiline ? undefined : type}
         value={value}
@@ -826,8 +831,8 @@ function MapLinkField({ value, onChange, onPlace, onName }) {
 
   return (
     <div>
-      <label className="text-[11px] text-slate-500 mb-1 block">Map Link</label>
-      <input
+      <label htmlFor="customers-page-map-link" className="text-[11px] text-slate-500 mb-1 block">Map Link</label>
+      <input id="customers-page-map-link" name="map_link"
         type="text"
         value={value}
         onChange={(e) => typed(e.target.value)}
@@ -890,8 +895,8 @@ function EmailDomainField({ label, value, onChange, required, savedEmail = "" })
 
   return (
     <div>
-      <label className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
-      <input
+      <label htmlFor="customer-contact-email" className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
+      <input id="customer-contact-email" name="login_email"
         type="email"
         value={value}
         onChange={(e) => onChange(e.target.value)}

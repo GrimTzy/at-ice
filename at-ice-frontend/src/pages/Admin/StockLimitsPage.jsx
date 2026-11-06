@@ -160,7 +160,7 @@ export default function StockLimitsPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <input
+            <input name="search"
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -208,7 +208,7 @@ export default function StockLimitsPage() {
                       {p.current_stock ?? 0} {p.unit || ""}
                     </td>
                     <td className="py-2 pr-3 text-right">
-                      <input
+                      <input name="stock_limit"
                         type="number"
                         min="0"
                         step="1"
@@ -220,7 +220,7 @@ export default function StockLimitsPage() {
                       />
                     </td>
                     <td className="py-2 pr-3 text-right">
-                      <input
+                      <input name="stock_limit"
                         type="number"
                         min="0"
                         step="1"

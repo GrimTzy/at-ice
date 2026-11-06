@@ -230,14 +230,14 @@ export default function CustomerPriceManagement() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by customer type"
+          <select name="type_filter" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by customer type"
             className="bg-slate-50 border border-black/[0.09] rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500">
             <option value="">All types ({rows.length})</option>
             {Object.entries(CUSTOMER_TYPES).map(([v, t]) => <option key={v} value={v}>{t.label} ({rows.filter((r) => (r.customer_type || "dealer") === v).length})</option>)}
           </select>
           <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
             <SearchIcon />
-            <input
+            <input name="search"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -306,7 +306,7 @@ export default function CustomerPriceManagement() {
                           {isEditing ? (
                             <div className="flex items-center gap-1">
                               <span className="text-slate-400">₱</span>
-                              <input
+                              <input name="draft"
                                 type="number"
                                 min="0"
                                 step="0.01"
@@ -481,7 +481,7 @@ function ReferencePrices({ onChanged }) {
                       {on ? (
                         <div className="flex items-center gap-1">
                           <span className="text-slate-400">₱</span>
-                          <input type="number" min="0" step="0.01" value={draft[p] ?? ""} placeholder="—" aria-label={`${t.label} ${PRODUCT_LABELS[p]}`}
+                          <input name="draft" type="number" min="0" step="0.01" value={draft[p] ?? ""} placeholder="—" aria-label={`${t.label} ${PRODUCT_LABELS[p]}`}
                             onChange={(e) => setDraft({ ...draft, [p]: e.target.value })}
                             className="w-20 bg-slate-50 border border-black/[0.09] rounded-md px-2 py-1 text-[13px] font-mono outline-none focus:border-cyan-500" />
                         </div>

@@ -83,24 +83,24 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged, sear
         </div>
         {error && <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div>
-          <label className={labelCls}>Driver *</label>
-          <select value={form.driver_id} onChange={(e) => { setForm({ ...form, driver_id: e.target.value }); setError(""); }} className={inputCls}>
+          <label htmlFor="driver-stores-tab-driver" className={labelCls}>Driver *</label>
+          <select id="driver-stores-tab-driver" name="driver_id" value={form.driver_id} onChange={(e) => { setForm({ ...form, driver_id: e.target.value }); setError(""); }} className={inputCls}>
             <option value="">Select driver…</option>
             {drivers.map((dr) => <option key={dr.id} value={dr.id}>{dr.name}{dr.employee_id ? ` · ${dr.employee_id}` : ""}</option>)}
           </select>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>From *</label>
-            <input type="date" min={today} value={form.effective_from} onChange={(e) => setForm({ ...form, effective_from: e.target.value })} className={inputCls} />
+            <label htmlFor="driver-stores-tab-from" className={labelCls}>From *</label>
+            <input id="driver-stores-tab-from" name="effective_from" type="date" min={today} value={form.effective_from} onChange={(e) => setForm({ ...form, effective_from: e.target.value })} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Until (optional)</label>
-            <input type="date" min={form.effective_from} value={form.effective_to} onChange={(e) => setForm({ ...form, effective_to: e.target.value })} className={inputCls} />
+            <label htmlFor="driver-stores-tab-until-optional" className={labelCls}>Until (optional)</label>
+            <input id="driver-stores-tab-until-optional" name="effective_to" type="date" min={form.effective_from} value={form.effective_to} onChange={(e) => setForm({ ...form, effective_to: e.target.value })} className={inputCls} />
           </div>
         </div>
         <div>
-          <label className={labelCls}>Stores *</label>
+          <div className={labelCls}>Stores *</div>
           <StorePicker stores={stores} value={form.store_ids} onChange={(ids) => { setForm({ ...form, store_ids: ids }); setError(""); }}
             note={(s) => (currentDriver[s.id] ? `now: ${currentDriver[s.id]}` : "no driver")} />
         </div>

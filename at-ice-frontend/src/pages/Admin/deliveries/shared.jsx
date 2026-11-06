@@ -69,14 +69,14 @@ export function StorePicker({ stores, value, onChange, note }) {
   return (
     <div className="rounded-lg border border-black/[0.09]">
       <div className="p-2 flex flex-col sm:flex-row gap-2 border-b border-black/[0.07]">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search store, branch, city…" aria-label="Search stores" className={inputCls} />
-        <select value={chain} onChange={(e) => setChain(e.target.value)} aria-label="Filter by chain" className={`${inputCls} sm:max-w-[150px]`}>
+        <input name="q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search store, branch, city…" aria-label="Search stores" className={inputCls} />
+        <select name="chain" value={chain} onChange={(e) => setChain(e.target.value)} aria-label="Filter by chain" className={`${inputCls} sm:max-w-[150px]`}>
           <option value="">All chains</option>
           {chains.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
       <label className="flex items-center gap-2 px-3 py-1.5 border-b border-black/[0.07] text-[12px] text-slate-600 cursor-pointer">
-        <input type="checkbox" checked={allPicked} onChange={toggleAll} disabled={list.length === 0} />
+        <input name="all_picked" type="checkbox" checked={allPicked} onChange={toggleAll} disabled={list.length === 0} />
         Select all shown ({list.length}) · {value.length} picked
       </label>
       <ul className="max-h-56 overflow-y-auto py-1">
@@ -84,7 +84,7 @@ export function StorePicker({ stores, value, onChange, note }) {
         {list.map((s) => (
           <li key={s.id}>
             <label className="flex items-start gap-2 px-3 py-1.5 text-[13px] cursor-pointer hover:bg-slate-50">
-              <input type="checkbox" className="mt-0.5" checked={picked.has(String(s.id))} onChange={() => toggle(s.id)} />
+              <input name="id" type="checkbox" className="mt-0.5" checked={picked.has(String(s.id))} onChange={() => toggle(s.id)} />
               <span className="min-w-0">
                 <span className="block text-slate-800 truncate">{storeName(s)}</span>
                 <span className="block text-[11px] text-slate-400">{[s.chain, s.city, note?.(s)].filter(Boolean).join(" · ")}</span>

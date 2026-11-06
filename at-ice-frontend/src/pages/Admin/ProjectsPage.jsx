@@ -61,6 +61,7 @@ function PickCell({ value, options, onPick, label }) {
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
       </StatusCell>
       <select
+        name="status"
         aria-label={label}
         value={value}
         onClick={(e) => e.stopPropagation()}
@@ -234,7 +235,7 @@ export default function ProjectsPage() {
             <div className="text-[11px] text-slate-400">Maintenance adds projects from their portal. Set the owner, budget, dates, status and priority here. Click a project to see the supplies it used.</div>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <input
+            <input name="search"
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -343,7 +344,7 @@ export default function ProjectsPage() {
               ].map(([key, label, type, ph, wide]) => (
                 <label key={key} className={`flex flex-col gap-1 ${wide ? "col-span-2" : ""}`}>
                   <span className="text-[11px] text-slate-500">{label}</span>
-                  <input
+                  <input name={key}
                     type={type}
                     value={form[key]}
                     min={type === "number" ? 0 : key === "due_date" ? form.start_date || undefined : undefined}
@@ -357,7 +358,7 @@ export default function ProjectsPage() {
               {[["status", "Status", STATUS], ["priority", "Priority", PRIORITY]].map(([key, label, opts]) => (
                 <label key={key} className="flex flex-col gap-1">
                   <span className="text-[11px] text-slate-500">{label}</span>
-                  <select value={form[key]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} className="px-2.5 py-2 border border-black/[0.09] rounded-md text-[13px] outline-none focus:border-cyan-400">
+                  <select name={key} value={form[key]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} className="px-2.5 py-2 border border-black/[0.09] rounded-md text-[13px] outline-none focus:border-cyan-400">
                     {Object.entries(opts).map(([k, o]) => <option key={k} value={k}>{o.label}</option>)}
                   </select>
                 </label>

@@ -171,7 +171,7 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
           </div>
           <label className="min-w-0">
             <div className="text-[11px] text-slate-400 mb-1">Priority</div>
-            <select
+            <select name="priority"
               value={t.priority}
               disabled={!active || busy === "priority"}
               onChange={(e) => run("priority", `/api/support-messages/${id}`, "PATCH", { priority: e.target.value }, "Priority changed.")}
@@ -182,7 +182,7 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
           </label>
           <label className="min-w-0">
             <div className="text-[11px] text-slate-400 mb-1">Assigned to</div>
-            <select
+            <select name="assigned_to"
               value={t.assigned_to ?? ""}
               disabled={!active || busy === "assign"}
               onChange={(e) => run("assign", `/api/support-messages/${id}`, "PATCH", { assigned_to: e.target.value ? Number(e.target.value) : null }, "Ticket assigned.")}
@@ -226,7 +226,7 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
 
         {t.status !== "closed" && !resolving && (
           <div className="space-y-2">
-            <textarea
+            <textarea name="reply"
               rows={3}
               value={text}
               maxLength={2000}
@@ -248,7 +248,7 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
         {resolving && (
           <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
             <div className="text-[12px] font-medium text-emerald-800">Resolution note (required)</div>
-            <textarea
+            <textarea name="note"
               rows={3}
               value={note}
               maxLength={2000}
@@ -408,7 +408,7 @@ export default function SupportInboxPage() {
               onChange={setPriority}
               options={[{ value: "all", label: "All", count: all.filter(isActive).length }, ...Object.entries(PRIORITY).map(([k, p]) => ({ value: k, label: p.label, count: all.filter((t) => t.priority === k && isActive(t)).length }))]}
             />
-            <input
+            <input name="search"
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}

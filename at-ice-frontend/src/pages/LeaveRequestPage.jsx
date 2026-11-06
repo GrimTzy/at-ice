@@ -201,13 +201,17 @@ export default function LeaveRequestPage() {
           ].map(([label, value, note]) => (
             <div key={label} className="bg-white border border-black/[0.09] rounded-xl p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-              <p className="text-[18px] font-bold font-mono text-slate-800 mt-1">{credits ? num(value) : "—"}</p>
+              <p className="text-[18px] font-bold font-mono text-slate-800 mt-1">{credits && credits.employee_linked !== false ? num(value) : "—"}</p>
               <p className="text-[11px] text-slate-500">{note}</p>
             </div>
           ))}
         </div>
 
-        {credits?.probationary ? (
+        {credits?.employee_linked === false ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[13px] text-amber-800">
+            This login has no employee record yet, so leave cannot be filed. Please ask HR to link your account.
+          </div>
+        ) : credits?.probationary ? (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[13px] text-amber-800">
             You are still on probation, so leave cannot be filed yet. Absences during probation are unpaid. Leave credits start once you become regular.
           </div>

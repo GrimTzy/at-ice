@@ -529,7 +529,7 @@ export default function Dashboard() {
                   {chartPeriod === "year" && <CalendarIconLocal />}
                   <span className="sr-only">Compare with</span>
                   {chartPeriod === "year" ? (
-                    <select
+                    <select name="picked_value"
                       value={salesChart?.period === "year" ? salesChart.picked_value : ""}
                       onChange={(e) => setChartValue(e.target.value)}
                       aria-label="Year to compare with this year"
@@ -539,7 +539,7 @@ export default function Dashboard() {
                         .map((y) => <option key={y} value={y}>{y}</option>)}
                     </select>
                   ) : (
-                    <input
+                    <input name="picked_value"
                       type={chartPeriod === "day" ? "date" : "month"}
                       value={salesChart?.period === chartPeriod ? salesChart.picked_value : ""}
                       max={salesChart?.period === chartPeriod ? salesChart.max_value : undefined}

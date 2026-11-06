@@ -362,14 +362,14 @@ function PaymentProofSection({ receipt, onSent }) {
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <span className="text-[11px] text-slate-500">Method</span>
-              <select value={method} onChange={(e) => setMethod(e.target.value)} className={`mt-1 ${field}`}>
+              <select name="method" value={method} onChange={(e) => setMethod(e.target.value)} className={`mt-1 ${field}`}>
                 <option value="">Not set</option>
                 {Object.entries(PROOF_METHODS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
               </select>
             </label>
             <label className="block">
               <span className="text-[11px] text-slate-500">Reference No.</span>
-              <input value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} maxLength={100} placeholder="Optional" className={`mt-1 ${field}`} />
+              <input name="reference_no" value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} maxLength={100} placeholder="Optional" className={`mt-1 ${field}`} />
             </label>
           </div>
           {error && <div className="text-[11px] text-red-600">{error}</div>}

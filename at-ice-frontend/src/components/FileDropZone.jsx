@@ -51,7 +51,7 @@ export default function FileDropZone({ files, onChange, accept, label = "Drop fi
         <div className="text-[13px] font-medium text-slate-700">{label}</div>
         {hint && <div className="mt-0.5 text-[11px] text-slate-500">{hint}</div>}
       </button>
-      <input ref={input} type="file" multiple accept={accept} className="hidden" onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+      <input name="file" ref={input} type="file" multiple accept={accept} className="hidden" onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
       {error && <div className="text-[12px] text-red-600">{error}</div>}
       {progress !== null && <UploadBar progress={progress} error={uploadError} />}
       {files.length > 0 && (

@@ -133,7 +133,7 @@ export default function CheckerSupplierManagementPage() {
       subHeader={
         <div className="relative">
           <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search supplier, code or city" aria-label="Search suppliers" className={`${FIELD} pl-10`} />
+          <input name="query" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search supplier, code or city" aria-label="Search suppliers" className={`${FIELD} pl-10`} />
         </div>
       }
     >
@@ -189,8 +189,8 @@ export default function CheckerSupplierManagementPage() {
             <input id="sup-person" value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} className={FIELD} />
           </div>
           <div>
-            <label className={LABEL}>Contact number</label>
-            <PhoneInput value={form.contact_number} onChange={(v) => setForm({ ...form, contact_number: v })} placeholder="917 123 4567" className={FIELD}
+            <label htmlFor="checker-supplier-management-page-contact-number" className={LABEL}>Contact number</label>
+            <PhoneInput name="contact_number" id="checker-supplier-management-page-contact-number" value={form.contact_number} onChange={(v) => setForm({ ...form, contact_number: v })} placeholder="917 123 4567" className={FIELD}
               invalid={!!form.contact_number && !ANY_REGEX.test(form.contact_number)} />
           </div>
           <div>
