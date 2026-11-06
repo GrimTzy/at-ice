@@ -11,14 +11,17 @@ export function useTimedIn() {
 
   useEffect(() => {
     let off = false;
+    let latestRequest = 0;
     const check = async () => {
+      const request = ++latestRequest;
       try {
         const res = await fetch("/api/my-time-in", {
           headers: { Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
         });
         if (!res.ok) return;
         const data = await res.json();
-        if (!off) setTimedIn(!!data.timed_in);
+        // Focus and polling can overlap; an older response must not undo a newer one.
+        if (!off && request === latestRequest) setTimedIn(!!data.timed_in);
       } catch {
         /* keep the last known state */
       }

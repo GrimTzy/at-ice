@@ -56,7 +56,7 @@ export function runWhenInView(el, fn) {
   const from = scroller.scrollTop;
   const max = scroller.scrollHeight - scroller.clientHeight;
   const to = Math.max(0, Math.min(max, from + offset - 12));
-  glide(scroller, to, fn);
+  return glide(scroller, to, fn);
 }
 
 function glide(scroller, to, done) {
@@ -69,13 +69,15 @@ function glide(scroller, to, done) {
     return done();
   }
   const start = performance.now();
+  let frame;
   const step = (now) => {
     const t = Math.min(1, (now - start) / SCROLL_MS);
     scroller.scrollTop = from + (to - from) * easeOut(t);
-    if (t < 1) requestAnimationFrame(step);
+    if (t < 1) frame = requestAnimationFrame(step);
     else done();
   };
-  requestAnimationFrame(step);
+  frame = requestAnimationFrame(step);
+  return () => cancelAnimationFrame(frame);
 }
 
 // Where a list lands: the top of its table, so the column header sits this far
@@ -114,7 +116,7 @@ function runAtListTop(el, fn) {
     return anchor.getBoundingClientRect().top - box.top - coveredTop(box) - LIST_GAP;
   };
   const max = scroller.scrollHeight - scroller.clientHeight;
-  glide(scroller, Math.max(0, Math.min(max, scroller.scrollTop + away())), () => {
+  return glide(scroller, Math.max(0, Math.min(max, scroller.scrollTop + away())), () => {
     const off = away();
     if (Math.abs(off) >= 2) scroller.scrollTop += off;
     fn();
@@ -124,7 +126,7 @@ function runAtListTop(el, fn) {
 // Pulse the element once. Calling it again restarts the pulse.
 export function pulseDestination(el) {
   if (!el) return;
-  runAtListTop(el, () => {
+  return runAtListTop(el, () => {
     el.removeAttribute("data-dest-pulse");
     void el.offsetWidth; // restart the animation
     el.setAttribute("data-dest-pulse", "");
@@ -164,7 +166,7 @@ export function pulseRows(el, rowKey, enter = false) {
     });
   }
   const row = rows[0];
-  runWhenInView(row, () => {
+  return runWhenInView(row, () => {
     row.removeAttribute("data-row-pulse");
     void row.offsetWidth; // restart on a repeat click
     row.setAttribute("data-row-pulse", "");
@@ -213,12 +215,16 @@ function waitForDestination(id, done) {
     return el && !el.querySelector(".animate-pulse, [data-skeleton]") ? el : null;
   };
   const now = ready();
-  if (now) return done(now), () => {};
+  let stopPulse;
+  if (now) {
+    stopPulse = done(now);
+    return () => stopPulse?.();
+  }
   const watch = new MutationObserver(() => {
     const el = ready();
-    if (el) { cleanup(); done(el); }
+    if (el) { cleanup(); stopPulse = done(el); }
   });
-  const cleanup = () => { watch.disconnect(); window.clearTimeout(giveUp); };
+  const cleanup = () => { watch.disconnect(); window.clearTimeout(giveUp); stopPulse?.(); };
   const giveUp = window.setTimeout(cleanup, 5000);
   watch.observe(document.body, { childList: true, subtree: true });
   return cleanup;
@@ -230,10 +236,15 @@ export function DestinationWatcher() {
 
   useEffect(() => {
     if (!dest) return;
-    waitForDestination(dest, (el) => pulseRows(el));
+    const cancel = waitForDestination(dest, (el) => pulseRows(el));
     // drop the state from the history entry so a reload or back does not replay it
     const h = window.history.state;
-    if (h?.usr) window.history.replaceState({ ...h, usr: null }, "");
+    if (h?.usr) {
+      const usr = { ...h.usr };
+      delete usr.dest;
+      window.history.replaceState({ ...h, usr: Object.keys(usr).length ? usr : null }, "");
+    }
+    return cancel;
   }, [dest, location.key]);
 
   return null;

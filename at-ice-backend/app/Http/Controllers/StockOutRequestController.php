@@ -118,8 +118,16 @@ class StockOutRequestController extends Controller
     /**
      * Show one request.
      */
-    public function show(StockOutRequest $stockOutRequest)
+    public function show(Request $request, StockOutRequest $stockOutRequest)
     {
+        $user = $request->user();
+        abort_if(
+            $user->role === 'employee' && $user->sub_role === 'maintenance'
+                && (int) $stockOutRequest->requested_by !== (int) $user->id,
+            404,
+            'Not found.'
+        );
+
         return response()->json(
             $stockOutRequest->load(self::RELATIONS)
         );
