@@ -117,8 +117,17 @@ html[data-fx="on"] :is(
 html[data-fx="on"] [data-cascade="b"][data-cascade] :is(tbody tr, .insight-panel ul > li) {
   animation-name: fx-stagger-b;
 }
+/* A hero card that filters a list replays the page entrance on the whole list
+   card, the same motion a menu click gives the content. destination.js flips
+   data-enter a/b; two names restart it. Extra [data-enter] raises specificity
+   over the main > * rule above for lists that sit straight under <main>. */
+@keyframes fx-enter-a { from { opacity: 0; transform: translateY(14px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes fx-enter-b { from { opacity: 0; transform: translateY(14px) scale(0.985); } to { opacity: 1; transform: none; } }
+html[data-fx="on"] [data-enter="a"][data-enter] { animation: fx-enter-a var(--fx-slow) var(--fx-ease) backwards; }
+html[data-fx="on"] [data-enter="b"][data-enter] { animation: fx-enter-b var(--fx-slow) var(--fx-ease) backwards; }
 @media (prefers-reduced-motion: reduce) {
   html[data-fx="on"] :is(.kpi-grid > *, tbody tr, .insight-panel ul > li, .role-shell main :is(ul, ol) > li) { animation: none !important; }
+  html[data-fx="on"] [data-enter] { animation: none !important; }
 }
 
 /* Content that replaces a skeleton (marked by ui-effects/reveal.js) enters the

@@ -105,11 +105,16 @@ export function rowsOf(el, rowKey) {
 // - one record (rowKey): only that row plays the entrance (glow.css
 //   data-row-pulse), the rest of the table stays still.
 // With no rows at all (not a table) the list itself pulses, as before.
-export function pulseRows(el, rowKey) {
+export function pulseRows(el, rowKey, enter = false) {
   if (!el) return;
   const rows = rowsOf(el, rowKey);
   if (!rows.length) return pulseDestination(el);
-  if (rowKey == null) return runWhenInView(el, () => recascade(el));
+  if (rowKey == null) {
+    return runWhenInView(el, () => {
+      if (enter) replayEnter(el);
+      recascade(el);
+    });
+  }
   const row = rows[0];
   runWhenInView(row, () => {
     row.removeAttribute("data-row-pulse");
@@ -126,13 +131,19 @@ export function recascade(el) {
   if (el) el.setAttribute("data-cascade", el.getAttribute("data-cascade") === "a" ? "b" : "a");
 }
 
+// Play the page-entrance animation (the one a menu click gives the content) on
+// the whole list card again. Same a/b trick as recascade.
+export function replayEnter(el) {
+  if (el) el.setAttribute("data-enter", el.getAttribute("data-enter") === "a" ? "b" : "a");
+}
+
 // Same page: the filter's list is committed by React before the next frame, so
 // on that frame scroll to the list and replay the cascade on the rows that are
 // left, once they are on screen (so the user sees it). An empty result still
 // cascades (its "no match" row is a row too). rowKey: only the row with that
 // data-row-key plays (a single record).
 export function focusDestination(id, rowKey) {
-  requestAnimationFrame(() => pulseRows(findDestination(id), rowKey));
+  requestAnimationFrame(() => pulseRows(findDestination(id), rowKey, true));
 }
 
 // One record: the page has already moved its pager to the record's page; wait
