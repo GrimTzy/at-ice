@@ -253,3 +253,19 @@ html[data-fx] .stat-card.stat-card {
 #root aside a, #root nav a, #root aside img, #root header img {
   filter: none !important;
 }
+
+/* ---- One record's row ("tibok") ------------------------------------------------
+   When a summary item points to one record (a store under Needs setup), only
+   that row plays the table's own entrance again: it fades in and settles up,
+   the same 240ms step as the staggered cascade (ui-effects/effects.css). No
+   color is added, and no other row moves. A card that filters the table
+   replays the cascade on the rows that are left instead (lib/destination.js). */
+@keyframes fx-row-again { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+html[data-fx="on"] :is(tr, [data-row])[data-row-pulse] {
+  animation: fx-row-again 240ms var(--fx-ease, ease-out) backwards !important;
+  animation-delay: 0ms !important;
+}
+tr[data-row-pulse] { scroll-margin-top: 96px; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-fx="on"] :is(tr, [data-row])[data-row-pulse] { animation: none !important; }
+}

@@ -165,6 +165,9 @@ export default function EmployeesPage() {
   const [roleFilter, setRoleFilter]   = useState("all");
   const [statusView, setStatusView]   = useState("active"); // active | inactive (archived)
   const [unenrolledFirst, setUnenrolledFirst] = useState(false);
+  // Hero card filter: "" (all) | enrolled | unenrolled | probationary | license
+  const [cardFilter, setCardFilter] = useState("");
+  const toggleCard = (key) => setCardFilter((f) => (f === key ? "" : key));
 
   const token = localStorage.getItem("token");
   const authHeaders = {
@@ -202,6 +205,13 @@ export default function EmployeesPage() {
 
   const filtered = employees
     .filter((e) => roleFilter === "all" || displayRole(e) === roleFilter)
+    .filter((e) => {
+      if (cardFilter === "enrolled") return !!e.face_data;
+      if (cardFilter === "unenrolled") return !e.face_data;
+      if (cardFilter === "probationary") return e.employment_status === "probationary";
+      if (cardFilter === "license") { const d = daysUntil(e.license_expiry); return d != null && d <= EXPIRY_ALERT_DAYS; }
+      return true;
+    })
     .filter((e) => {
       const q = search.trim().toLowerCase();
       if (!q) return true;
@@ -622,11 +632,11 @@ export default function EmployeesPage() {
   return (
     <HrLayout pageTitle="Employees" breadcrumb="HRIS / Employees">
       <KpiGrid cols={5}>
-        <KpiCard label={statusView === "inactive" ? "Archived" : "Active staff"} icon="users" tone="cyan" value={employees.length} sub={`${Object.keys(roleCounts).length} roles`} />
-        <KpiCard label="Face enrolled" icon="check" tone="emerald" value={enrolledCount} sub="Can time in at the kiosk" bar={shareOf(enrolledCount)} />
-        <KpiCard label="Not enrolled" icon="alert" tone={unenrolledCount ? "rose" : "emerald"} value={unenrolledCount} sub={unenrolledCount ? "Enroll their face to time in" : "Everyone can time in"} bar={shareOf(unenrolledCount)} onClick={() => setUnenrolledFirst((v) => !v)} active={unenrolledFirst} />
-        <KpiCard label="Probationary" icon="clock" tone="amber" value={probationary} sub={`${employees.length - probationary} regular`} bar={shareOf(probationary)} />
-        <KpiCard label="Licenses expiring" icon="key" tone={licenseSoon ? "rose" : "violet"} value={licenseSoon} sub={`Within ${EXPIRY_ALERT_DAYS} days or already expired`} />
+        <KpiCard label={statusView === "inactive" ? "Archived" : "Active staff"} icon="users" tone="cyan" value={employees.length} sub={`${Object.keys(roleCounts).length} roles`} onClick={() => setCardFilter("")} active={cardFilter === ""} />
+        <KpiCard label="Face enrolled" icon="check" tone="emerald" value={enrolledCount} sub="Can time in at the kiosk" bar={shareOf(enrolledCount)} onClick={() => toggleCard("enrolled")} active={cardFilter === "enrolled"} />
+        <KpiCard label="Not enrolled" icon="alert" tone={unenrolledCount ? "rose" : "emerald"} value={unenrolledCount} sub={unenrolledCount ? "Enroll their face to time in" : "Everyone can time in"} bar={shareOf(unenrolledCount)} onClick={() => toggleCard("unenrolled")} active={cardFilter === "unenrolled"} />
+        <KpiCard label="Probationary" icon="clock" tone="amber" value={probationary} sub={`${employees.length - probationary} regular`} bar={shareOf(probationary)} onClick={() => toggleCard("probationary")} active={cardFilter === "probationary"} />
+        <KpiCard label="Licenses expiring" icon="key" tone={licenseSoon ? "rose" : "violet"} value={licenseSoon} sub={`Within ${EXPIRY_ALERT_DAYS} days or already expired`} onClick={() => toggleCard("license")} active={cardFilter === "license"} />
       </KpiGrid>
 
       <div className="bg-white border border-black/[0.09] rounded-xl">
@@ -806,8 +816,8 @@ export default function EmployeesPage() {
       {/* ── ADD / EDIT MODAL: six steps (owner, 2026-10-20) ── */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-black/[0.09]">
+          <div className="modal-shell bg-white rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between gap-3 px-5 py-4 border-b border-black/[0.09]">
               <div className="text-xl font-bold text-slate-800">
                 {editingId ? `Edit Employee · ${[form.first_name, form.last_name].filter(Boolean).join(" ")}` : "Add Employee"}
               </div>
@@ -824,6 +834,7 @@ export default function EmployeesPage() {
                 </button>
               </div>
             </div>
+<div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
 
             {/* Step bar: Personal → Contact → Payroll → Technical → History → Attachments */}
             <nav aria-label="Form steps" className="px-5 pt-4">
@@ -1193,6 +1204,7 @@ export default function EmployeesPage() {
                 </div>
               </div>
             </form>
+</div>
           </div>
         </div>
       )}
@@ -1240,7 +1252,7 @@ export default function EmployeesPage() {
             </p>
             <div className="mt-4 flex flex-col gap-2">
               {[["Email", createdAccount.email], ["Password", createdAccount.password]].map(([label, value]) => (
-                <div key={label} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-black/[0.09]">
+                <div key={label} className="neu-inset flex items-center gap-2 px-3 py-2 rounded-xl">
                   <div className="min-w-0 flex-1">
                     <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
                     <div className="font-mono text-[13px] text-slate-800 break-all select-all">{value}</div>
@@ -1382,8 +1394,8 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.09]">
+      <div className="modal-shell bg-white rounded-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-black/[0.09]">
           <div>
             <div className="text-[15px] font-semibold text-slate-800">
               {!enrolled ? "Enroll Face" : capturing ? "Re-enroll Face" : "Registered Face"}
@@ -1392,6 +1404,7 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
           </div>
           <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700 cursor-pointer"><XIcon /></button>
         </div>
+<div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
 
         <div className="px-5 py-4 flex flex-col gap-3">
           {enrolled && !capturing && (
@@ -1483,6 +1496,7 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
             </div>
           )}
         </div>
+</div>
       </div>
     </div>
   );

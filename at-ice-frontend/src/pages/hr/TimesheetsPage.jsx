@@ -48,7 +48,7 @@ export default function TimesheetsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [approval, setApproval] = useState(""); // "", approved or not_approved: set by the cards
+  const [approval, setApproval] = useState(""); // "", approved, not_approved, absent or overtime: set by the cards
   const [selected, setSelected] = useState(() => new Set());
   // Overtime is paid only for the employees ticked here (R3)
   const [otOk, setOtOk] = useState(() => new Set());
@@ -73,7 +73,13 @@ export default function TimesheetsPage() {
   const ended = period ? period.end < todayLocal() : false;
   const q = search.trim().toLowerCase();
   const rows = useMemo(() => (data?.rows || [])
-    .filter((r) => !approval || (approval === "approved" ? ["unpaid", "paid"].includes(r.status) : r.status === "not_approved"))
+    .filter((r) => {
+      if (!approval) return true;
+      if (approval === "approved") return ["unpaid", "paid"].includes(r.status);
+      if (approval === "absent") return Number(r.absent_days || 0) > 0;
+      if (approval === "overtime") return r.ot_pending_minutes > 0;
+      return r.status === "not_approved";
+    })
     .map((r) => [r, !q ? 1 : String(r.employee_id).toLowerCase().includes(q) ? 2 : r.name.toLowerCase().includes(q) ? 1 : 0])
     .filter(([, rank]) => rank > 0)
     .sort((a, b) => b[1] - a[1])
@@ -114,8 +120,8 @@ export default function TimesheetsPage() {
         <KpiCard label="Employees" icon="users" tone="cyan" value={all.length} sub={period ? payPeriodLabel(period) : "This pay period"} onClick={() => setApproval("")} />
         <KpiCard label="Approved" icon="check" tone="emerald" value={done} sub={`${statusOf("paid")} already paid by Admin`} bar={all.length ? done / all.length : 0} onClick={() => setApproval((a) => (a === "approved" ? "" : "approved"))} active={approval === "approved"} />
         <KpiCard label="Not approved" icon="clock" tone="amber" value={statusOf("not_approved")} sub={ended ? "Ready for your approval" : "Period has not ended yet"} bar={all.length ? statusOf("not_approved") / all.length : 0} live={ended && statusOf("not_approved") > 0} onClick={() => setApproval((a) => (a === "not_approved" ? "" : "not_approved"))} active={approval === "not_approved"} />
-        <KpiCard label="Absences" icon="x" tone="rose" value={absences} sub={`${lateMin} late minutes in all`} />
-        <KpiCard label="Overtime to approve" icon="alert" tone="violet" value={otToApprove} sub="Tick it with the timesheet to pay it" />
+        <KpiCard label="Absences" icon="x" tone="rose" value={absences} sub={`${lateMin} late minutes in all`} onClick={() => setApproval((a) => (a === "absent" ? "" : "absent"))} active={approval === "absent"} />
+        <KpiCard label="Overtime to approve" icon="alert" tone="violet" value={otToApprove} sub="Tick it with the timesheet to pay it" onClick={() => setApproval((a) => (a === "overtime" ? "" : "overtime"))} active={approval === "overtime"} />
       </KpiGrid>
 
       <div className="bg-white border border-black/[0.09] rounded-xl px-[18px] py-3.5 flex flex-wrap items-center gap-3">

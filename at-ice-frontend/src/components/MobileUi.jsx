@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./icons";
+import { QTY_CEILING, cleanQty } from "../lib/quantity";
 import { TONE_CLASS, toneFor, BTN, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER, FIELD } from "../lib/mobileUi";
 
 // Building blocks of the Maintenance, Checker and Salesman screens (the AT-ICE
@@ -99,7 +100,7 @@ export function BottomSheet({ open, onClose, title, children, footer, front = fa
 
 // Big - / + buttons with a number field between them, for counting sacks and
 // bags with wet or busy hands.
-export function Stepper({ value, onChange, min = 0, max = 100000, label, id, disabled = false }) {
+export function Stepper({ value, onChange, min = 0, max = QTY_CEILING, label, id, disabled = false }) {
   const autoId = useId();
   const fieldId = id || autoId;
   const n = Number(value) || 0;
@@ -111,7 +112,7 @@ export function Stepper({ value, onChange, min = 0, max = 100000, label, id, dis
         <Icon name="minus" size={20} />
       </button>
       <input id={fieldId} type="text" inputMode="numeric" pattern="[0-9]*" aria-label={label} value={value} disabled={disabled}
-        onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
+        onChange={(e) => onChange(cleanQty(e.target.value, max))}
         className="min-h-[44px] w-full min-w-0 text-center text-base font-semibold tabular-nums border border-slate-200 rounded-xl bg-white text-slate-900 outline-none focus:border-cyan-500" />
       <button type="button" onClick={() => set(n + 1)} disabled={disabled || n >= max} aria-label={`More ${label || ""}`.trim()}
         className="h-11 w-11 min-h-[44px] min-w-[44px] flex-shrink-0 inline-flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-700 active:scale-[0.98] transition-transform disabled:opacity-50 disabled:pointer-events-none">

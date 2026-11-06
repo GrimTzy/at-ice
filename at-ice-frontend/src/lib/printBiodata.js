@@ -1,4 +1,4 @@
-import { PRINT_BASE_CSS, printDocument } from "./printDocument";
+import { PRINT_BASE_CSS, docFileName, printDocument } from "./printDocument";
 import { CIVIL_STATUSES, EDUCATION_LEVELS, GOV_IDS, RESTRICTIONS, SEXES, labelOf } from "./biodata";
 import { fullName, shiftLabel } from "./names";
 import { COMPANY } from "./company";
@@ -111,5 +111,5 @@ export async function printBiodata(emp, documents = []) {
     <div class="foot">Confidential. Personal data is processed under the Data Privacy Act of 2012 (RA 10173) for employment purposes only.</div>
   </div></body></html>`;
 
-  printDocument(html);
+  printDocument(html, docFileName("biodata", emp.employee_id, [emp.last_name, emp.first_name].filter(Boolean).join("-")));
 }

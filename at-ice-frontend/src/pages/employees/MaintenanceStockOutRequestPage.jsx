@@ -11,6 +11,7 @@ import { formatDateTime } from "../../lib/time";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import FilterSelect from "../../components/FilterSelect";
+import { QTY_CEILING, QTY_INPUT_PROPS, cleanQty, qtyWasCapped } from "../../lib/quantity";
 
 const STATUS_LABEL = { pending: "Pending", approved: "Approved", released: "Released", rejected: "Rejected" };
 const FILTERS = [["all", "All"], ["pending", "Pending"], ["approved", "Approved"], ["released", "Released"], ["rejected", "Rejected"]];
@@ -109,6 +110,10 @@ export default function MaintenanceStockOutRequestPage() {
   useEffect(() => { if (showForm) fetchItems(); }, [showForm, fetchItems, live]);
 
   const selectedItem = items.find((i) => String(i.id) === String(productId));
+  // Most that can be asked for: the item's stock on hand (or the ceiling)
+  const maxQty = selectedItem ? Math.max(0, Math.min(Number(selectedItem.current_stock) || 0, QTY_CEILING)) : QTY_CEILING;
+  const [qtyCapped, setQtyCapped] = useState(false);
+  const typeQty = (raw) => { setQtyCapped(qtyWasCapped(raw, maxQty)); setQuantity(cleanQty(raw, maxQty)); };
 
   // Choosing a project fills Purpose from its description (still editable).
   // Text the user typed is kept; text filled from a project is replaced.
@@ -238,8 +243,16 @@ export default function MaintenanceStockOutRequestPage() {
           </div>
           <div>
             <label htmlFor="sor-qty" className={LABEL}>Quantity *</label>
-            <input id="sor-qty" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="e.g. 2" value={quantity}
-              onChange={(e) => setQuantity(e.target.value.replace(/\D/g, ""))} className={FIELD} />
+            <input id="sor-qty" name="quantity" {...QTY_INPUT_PROPS} placeholder="e.g. 2" value={quantity}
+              aria-describedby="sor-qty-hint" aria-invalid={qtyCapped || undefined}
+              onChange={(e) => typeQty(e.target.value)} className={FIELD} />
+            <p id="sor-qty-hint" className={`text-[13px] mt-1.5 ${qtyCapped ? "text-rose-600" : "text-slate-500"}`} role={qtyCapped ? "alert" : undefined}>
+              {selectedItem
+                ? qtyCapped
+                  ? `Only ${maxQty} ${selectedItem.unit || ""} in stock, so the quantity was set to ${maxQty}.`.replace(/\s+/g, " ")
+                  : `Whole number, 1 to ${maxQty} ${selectedItem.unit || ""} (in stock).`.replace(/\s+/g, " ")
+                : "Choose the item first; the quantity cannot be more than its stock."}
+            </p>
           </div>
           <div>
             <label htmlFor="sor-project" className={LABEL}>Project (optional)</label>

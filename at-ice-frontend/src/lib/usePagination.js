@@ -10,12 +10,24 @@ export function usePagination(items, { initialSize = 10 } = {}) {
   const list = useMemo(() => (Array.isArray(items) ? items : []), [items]);
   const [pageSize, setPageSizeState] = useState(initialSize);
   const [state, setState] = useState({ page: 1, total: list.length });
+  // reveal(match): open the page that holds the first item where match(item)
+  // is true. It waits for the next render, so a filter cleared in the same
+  // click is already applied when the item is looked up.
+  const [pending, setPending] = useState(null);
 
   // a different number of rows (filter, search, new data): back to page 1
   let page = state.page;
   if (state.total !== list.length) {
     page = 1;
     setState({ page: 1, total: list.length });
+  }
+  if (pending) {
+    const at = list.findIndex(pending.match);
+    if (at >= 0) {
+      page = Math.floor(at / pageSize) + 1;
+      setState({ page, total: list.length });
+    }
+    setPending(null);
   }
 
   const pageCount = Math.max(1, Math.ceil(list.length / pageSize));
@@ -32,5 +44,6 @@ export function usePagination(items, { initialSize = 10 } = {}) {
     pageItems,
     setPage: (p) => setState((s) => ({ ...s, page: Math.max(1, Math.min(pageCount, p)) })),
     setPageSize: (n) => { setPageSizeState(n); setState((s) => ({ ...s, page: 1 })); },
+    reveal: (match) => setPending({ match }),
   };
 }

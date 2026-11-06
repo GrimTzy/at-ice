@@ -209,8 +209,8 @@ export default function CustomerReceipts() {
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-950/60" onClick={() => setSelectedId(null)} />
-          <div className="relative bg-white rounded-xl border border-black/[0.09] shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
+          <div className="modal-shell relative bg-white rounded-xl border border-black/[0.09] shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold text-slate-800">{selected.receipt_no}</div>
                 <div className="mt-1"><Badge receipt={selected} /></div>
@@ -224,34 +224,24 @@ export default function CustomerReceipts() {
                 </button>
               </div>
             </div>
+            <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="px-5 py-4">
               <div className="text-xs text-slate-400 mb-3">Issued {fmtDate(selected.created_at)}</div>
               {(selected.items || []).length === 0 ? (
                 <div className="text-xs text-slate-400">No item breakdown available.</div>
               ) : (
-                <div className="detail-well !p-2 overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-left text-slate-400 bg-slate-50">
-                        <th className="px-3 py-2 font-medium">Product</th>
-                        <th className="px-3 py-2 font-medium text-right">Qty</th>
-                        <th className="px-3 py-2 font-medium text-right">Price</th>
-                        <th className="px-3 py-2 font-medium text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-black/[0.06]">
-                      {selected.items.map((it, idx) => (
-                        <tr key={idx}>
-                          <td className="px-3 py-2 text-slate-800">{PRODUCT_LABEL[it.product_type] || it.product_type}</td>
-                          <td className="px-3 py-2 text-right text-slate-600">{it.quantity}</td>
-                          <td className="px-3 py-2 text-right text-slate-600">{peso(it.unit_price)}</td>
-                          <td className="px-3 py-2 text-right text-slate-800">
-                            {peso(it.line_total ?? Number(it.quantity || 0) * Number(it.unit_price || 0))}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div>
+                  <div className="text-[11px] text-slate-400 uppercase tracking-wide mb-1.5">Items</div>
+                  <div className="flex flex-col gap-1.5">
+                    {selected.items.map((it, idx) => (
+                      <div key={idx} className="item-card flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-xs">
+                        <span className="text-slate-800">{PRODUCT_LABEL[it.product_type] || it.product_type}</span>
+                        <span className="text-slate-600 font-mono text-right">
+                          {it.quantity} × {peso(it.unit_price)} = {peso(it.line_total ?? Number(it.quantity || 0) * Number(it.unit_price || 0))}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               <div className="total-row flex items-center justify-between mt-4 rounded-xl px-3.5 py-3 text-sm">
@@ -259,6 +249,7 @@ export default function CustomerReceipts() {
                 <span className="font-semibold text-slate-800">{peso(selected.total_amount)}</span>
               </div>
               <PaymentProofSection key={selected.id} receipt={selected} onSent={() => setReload((n) => n + 1)} />
+            </div>
             </div>
           </div>
         </div>

@@ -113,6 +113,10 @@ export default function CheckerStockMovementsPage() {
     }
   }
 
+  // A stock out cannot take more than what is on hand
+  const pickedProduct = products.find((p) => String(p.id) === String(productId));
+  const qtyMax = type === "stock_out" && pickedProduct ? Math.max(0, Number(pickedProduct.current_stock) || 0) : undefined;
+
   const visible = (filter === "pending" ? movements.filter((m) => m.status === "pending") : movements).filter((m) =>
     matchesQuery(query, m.product?.name, m.type === "stock_in" ? "stock in" : "stock out", m.type, m.id, m.reference, m.reason, m.notes, m.entered_by?.name));
   const pendingCount = movements.filter((m) => m.status === "pending").length;
@@ -193,7 +197,7 @@ export default function CheckerStockMovementsPage() {
           </div>
           <div>
             <label htmlFor="mv-qty" className={LABEL}>Quantity *</label>
-            <Stepper id="mv-qty" label="Quantity" min={0} value={quantity} onChange={setQuantity} />
+            <Stepper id="mv-qty" label="Quantity" min={0} max={qtyMax} value={quantity} onChange={setQuantity} />
           </div>
           <div>
             <label htmlFor="mv-notes" className={LABEL}>Notes</label>

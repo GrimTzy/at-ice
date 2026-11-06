@@ -4,7 +4,7 @@ import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
 import PhoneInput from "../components/PhoneInput";
 import AddressFields from "../components/AddressFields";
-import { MOBILE_REGEX, MOBILE_MESSAGE, toStoredPhone } from "../lib/phone";
+import { MOBILE_REGEX, MOBILE_MESSAGE, mobileError, toStoredPhone } from "../lib/phone";
 import { PUBLIC_POSITIONS } from "../lib/positions";
 import { useDraft } from "../lib/useDraft";
 import DraftHint from "../components/DraftHint";
@@ -170,6 +170,10 @@ export default function ApplyPage() {
     }
   };
 
+  // Live check while typing: a PH mobile number after +63 must start with 9
+  const liveStart = (digits) => (digits && digits[0] !== "9"
+    ? <span role="alert" className="text-[12px] text-red-600">{mobileError(digits)}</span>
+    : null);
   const err = (k) => {
     const list = errors[k] || Object.entries(errors).find(([key]) => key.startsWith(`${k}.`))?.[1];
     return list && <span data-apply-error className="text-[12px] text-red-600">{list[0]}</span>;
@@ -285,8 +289,8 @@ export default function ApplyPage() {
                 <Section n={2} title="Contact" sub="So HR can reach you">
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Mobile Number *</span>
-                    <PhoneInput value={form.phone} onChange={(phone) => setForm((f) => ({ ...f, phone }))} className={fieldCls} invalid={!!form.phone && !MOBILE_REGEX.test(form.phone)} />
-                    {err("phone")}
+                    <PhoneInput value={form.phone} onChange={(phone) => setForm((f) => ({ ...f, phone }))} className={fieldCls} invalid={!!form.phone && !MOBILE_REGEX.test(form.phone)} aria-label="Mobile number" name="phone" />
+                    {err("phone") || liveStart(form.phone)}
                   </label>
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Email (optional)</span>
@@ -301,8 +305,8 @@ export default function ApplyPage() {
                   <input value={form.emergency_name} onChange={set("emergency_name")} maxLength={120} placeholder="Name" aria-label="Emergency contact name" className={fieldCls} />
                   <input value={form.emergency_relationship} onChange={set("emergency_relationship")} maxLength={40} placeholder="Relationship (e.g. Mother)" aria-label="Emergency contact relationship" className={fieldCls} />
                   <PhoneInput value={form.emergency_phone} onChange={(emergency_phone) => setForm((f) => ({ ...f, emergency_phone }))} className={fieldCls}
-                    invalid={!!form.emergency_phone && !MOBILE_REGEX.test(form.emergency_phone)} />
-                  {err("emergency_phone")}
+                    invalid={!!form.emergency_phone && !MOBILE_REGEX.test(form.emergency_phone)} aria-label="Emergency contact mobile number" name="emergency_phone" />
+                  {err("emergency_phone") || liveStart(form.emergency_phone)}
                 </Section>
 
                 {isDriver && (
@@ -369,7 +373,7 @@ export default function ApplyPage() {
                   )}
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Message to HR (optional)</span>
-                    <textarea value={form.notes} onChange={set("notes")} rows={3} maxLength={1000} placeholder="e.g. when you can start" className={`${fieldCls} resize-none`} />
+                    <textarea value={form.notes} onChange={set("notes")} rows={3} maxLength={1000} placeholder="e.g. when you can start" className={`${fieldCls} resize-y`} />
                   </label>
                 </Section>
 

@@ -47,6 +47,8 @@ export default function Pagination({ pager, fixed = false, dock = false, dockBot
   const navRef = useRef(null);
   const lift = useActionBarHeight(dock);
   const tallest = useRef({ key: "", height: 0 });
+  // Go-to-page box: what the user is typing, or null to show the current page.
+  const [draft, setDraft] = useState(null);
   useLayoutEffect(() => {
     const box = navRef.current?.previousElementSibling;
     if (!box || !pager || !box.querySelector("table")) return;
@@ -60,6 +62,14 @@ export default function Pagination({ pager, fixed = false, dock = false, dockBot
   if (!pager || pager.total === 0) return null;
   const { page, pageCount, pageSize, setPage, setPageSize } = pager;
   const pill = "inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-black/[0.09] bg-white text-[12px] font-medium text-slate-600 transition-colors";
+  // Enter or leaving the box jumps; out-of-range numbers clamp to 1..pageCount,
+  // anything else goes back to the current page. Escape cancels.
+  const commit = () => {
+    if (draft === null) return;
+    const n = parseInt(draft, 10);
+    if (Number.isFinite(n)) setPage(Math.min(pageCount, Math.max(1, n)));
+    setDraft(null);
+  };
 
   const bar = (
     <nav ref={navRef} aria-label="Pagination" className={`pager flex flex-col items-center gap-2 w-full px-[18px] ${dock ? "py-2" : "py-4 border-t border-black/[0.06]"}`}>
@@ -68,8 +78,28 @@ export default function Pagination({ pager, fixed = false, dock = false, dockBot
           className={`${pill} hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}>
           <ChevLeft /> Previous
         </button>
-        <span className={`${pill} min-w-[80px] tabular-nums text-slate-500`} aria-current="page">
-          <b className="text-slate-800">{page}</b>&nbsp;/&nbsp;{pageCount}
+        <span className={`${pill} min-w-[80px] tabular-nums text-slate-500 !px-2`}>
+          {pageCount > 1 ? (
+            <input
+              type="text"
+              inputMode="numeric"
+              name="page"
+              className="pager-input tabular-nums"
+              aria-label={`Page number, 1 to ${pageCount}`}
+              aria-current="page"
+              value={draft ?? String(page)}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setDraft(e.target.value.replace(/\D/g, "").slice(0, String(pageCount).length))}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); commit(); e.currentTarget.blur(); }
+                if (e.key === "Escape") { setDraft(null); e.currentTarget.blur(); }
+              }}
+            />
+          ) : (
+            <b className="text-slate-800" aria-current="page">{page}</b>
+          )}
+          &nbsp;/&nbsp;{pageCount}
         </span>
         <button type="button" onClick={() => setPage(page + 1)} disabled={page >= pageCount} aria-label="Next page"
           className={`${pill} hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}>

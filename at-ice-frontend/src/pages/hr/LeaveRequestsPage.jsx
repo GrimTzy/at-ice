@@ -66,12 +66,14 @@ const payLabel = (l) => (l.status !== "approved" ? "" : l.is_paid ? "Paid" : Num
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div role="dialog" aria-label={title} className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-3.5 border-b border-black/[0.09] flex items-center justify-between">
+      <div role="dialog" aria-label={title} className="modal-shell bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 px-5 py-3.5 border-b border-black/[0.09] flex items-center justify-between">
           <div className="text-[14px] font-semibold text-slate-800">{title}</div>
           <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700 cursor-pointer p-1"><XIcon /></button>
         </div>
+        <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {children}
+        </div>
       </div>
     </div>
   );
@@ -235,7 +237,7 @@ export default function LeaveRequestsPage() {
                     <th className="px-[18px] py-2.5 font-medium">Dates</th>
                     <th className="px-[18px] py-2.5 font-medium">Length</th>
                     <th className="px-[18px] py-2.5 font-medium">Credits left</th>
-                    <th className="px-[18px] py-2.5 font-medium">Status</th>
+                    <th className="px-[18px] py-2.5 font-medium text-center">Status</th>
                     <th className="px-[18px] py-2.5 font-medium text-right">Actions</th>
                   </tr>
                 </thead>

@@ -19,7 +19,7 @@ import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 import { payPeriodLabel } from "../../lib/payPeriod";
-import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
+import { PRINT_BASE_CSS, cutoffPart, docFileName, printDocument } from "../../lib/printDocument";
 import { COMPANY } from "../../lib/company";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
@@ -81,7 +81,7 @@ function printPayslip(p) {
     ${n(p.carry_over_out) ? `<p>Deductions were ${peso(p.carry_over_out)} more than the pay; this is deducted on the next cut-off.</p>` : ""}
     ${n(p.employer_shouldered) ? `<p>Deductions were ${peso(p.employer_shouldered)} more than the pay; the employer pays this.</p>` : ""}
     <p class="muted" style="margin-top:18px">Gross ${peso(p.gross_pay)} · Taxable income ${peso(p.taxable_income)} · Hourly rate ${peso(p.hourly_rate)}</p>
-  </div></body></html>`);
+  </div></body></html>`, docFileName("payslip", e.employee_id, cutoffPart(p.period_start, p.period_end)));
 }
 
 const Chevron = ({ left }) => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><polyline points={left ? "15 18 9 12 15 6" : "9 18 15 12 9 6"} /></svg>;
@@ -122,8 +122,10 @@ function AdjustModal({ payroll, onClose, onChanged }) {
   };
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={close}>
-      <div role="dialog" aria-label="Earnings adjustments" className="bg-white rounded-xl w-full max-w-md p-5 flex flex-col gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
-        <div className="text-[14px] font-semibold text-slate-800">Earnings adjustments</div>
+      <div role="dialog" aria-label="Earnings adjustments" className="modal-shell bg-white rounded-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden text-xs" onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] text-[14px] font-semibold text-slate-800">Earnings adjustments</div>
+        <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="p-5 flex flex-col gap-3">
         <DraftHint draft={draft} />
         <ul className="flex flex-col gap-1">
           {(payroll.adjustments || []).length === 0 && <li className="text-slate-400">None yet.</li>}
@@ -142,7 +144,11 @@ function AdjustModal({ payroll, onClose, onChanged }) {
           <label className="flex items-center gap-2 col-span-2"><input type="checkbox" data-native checked={form.taxable} onChange={(e) => setForm({ ...form, taxable: e.target.checked })} /> Taxable</label>
           <button type="submit" disabled={busy || !form.amount} className="col-span-2 px-3 py-1.5 rounded-md bg-cyan-500 text-white font-semibold disabled:opacity-50 cursor-pointer">{busy ? "Adding…" : "Add earning"}</button>
         </form>
-        <button onClick={close} className="self-end text-slate-500 cursor-pointer">Close</button>
+        </div>
+        </div>
+        <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] flex justify-end">
+          <button onClick={close} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 cursor-pointer">Close</button>
+        </div>
       </div>
     </div>
   );

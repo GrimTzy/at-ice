@@ -81,11 +81,13 @@ function HolidayModal({ holiday, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={close}>
       <form role="dialog" aria-modal="true" aria-label={editing ? "Edit holiday" : "Add a holiday"} onSubmit={save} onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl w-full max-w-md p-5 flex flex-col gap-3.5">
-        <div>
+        className="modal-shell bg-white rounded-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="shrink-0 px-5 py-4 border-b border-black/[0.09]">
           <div className="text-[15px] font-semibold text-slate-800">{editing ? "Edit holiday" : "Add a holiday"}</div>
           <div className="text-[11px] text-slate-500 mt-0.5">Use the date and name from the official proclamation.</div>
         </div>
+        <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="p-5 flex flex-col gap-3.5">
         <DraftHint draft={draft} onDiscard={onClose} />
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Date</span>
           <input type="date" required autoFocus value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inputCls} /></label>
@@ -98,7 +100,9 @@ function HolidayModal({ holiday, onClose, onSaved }) {
         <label className="flex items-center gap-1.5 text-[12px] text-slate-600">
           <input type="checkbox" data-native checked={form.is_double} onChange={(e) => setForm({ ...form, is_double: e.target.checked })} /> Two holidays on this date
         </label>
-        <div className="flex justify-end gap-2 pt-1">
+        </div>
+        </div>
+        <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] flex justify-end gap-2">
           <button type="button" onClick={close} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-xs text-slate-600 hover:bg-slate-50 cursor-pointer">Cancel</button>
           <button type="submit" disabled={busy} className="px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold disabled:opacity-50 cursor-pointer">
             {busy ? "Saving…" : editing ? "Save changes" : "Add holiday"}

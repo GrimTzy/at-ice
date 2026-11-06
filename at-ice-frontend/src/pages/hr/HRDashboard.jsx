@@ -167,6 +167,7 @@ export default function HRDashboard() {
             { label: "Attendance", hint: "Today and history", icon: "clock", tone: "emerald", onClick: () => navigate("/hr/attendance") },
             { label: "Leave requests", hint: `${pendingLeaves.length} to review`, icon: "calendar", tone: "violet", onClick: () => navigate("/hr/leave-requests") },
             { label: "Timesheets", hint: "Approve the pay period", icon: "file", tone: "amber", onClick: () => navigate("/hr/timesheets") },
+            { label: "Enroll a worker's face", hint: "Employees › Face", icon: "scan", tone: "cyan", wide: true, onClick: () => navigate("/hr/employees") },
           ]} />
         </div>
         </div>
@@ -245,14 +246,6 @@ export default function HRDashboard() {
                 </div>
               ))}
           </div>
-
-          {/* QUICK ACTION */}
-          <button
-            onClick={() => navigate("/hr/employees")}
-            className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-600 active:bg-cyan-700 text-white text-[13px] font-semibold rounded-xl transition-colors shadow-sm cursor-pointer"
-          >
-            Enroll a Worker's Face (Employees › Face)
-          </button>
         </div>
       </div>
     </HrLayout>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "../../../lib/toast";
 import { useMaxQuantity } from "../../../lib/limits";
+import { QTY_INPUT_PROPS, cleanQty } from "../../../lib/quantity";
 import { api, todayStr, shortDate, timeOf, DAYS, daysLabel, PRODUCT_TYPES, productLabel, inputCls, labelCls, btnPrimary, btnGhost } from "./utils";
 import { Modal, StorePicker, PlusIcon } from "./shared";
 
@@ -13,7 +14,8 @@ const CONTRACT_BADGE = {
 // Contracts: one delivery schedule per customer (a whole chain such as SM, or
 // one store), a date range and delivery days. Approving it makes every
 // daily delivery, so nobody fills in a form each day.
-export default function ContractsTab({ stores, live, onChanged }) {
+// The page toolbar passes `search`, `type` (customer type) and `status`.
+export default function ContractsTab({ stores, live, onChanged, search = "", type = "", status = "all", onLoaded }) {
   const [contracts, setContracts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -31,6 +33,13 @@ export default function ContractsTab({ stores, live, onChanged }) {
     }
   }, []);
   useEffect(() => { load(); }, [load, live]);
+  useEffect(() => { onLoaded?.(contracts); }, [contracts, onLoaded]);
+
+  const shown = contracts.filter((c) =>
+    (status === "all" || c.status === status)
+    && (!type || (c.stores || []).some((s) => (s.customer_type || "dealer") === type))
+    && (!search || `${c.name} ${c.contract_no} ${c.chain || ""} ${(c.stores || []).map((s) => s.name).join(" ")}`.toLowerCase().includes(search)));
+  const narrowed = !!(search || type || status !== "all");
 
   async function act() {
     const { contract, action } = confirm;
@@ -75,8 +84,8 @@ export default function ContractsTab({ stores, live, onChanged }) {
           </thead>
           <tbody>
             {loading && contracts.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">Loading…</td></tr>}
-            {!loading && contracts.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">No contracts yet.</td></tr>}
-            {contracts.map((c) => (
+            {!loading && shown.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">{narrowed && contracts.length ? "No contracts match this filter." : "No contracts yet."}</td></tr>}
+            {shown.map((c) => (
               <tr key={c.id} className="border-t border-black/[0.06] align-top">
                 <td className="px-3 py-2.5">
                   <div className="text-slate-800 font-medium">{c.name}</div>
@@ -246,7 +255,7 @@ function ContractForm({ stores, onClose, onSaved }) {
                   <option value="">Select product…</option>
                   {PRODUCT_TYPES.map((p) => <option key={p.value} value={p.value} disabled={form.items.some((o, j) => j !== i && o.product_type === p.value)}>{p.label}</option>)}
                 </select>
-                <input type="number" min="1" max={maxQty} placeholder="Qty" aria-label={`Quantity ${i + 1}`} value={it.quantity} onChange={(e) => set({ items: form.items.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)) })} className={inputCls} />
+                <input {...QTY_INPUT_PROPS} name={`quantity-${i + 1}`} placeholder="Qty" aria-label={`Quantity ${i + 1}, at most ${maxQty}`} value={it.quantity} onChange={(e) => set({ items: form.items.map((x, j) => (j === i ? { ...x, quantity: cleanQty(e.target.value, maxQty) } : x)) })} className={inputCls} />
                 <button type="button" disabled={form.items.length === 1} onClick={() => set({ items: form.items.filter((_, j) => j !== i) })} className="px-2 rounded-md border border-black/[0.09] text-red-500 text-[12px] disabled:opacity-30">Remove</button>
               </div>
             ))}

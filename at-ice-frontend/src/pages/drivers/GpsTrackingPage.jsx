@@ -250,7 +250,7 @@ export function GpsTrackingPage() {
         title="GPS Tracking"
         back="/driver/deliveries"
         status={
-          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium border whitespace-nowrap ${
+          <div title={gpsStatus === "error" ? "Location is blocked or unavailable. Allow location access for this site." : undefined} className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium border whitespace-nowrap ${
             gpsStatus === "active"  ? "bg-green-50 border-green-200 text-green-600" :
             gpsStatus === "error"   ? "bg-red-50 border-red-200 text-red-500" :
                                       "bg-amber-50 border-amber-200 text-amber-600"
@@ -259,7 +259,7 @@ export function GpsTrackingPage() {
               gpsStatus === "active" ? "bg-green-500 animate-pulse" :
               gpsStatus === "error"  ? "bg-red-500" : "bg-amber-400 animate-pulse"
             }`} />
-            {gpsStatus === "active" ? "GPS" : gpsStatus === "error" ? "Error" : "Wait…"}
+            {gpsStatus === "active" ? "GPS" : gpsStatus === "error" ? "Location off" : "Wait…"}
           </div>
         }
       >

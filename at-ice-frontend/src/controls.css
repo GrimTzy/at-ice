@@ -314,14 +314,18 @@
 }
 
 /* Text areas: never smaller than about four lines, grow downwards only, and
-   long words wrap instead of running out of the box (desktop and phone). */
+   long words wrap instead of running out of the box (desktop and phone).
+   Height is not !important: dragging the resize handle sets an inline height,
+   and an !important height here would cancel it. The ID selector still wins
+   over any per-page resize-none or h-* utility. */
 #root textarea:not(.soft-pop *) {
   min-height: 96px;
-  height: auto !important;
+  height: auto;
   padding: 12px 14px !important;
   line-height: 1.5;
   resize: vertical;
-  overflow-wrap: break-word;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 /* every Notes, remarks and reply box is the same deep well (like the
@@ -939,19 +943,23 @@ html.front-sheet-open :is(.fixed.inset-0[class*="z-"], .guard-layer):not([data-f
   box-shadow: inset 3px 3px 6px rgba(8, 30, 50, 0.4) !important;
 }
 
-/* Table cells with a status pill and a small note (Approved · Paid): one
-   inline group on the same line as the row's buttons, so the pill and the
-   View button share one center line. Every cell is vertically centered. */
+/* Table cells with a status pill and a small note (Approved / Paid): the pill
+   on top and the note centered under it, so every row's pill sits on the same
+   vertical axis whatever the note's length. Every cell is vertically centered. */
 #root :is(.ice-main, .ice-scope, .fixed.inset-0) :is(td, th) { vertical-align: middle; }
 #root .status-stack {
   display: inline-flex;
-  flex-direction: row;
+  flex-direction: column;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 3px;
+  min-width: 96px;
   max-width: 100%;
+  text-align: center;
   vertical-align: middle;
 }
+#root td:has(> .status-stack) { text-align: center; }
 #root :is(.status-stack > .status-note, td > :is(span, div).rounded-full + :is(div, small)) {
   display: block;
   margin-top: 0 !important;
@@ -1376,3 +1384,155 @@ html #root :is(.kpi-card, .stat-card, button.breakdown-row) {
 #root button.maps-fab.maps-fab:hover { box-shadow: var(--neu-raised), var(--float-shadow-sm) !important; }
 #root button.maps-fab.maps-fab:active { box-shadow: var(--neu-inset) !important; }
 #root button.maps-fab.maps-fab:focus-visible { box-shadow: var(--neu-raised), 0 0 0 3px #38bdf8 !important; }
+
+/* Pagination go-to-page box: a small recessed well inside the page pill.
+   Repeated class beats the global field rules (height, padding, width). */
+:is(#root, body) .pager .pager-input.pager-input.pager-input {
+  width: 3.25em !important;
+  min-width: 0 !important;
+  height: 26px !important;
+  min-height: 0 !important;
+  padding: 0 4px !important;
+  flex: 0 0 auto !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  text-align: center;
+  font-size: 12px !important;
+  font-weight: 700;
+  color: var(--neu-text, #1e293b);
+  background: var(--neu-bg, #f1f5f9) !important;
+  box-shadow: var(--neu-inset-sm, inset 1px 1px 3px rgba(0, 0, 0, 0.12)) !important;
+  outline: none;
+}
+:is(#root, body) .pager .pager-input.pager-input.pager-input:focus-visible {
+  box-shadow: var(--neu-inset-sm, inset 1px 1px 3px rgba(0, 0, 0, 0.12)), 0 0 0 2px rgba(6, 182, 212, 0.55) !important;
+}
+
+/* Summary list items that lead to a record (ActivityFeed onPick): a soft
+   raised hover and a clear keyboard ring, so it reads as clickable. */
+.feed-pick { transition: background-color 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+.feed-pick:hover { background-color: rgba(34, 211, 238, 0.08); box-shadow: var(--neu-raised-sm, 0 1px 3px rgba(0, 0, 0, 0.08)); }
+.feed-pick:active { box-shadow: var(--neu-inset-sm, inset 0 1px 3px rgba(0, 0, 0, 0.12)); }
+.feed-pick:focus-visible { outline: 2px solid rgba(6, 182, 212, 0.7); outline-offset: 1px; }
+
+/* Driver cell: full name on line 1, the plate as a small recessed badge under
+   it, so a wrapped last name never runs into the plate number. */
+.driver-cell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.driver-cell-name { font-weight: 600; line-height: 1.25; }
+.plate-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  color: var(--neu-muted, #64748b);
+  background: var(--neu-bg, #f1f5f9);
+  box-shadow: var(--neu-inset-sm, inset 1px 1px 2px rgba(0, 0, 0, 0.1));
+  white-space: nowrap;
+}
+
+/* Board tables (components/Board.jsx): soft column and row dividers so the
+   columns scan cleanly; long words wrap inside a fixed column template. */
+#root .board-table :is(th, td) + :is(th, td) { border-left: 1px solid rgba(148, 163, 184, 0.22); }
+#root .board-table tbody tr + tr > td { border-top: 1px solid rgba(148, 163, 184, 0.22); }
+#root .board-table.table-fixed :is(th, td) { overflow-wrap: anywhere; }
+:is(.dark, .cp-dark) #root .board-table :is(th, td) + :is(th, td),
+#root:is(.dark, .cp-dark) .board-table :is(th, td) + :is(th, td) { border-left-color: rgba(71, 85, 105, 0.5); }
+
+/* ---- Dialog caps follow the panel's rounded corners ---------------------------
+   The header and footer caps have their own background; without the panel's
+   radius their square corners showed as a hard line by the X. */
+#root .fixed.inset-0 > :is(div, form, #modal-panel)[class*="rounded"] > div.border-b:first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+#root .fixed.inset-0 > :is(div, form, #modal-panel)[class*="rounded"] > div.border-t:last-child {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+/* the X: a clear keyboard ring, and the accent on hover so it is never mistaken */
+#root .fixed.inset-0 button:is([aria-label="Close" i], [aria-label^="Close " i]):not(.sheet-backdrop, .map-btn):focus-visible,
+#root .fixed.inset-0 > :is(div, form) > div.border-b:first-child > button:last-child:has(> svg:only-child):not(.print-btn):focus-visible,
+:is(#root, body) .role-sheet button[aria-label="Close"]:focus-visible {
+  outline: none;
+  box-shadow: var(--neu-raised-sm), 0 0 0 2px rgba(6, 182, 212, 0.75) !important;
+}
+#root .fixed.inset-0 button:is([aria-label="Close" i], [aria-label^="Close " i]):not(.sheet-backdrop, .map-btn):hover,
+#root .fixed.inset-0 > :is(div, form) > div.border-b:first-child > button:last-child:has(> svg:only-child):not(.print-btn):hover {
+  color: var(--neu-accent, #0891b2) !important;
+}
+
+/* Summary tiles inside a dialog (Appraisal: Attendance, Punctuality, Goal,
+   Draft rating): raised cards on the dialog surface, so each box reads as its
+   own card in both themes without a hard border. */
+:is(#root, body) .stat-tile.stat-tile {
+  border: 0 !important;
+  border-radius: 14px !important;
+  padding: 10px 12px !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-raised-sm) !important;
+}
+
+/* Shell dialogs whose actions row is the last thing in the scrolling body
+   (Appraisal, Interviews, Deliveries dialogs): the row sticks to the bottom of
+   the body as a flush cap, so Save / Publish stay in view while the fields
+   scroll above them. */
+#root .fixed.inset-0 .modal-shell > .modal-body > :is(div, form):last-child > div.flex:not(.flex-col):is(.justify-end, .justify-between, .border-t):last-child:not(:first-child) {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  margin: 8px -20px -20px !important;
+  padding: 14px 20px !important;
+  background-color: var(--modal-cap) !important;
+  border-top: 1px solid var(--groove-dark) !important;
+  box-shadow: inset 0 1px 0 var(--groove-light) !important;
+}
+
+/* ---- Profile menu (desktop HeaderAvatar and the phone header) ---------------
+   Same rules as components/mobile-app-shell.css, here so the desktop menu has
+   them too: raised rows on the floating menu, a cyan outline on hover, sunk in
+   when pressed, and a clear ring for the keyboard. Sign out turns red on hover
+   so it is never clicked by mistake for Account settings. */
+:is(#root, body) .profile-menu button.profile-item {
+  background-color: var(--neu-bg) !important;
+  border: 0 !important;
+  border-radius: var(--neu-radius-sm, 12px) !important;
+  box-shadow: var(--neu-raised-sm) !important;
+  transition: box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), color 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.profile-menu .profile-item + .profile-item { margin-top: 10px; }
+:is(#root, body) .profile-menu button.profile-item:hover { color: var(--neu-accent) !important; box-shadow: var(--neu-raised-sm), 0 0 0 1px rgba(6, 182, 212, 0.45) !important; }
+:is(#root, body) .profile-menu button.profile-item.is-danger:hover { color: #dc2626 !important; box-shadow: var(--neu-raised-sm), 0 0 0 1px rgba(220, 38, 38, 0.5) !important; }
+:is(#root, body) .profile-menu button.profile-item:active { box-shadow: var(--neu-inset-sm) !important; }
+:is(#root, body) .profile-menu button.profile-item:focus-visible { outline: none; box-shadow: var(--neu-raised-sm), 0 0 0 2px rgba(6, 182, 212, 0.75) !important; }
+:is(#root, body) .profile-menu button.profile-item.is-danger:focus-visible { box-shadow: var(--neu-raised-sm), 0 0 0 2px rgba(220, 38, 38, 0.7) !important; }
+.profile-menu .profile-sep { height: 0; border-top: 1px solid var(--groove-line); box-shadow: 0 1px 0 var(--groove-light); }
+
+/* ---- Side menu count badges (components/SideNav.jsx NavBadge) ----------------
+   A small blue pill on the right of a menu link, like an unread counter on a
+   phone: raised on the menu surface, white digits, readable in both themes. */
+.nav-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 9999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  background-color: #2563eb;
+  box-shadow: 1px 1px 3px rgba(37, 99, 235, 0.35), -1px -1px 2px rgba(255, 255, 255, 0.5);
+}
+:is(.cp-dark, .neu-dark) .nav-badge { background-color: #3b82f6; box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); }
+/* sub-links are blocks: lay the label and the badge out on one line */
+.sidenav-link:has(> .nav-badge) { display: flex !important; align-items: center; gap: 8px; }
+/* the collapsed rail hides labels; the badge goes with them */

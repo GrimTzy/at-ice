@@ -1,5 +1,5 @@
 import { COMPANY } from "./company";
-import { PRINT_BASE_CSS, printDocument } from "./printDocument";
+import { PRINT_BASE_CSS, docFileName, printDocument } from "./printDocument";
 import { formatDateTime } from "./time";
 
 // Prints a delivery invoice (Admin > Invoices and Customer > Invoices & Balance).
@@ -110,5 +110,5 @@ export function printReceipt(receipt, customer) {
   </div>
 </div></body></html>`;
 
-  printDocument(html);
+  printDocument(html, docFileName("delivery-invoice", r.receipt_no, r.delivery?.delivery_no, String(r.created_at || "").slice(0, 10)));
 }

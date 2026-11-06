@@ -780,7 +780,10 @@ export default function Dashboard() {
                     onClick={() => navigate("/admin/deliveries")}
                     title="Open deliveries"
                     cells={[
-                      <span key="n">{d.name}{d.vehicle_plate && <span className="ml-1.5 text-[10px] font-mono text-slate-400">{d.vehicle_plate}</span>}</span>,
+                      <span key="n" className="driver-cell">
+                        <span className="driver-cell-name">{d.name}</span>
+                        {d.vehicle_plate && <span className="plate-badge" title="Vehicle plate">{d.vehicle_plate}</span>}
+                      </span>,
                       d.time_in ? <StatusCell tone="done">{clock(d.time_in)}</StatusCell> : <StatusCell tone="stuck">Not in</StatusCell>,
                       d.time_out ? <StatusCell tone="idle">{clock(d.time_out)}</StatusCell> : <StatusCell tone={d.time_in ? "working" : "idle"}>{d.time_in ? "Working" : "—"}</StatusCell>,
                       <span key="dl" className="font-semibold text-slate-800">{d.delivered}</span>,

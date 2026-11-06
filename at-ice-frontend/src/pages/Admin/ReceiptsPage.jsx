@@ -390,8 +390,8 @@ export default function ReceiptsPage() {
       {/* View receipt modal */}
       {viewing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[85vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
+          <div className="modal-shell bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-slate-800">{viewing.receipt_no}</h3>
               <div className="flex items-center gap-2">
                 <button onClick={() => printReceipt(viewing)} className="print-btn">
@@ -402,6 +402,7 @@ export default function ReceiptsPage() {
                 </button>
               </div>
             </div>
+            <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="p-5 flex flex-col gap-4 text-[13px]">
               <div className="detail-well">
               <Row label="Customer" value={viewing.customer?.name || "—"} />
@@ -478,6 +479,7 @@ export default function ReceiptsPage() {
                   </div>
                 )}
               </div>
+            </div>
             </div>
           </div>
         </div>

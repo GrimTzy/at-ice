@@ -29,12 +29,15 @@ export const TrashIcon = () => <Icon name="trashAlt" size={13} />;
 export function Modal({ title, onClose, children, wide = false }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className={`bg-white rounded-xl border border-black/[0.09] w-full ${wide ? "max-w-2xl" : "max-w-md"} max-h-[88vh] overflow-y-auto`}>
-        <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between sticky top-0 bg-white z-10">
+      {/* Shell: the title bar stays put and only the body scrolls (controls.css .modal-shell) */}
+      <div className={`modal-shell bg-white rounded-xl border border-black/[0.09] w-full ${wide ? "max-w-2xl" : "max-w-md"} max-h-[88vh] flex flex-col overflow-hidden`}>
+        <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
           <h3 className="text-[14px] font-semibold text-slate-800">{title}</h3>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close"><XIcon /></button>
         </div>
-        {children}
+        <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          {children}
+        </div>
       </div>
     </div>
   );

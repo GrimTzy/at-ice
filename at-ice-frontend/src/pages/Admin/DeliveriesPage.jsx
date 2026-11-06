@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { SkeletonTableRows } from "../../components/Skeleton";
@@ -19,9 +19,11 @@ import { STATUS_STYLE } from "./deliveries/utils";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
+import { CUSTOMER_TYPES } from "../../lib/customerTypes";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { PILL } from "../../lib/statusTones";
 import { Icon } from "../../components/icons";
+import { QTY_INPUT_PROPS, cleanQty } from "../../lib/quantity";
 
 const API_BASE = "/api";
 // Proof photos are on Laravel's public disk, served by the backend at /storage/.
@@ -42,6 +44,15 @@ const STATUS_FILTERS = [
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ];
+const CONTRACT_STATUS_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "cancelled", label: "Cancelled" },
+];
+// A customer without a type is a dealer (same default as Customer Prices).
+const typeOf = (c) => c?.customer_type || "dealer";
+const boardDeliveries = (board) => board?.deliveries || [];
 
 // Icons
 const SearchIcon = () => <Icon name="search" size={14} />;
@@ -118,6 +129,11 @@ export default function DeliveriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
   const [search, setSearch]   = useState("");
+  // One toolbar for every tab: search, customer type and (where the tab has
+  // one) a status filter.
+  const [typeFilter, setTypeFilter] = useState("");
+  const [subStatus, setSubStatus] = useState("all"); // Store View and Contracts
+  const [contractList, setContractList] = useState([]);
 
   const maxQty = useMaxQuantity(); // same limit as Ice Loading and the Salesman confirmation
   // New Delivery modal: kept as a draft while open, so a refresh reopens it as it was.
@@ -140,7 +156,7 @@ export default function DeliveriesPage() {
     setSearchParams(Object.fromEntries(Object.entries(next).filter(([k, v]) => v && !(k === "status" && v === "all") && !(k === "tab" && v === "drivers"))), { replace: true });
   };
   const setStatusFilter = (value) => setParams({ status: value });
-  const setTab = (value) => setParams({ tab: value, status: value === "list" ? statusFilter : "all" });
+  const setTab = (value) => { setSubStatus("all"); setParams({ tab: value, status: value === "list" ? statusFilter : "all" }); };
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -354,7 +370,7 @@ export default function DeliveriesPage() {
 
   // No separate customer filter: customers are listed under each driver
   // (Driver View) and by store (Store View).
-  const forCustomer = deliveries;
+  const forCustomer = typeFilter ? deliveries.filter((d) => typeOf(d.customer) === typeFilter) : deliveries;
 
   const counts = STATUS_FILTERS.reduce((acc, f) => {
     acc[f.value] = f.value === "all" ? forCustomer.length : forCustomer.filter((d) => d.status === f.value).length;
@@ -370,6 +386,33 @@ export default function DeliveriesPage() {
   });
 
   const pager = usePagination(filtered);
+
+  const needle = search.trim().toLowerCase();
+  const typeOptions = [
+    { value: "", label: "All types", count: customers.length },
+    ...Object.entries(CUSTOMER_TYPES).map(([value, t]) => ({ value, label: t.label, count: customers.filter((c) => typeOf(c) === value).length })),
+  ];
+
+  // Driver View and Store View: the day's deliveries narrowed by the toolbar.
+  const viewBoard = useMemo(() => {
+    if (!board) return board;
+    const match = (d) => (!typeFilter || typeOf(d.customer) === typeFilter)
+      && (!needle || `${d.customer?.name || ""} ${d.customer?.branch_code || ""} ${d.customer?.chain || ""} ${d.driver?.name || ""} ${d.delivery_no || ""}`.toLowerCase().includes(needle))
+      && (tab !== "stores" || subStatus === "all" || d.status === subStatus);
+    const narrowed = boardDeliveries(board).filter(match);
+    const drivers = typeFilter || needle
+      ? (board.drivers || []).filter((dr) => (needle && `${dr.name} ${dr.employee_id || ""}`.toLowerCase().includes(needle)) || narrowed.some((d) => String(d.driver_id) === String(dr.id)))
+      : board.drivers;
+    return { ...board, deliveries: narrowed, drivers };
+  }, [board, typeFilter, needle, tab, subStatus]);
+
+  // The status filter of the current tab (Driver View and Driver Stores have none).
+  const boardForType = boardDeliveries(board).filter((d) => !typeFilter || typeOf(d.customer) === typeFilter);
+  const statusFilterFor = {
+    list: { value: statusFilter, set: setStatusFilter, options: STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: counts[f.value] ?? 0 })) },
+    stores: { value: subStatus, set: setSubStatus, options: STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: f.value === "all" ? boardForType.length : boardForType.filter((d) => d.status === f.value).length })) },
+    contracts: { value: subStatus, set: setSubStatus, options: CONTRACT_STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: f.value === "all" ? contractList.length : contractList.filter((c) => c.status === f.value).length })) },
+  }[tab];
 
   // Today at a glance for the KPI cards
   const today = todayStr();
@@ -414,18 +457,6 @@ export default function DeliveriesPage() {
               </>
             )}
             {tab === "list" && (
-            <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
-              <SearchIcon />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search delivery, customer, invoice…"
-                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-64"
-              />
-            </div>
-            )}
-            {tab === "list" && (
             <button
               onClick={openAddForm}
               title="A one-off delivery outside a contract"
@@ -437,19 +468,48 @@ export default function DeliveriesPage() {
           </div>
         </div>
 
-        <div className="px-[18px] flex flex-wrap gap-1" role="tablist" aria-label="Deliveries views">
-          {TABS.map((t) => (
-            <button
-              key={t.value}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.value}
-              onClick={() => setTab(t.value)}
-              className={`px-3 py-2.5 text-[12.5px] font-medium border-b-2 -mb-px whitespace-nowrap ${tab === t.value ? "border-cyan-500 text-cyan-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Same toolbar on every tab: search and filters on the left, the tabs on the right */}
+        <div className="px-[18px] pb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
+              <SearchIcon />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={tab === "list" ? "Search delivery, customer, invoice…" : tab === "contracts" ? "Search contract or store…" : "Search store, chain or driver…"}
+                aria-label="Search"
+                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
+              />
+            </div>
+            <FilterSelect label="Customer type" hideLabel value={typeFilter} onChange={(v) => setTypeFilter(v || "")} options={typeOptions} className="!min-w-0" />
+            {statusFilterFor && (
+              <FilterSelect label="Status" value={statusFilterFor.value} onChange={statusFilterFor.set} options={statusFilterFor.options} />
+            )}
+            {(search || typeFilter || (statusFilterFor && statusFilterFor.value !== "all")) && (
+              <button
+                type="button"
+                onClick={() => { setSearch(""); setTypeFilter(""); statusFilterFor?.set("all"); }}
+                className="clear-filters"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1" role="tablist" aria-label="Deliveries views">
+            {TABS.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.value}
+                onClick={() => setTab(t.value)}
+                className={`px-3 py-2.5 text-[12.5px] font-medium border-b-2 -mb-px whitespace-nowrap ${tab === t.value ? "border-cyan-500 text-cyan-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {error && (
@@ -459,22 +519,17 @@ export default function DeliveriesPage() {
         )}
 
         {tab === "drivers" && (
-          <DriverView board={board} loading={boardLoading} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
+          <DriverView board={viewBoard} loading={boardLoading} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
         )}
         {tab === "stores" && (
-          <StoreView board={board} loading={boardLoading} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
+          <StoreView board={viewBoard} loading={boardLoading} filtered={!!(needle || typeFilter || subStatus !== "all")} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
         )}
-        {tab === "contracts" && <ContractsTab stores={activeStores} live={live} onChanged={refreshAll} />}
+        {tab === "contracts" && <ContractsTab stores={activeStores} live={live} onChanged={refreshAll} search={needle} type={typeFilter} status={subStatus} onLoaded={setContractList} />}
         {tab === "assign" && (
-          <DriverStoresTab stores={activeStores} drivers={board?.drivers || []} live={live} onChanged={refreshAll} />
+          <DriverStoresTab stores={activeStores} drivers={board?.drivers || []} live={live} onChanged={refreshAll} search={needle} type={typeFilter} />
         )}
 
         {tab === "list" && (<>
-        <div className="px-[18px] pt-3">
-          <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter}
-            options={STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: counts[f.value] ?? 0 }))} />
-        </div>
-
         <div className="overflow-x-auto lg:overflow-visible">
           <table className="w-full text-[13px]">
             <thead>
@@ -557,8 +612,8 @@ export default function DeliveriesPage() {
           sit right under the blocks. */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-2xl max-h-[88vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between sticky top-0 bg-white z-10">
+          <div className="modal-shell bg-white rounded-xl border border-black/[0.09] w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-slate-800">
                 New Delivery{blocks.length > 1 ? ` (${blocks.length})` : ""}
               </h3>
@@ -566,6 +621,7 @@ export default function DeliveriesPage() {
                 <XIcon />
               </button>
             </div>
+            <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <form onSubmit={submitForm} className="p-5 flex flex-col gap-4" noValidate>
               <DraftHint draft={formDraft} />
               {blocks.map((block, bi) => {
@@ -661,10 +717,10 @@ export default function DeliveriesPage() {
                                 ))}
                               </select>
                               <input
-                                type="number" min="1" max={maxQty} placeholder="Qty"
-                                aria-label={`Quantity ${idx + 1}`}
+                                {...QTY_INPUT_PROPS} name={`quantity-${bi + 1}-${idx + 1}`} placeholder="Qty"
+                                aria-label={`Quantity ${idx + 1}, at most ${maxQty}`}
                                 value={item.quantity_ordered}
-                                onChange={(e) => updateItem(bi, idx, "quantity_ordered", e.target.value)}
+                                onChange={(e) => updateItem(bi, idx, "quantity_ordered", cleanQty(e.target.value, maxQty))}
                                 className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                               />
                               <button
@@ -713,6 +769,7 @@ export default function DeliveriesPage() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
@@ -720,14 +777,14 @@ export default function DeliveriesPage() {
       {/* View delivery modal */}
       {viewing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className={`bg-white rounded-xl border border-black/[0.09] w-full ${proofs[viewing.id] ? "max-w-3xl" : "max-w-lg"} max-h-[85vh] overflow-y-auto`}>
-            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
+          <div className={`modal-shell bg-white rounded-xl border border-black/[0.09] w-full ${proofs[viewing.id] ? "max-w-3xl" : "max-w-lg"} max-h-[88vh] flex flex-col overflow-hidden`}>
+            <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-slate-800">{viewing.delivery_no}</h3>
-              <button onClick={() => setViewing(null)} className="text-slate-400 hover:text-slate-600">
+              <button type="button" aria-label="Close" onClick={() => setViewing(null)} className="text-slate-400 hover:text-slate-600">
                 <XIcon />
               </button>
             </div>
-            <div className="p-5 flex flex-col gap-4 text-[13px]">
+            <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 flex flex-col gap-4 text-[13px]">
               <div className="detail-well">
               <Row label="Customer" value={viewing.customer?.name} />
               <Row label="Driver" value={<>{viewing.driver?.name || (viewing.status === "queued" ? "Queued, waiting for a driver" : "—")} {viewing.reassigned_from && <span className="ml-1"><ReassignedTag delivery={viewing} /></span>}</>} />

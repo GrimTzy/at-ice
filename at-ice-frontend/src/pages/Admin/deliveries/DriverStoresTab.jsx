@@ -8,7 +8,8 @@ import { StorePicker } from "./shared";
 // Below: Drivers who are off today. Nobody marks this: a Driver still not
 // timed in a while after their shift starts, or on approved leave, is off and
 // their stops are reassigned (owner, 2026-10-20).
-export default function DriverStoresTab({ stores, drivers, live, onChanged }) {
+// The page toolbar passes `search` and `type` (customer type) to narrow "Stores per driver".
+export default function DriverStoresTab({ stores, drivers, live, onChanged, search = "", type = "" }) {
   const [assignments, setAssignments] = useState([]);
   const [form, setForm] = useState({ driver_id: "", store_ids: [], effective_from: nextMonday(), effective_to: "" });
   const [saving, setSaving] = useState(false);
@@ -61,8 +62,17 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged }) {
     }
   }
 
-  const offToday = drivers.filter((dr) => dr.status === "off");
-  const byDriver = drivers.map((dr) => ({ driver: dr, list: assignments.filter((a) => String(a.driver_id) === String(dr.id)) }));
+  const offToday = drivers.filter((dr) => dr.status === "off" && (!search || `${dr.name} ${dr.employee_id || ""}`.toLowerCase().includes(search)));
+  const narrowed = !!(search || type);
+  const byDriver = drivers
+    .map((dr) => {
+      const driverHit = !!search && `${dr.name} ${dr.employee_id || ""}`.toLowerCase().includes(search);
+      const list = assignments.filter((a) => String(a.driver_id) === String(dr.id)
+        && (!type || (a.store?.customer_type || "dealer") === type)
+        && (!search || driverHit || `${a.store?.name || ""} ${a.store?.chain || ""} ${a.store?.branch_code || ""}`.toLowerCase().includes(search)));
+      return { driver: dr, list, driverHit };
+    })
+    .filter((x) => !narrowed || x.list.length > 0 || (x.driverHit && !type));
 
   return (
     <div className="p-[18px] grid gap-4 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
@@ -100,7 +110,7 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged }) {
       <div className="flex flex-col gap-4 min-w-0">
         <div className="rounded-xl border border-black/[0.09]">
           <div className="px-4 py-2.5 border-b border-black/[0.09] bg-slate-50 rounded-t-xl text-[12.5px] font-semibold text-slate-700">Stores per driver</div>
-          {byDriver.length === 0 && <div className="px-4 py-6 text-[13px] text-slate-400">No drivers yet.</div>}
+          {byDriver.length === 0 && <div className="px-4 py-6 text-[13px] text-slate-400">{narrowed && drivers.length ? "No driver or store matches this filter." : "No drivers yet."}</div>}
           {byDriver.map(({ driver, list }) => (
             <div key={driver.id} className="px-4 py-3 border-t first:border-t-0 border-black/[0.06]">
               <div className="text-[13px] font-semibold text-slate-800">{driver.name} <span className="font-normal text-slate-400">· {list.length} {list.length === 1 ? "store" : "stores"}</span></div>

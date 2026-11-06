@@ -154,12 +154,15 @@ const addressLine = (a) =>
 function Modal({ title, onClose, children, width = "max-w-lg" }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className={`bg-white rounded-xl border border-black/[0.09] w-full ${width} max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-3.5 border-b border-black/[0.09] flex items-center justify-between">
+      {/* Shell: the title bar stays put and only the body scrolls (controls.css .modal-shell) */}
+      <div className={`modal-shell bg-white rounded-xl border border-black/[0.09] w-full ${width} max-h-[90vh] flex flex-col overflow-hidden`} onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 px-5 py-3.5 border-b border-black/[0.09] flex items-center justify-between">
           <div className="text-[14px] font-semibold text-slate-800">{title}</div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1"><XIcon /></button>
+          <button type="button" aria-label="Close" onClick={onClose} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1"><XIcon /></button>
         </div>
-        {children}
+        <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -788,7 +791,7 @@ export default function InterviewsPage() {
                 maxLength={1000}
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                className={`${inputClass} resize-none`}
+                className={`${inputClass} resize-y`}
                 placeholder="Referral, requirements submitted, interview remarks"
               />
             </Field>
@@ -861,6 +864,7 @@ export default function InterviewsPage() {
       {viewing && (
         <Modal title="Applicant Details" onClose={() => setViewing(null)}>
           <div className="p-5 flex flex-col gap-2.5 text-xs">
+            <div className="detail-well">
             {[
               ["Name", viewing.name],
               ["Position Applied", viewing.position_applied],
@@ -911,11 +915,12 @@ export default function InterviewsPage() {
               ["Added On", fmtDateTime(viewing.created_at)],
               ["Last Updated", fmtDateTime(viewing.updated_at)],
             ].map(([label, value]) => (
-              <div key={label} className="grid grid-cols-[120px_1fr] gap-3 py-1 border-b border-black/[0.06] last:border-b-0">
+              <div key={label} className="grid grid-cols-[120px_1fr] gap-3">
                 <span className="text-slate-400">{label}</span>
                 <span className="text-slate-700 break-words whitespace-pre-line">{value}</span>
               </div>
             ))}
+            </div>
             {isFinal(viewing) && (
               <div className="text-[11px] text-slate-400 pt-1">This applicant is {STATUS_LABEL[viewing.status]}. The interview record is view only.</div>
             )}

@@ -125,13 +125,14 @@ export default function CustomerDeliveryProofs() {
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-950/60" onClick={() => setSelected(null)} />
-          <div className="relative bg-white rounded-xl border border-black/[0.09] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
+          <div className="modal-shell relative bg-white rounded-xl border border-black/[0.09] shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <div className="text-sm font-semibold text-slate-800">{selected.delivery?.delivery_no || "Delivery"}</div>
               <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-700 text-lg leading-none px-2">
                 &times;
               </button>
             </div>
+            <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <Photo proof={selected} className="w-full max-h-[60vh] min-h-[10rem]" />
             <div className="px-5 py-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
               <div>
@@ -146,6 +147,7 @@ export default function CustomerDeliveryProofs() {
                 <div className="text-slate-400">Confirmed by</div>
                 <div className="text-slate-800 mt-0.5">{selected.salesman?.name || "Not recorded"}</div>
               </div>
+            </div>
             </div>
           </div>
         </div>

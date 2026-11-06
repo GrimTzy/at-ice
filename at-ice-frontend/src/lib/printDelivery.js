@@ -1,4 +1,5 @@
 import { formatDateTime } from "./time";
+import { docFileName, setPrintTitle } from "./printDocument";
 // Printable delivery confirmation for a Salesman-confirmed delivery: customer,
 // items and quantities, date, driver, salesman and the proof. Printed from a
 // hidden iframe with its own print CSS, so the page layout is not involved.
@@ -89,10 +90,14 @@ export function printDeliveryConfirmation({ delivery, proof, receipt, photoUrl, 
   doc.close();
 
   // Wait for the photo so it is on the printout, then print and clean up.
+  const fileName = docFileName("delivery-confirmation", delivery?.delivery_no, receipt?.receipt_no,
+    String(delivery?.delivered_at || delivery?.scheduled_date || receipt?.created_at || "").slice(0, 10));
   const go = () => {
+    const restoreTitle = setPrintTitle(fileName);
+    frame.contentWindow.onafterprint = restoreTitle;
     frame.contentWindow.focus();
     frame.contentWindow.print();
-    setTimeout(() => frame.remove(), 1000);
+    setTimeout(() => { restoreTitle(); frame.remove(); }, 1000);
   };
   const img = doc.querySelector("img");
   if (img && !img.complete) {

@@ -10,6 +10,7 @@ import SidebarSignOut from "./SidebarSignOut";
 import LiveClock from "./LiveClock";
 import { initialsOf } from "../lib/initials";
 import SideNav from "./SideNav";
+import { useNavCounts } from "../lib/navCounts";
 import Rail from "./Rail";
 import { HR_NAV } from "../lib/nav";
 import { Icon } from "./icons";
@@ -19,6 +20,7 @@ const MenuIcon = () => <Icon name="menu" size={20} />;
 const XIcon = () => <Icon name="x" size={18} />;
 
 export default function HrLayout({ pageTitle, breadcrumb, headerActions, children }) {
+  const navCounts = useNavCounts("hr");
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [dark, setDark] = useNightMode();
@@ -47,7 +49,7 @@ export default function HrLayout({ pageTitle, breadcrumb, headerActions, childre
         </div>
       </div>
 
-      <SideNav items={HR_NAV} onNavigate={() => setMobileOpen(false)} />
+      <SideNav items={HR_NAV} onNavigate={() => setMobileOpen(false)} counts={navCounts} />
 
       <div className="px-[18px] py-3.5 border-t border-black/[0.09] flex items-center gap-2.5">
         <div className="w-[30px] h-[30px] rounded-full bg-cyan-500/10 border border-cyan-400/25 flex items-center justify-center text-[11px] font-semibold text-cyan-500 flex-shrink-0">{initials}</div>
@@ -90,7 +92,7 @@ export default function HrLayout({ pageTitle, breadcrumb, headerActions, childre
         <header className="h-14 bg-white border-b border-black/[0.09] flex items-center px-4 sm:px-6 gap-3 flex-shrink-0 sticky top-0 z-10">
           <button
             onClick={() => setMobileOpen(true)}
-            className="lg:hidden text-slate-500 hover:text-slate-800 p-1 -ml-1 cursor-pointer"
+            className="lg:hidden grid place-items-center w-10 h-10 -ml-2 text-slate-500 hover:text-slate-800 cursor-pointer"
             aria-label="Open menu"
           >
             <MenuIcon />

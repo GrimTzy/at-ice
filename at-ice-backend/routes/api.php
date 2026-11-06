@@ -24,6 +24,7 @@ use App\Http\Controllers\IceLoadingController;
 use App\Http\Controllers\InventoryAlertController;
 use App\Http\Controllers\KioskController;
 use App\Http\Controllers\LeaveRequestController;
+use App\Http\Controllers\NavCountController;
 use App\Http\Controllers\LiveFeedController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PasswordResetController;
@@ -124,6 +125,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
+        // Side menu badges: items waiting for the Admin (NavCountController)
+        Route::get('nav-counts/admin', [NavCountController::class, 'admin']);
         // Performance appraisals: draft ratings from the records, Admin overrides and publishes
         Route::get('performance', [PerformanceController::class, 'index']);
         Route::put('performance/{employee}', [PerformanceController::class, 'update']);
@@ -279,6 +282,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     // HR ROUTES
     Route::middleware('role:hr')->group(function () {
+        // Side menu badges: items waiting for HR (NavCountController)
+        Route::get('nav-counts/hr', [NavCountController::class, 'hr']);
 
         // Disciplinary memos (HR > Memos, EmployeeMemoController): drafts from
         // missed Time Outs, memos issued by hand, files, signed copies.

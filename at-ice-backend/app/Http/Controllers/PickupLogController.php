@@ -30,7 +30,7 @@ class PickupLogController extends Controller
         $validated = $request->validate([
             'company_name' => 'required|string|max:255',
             'product_type' => 'required|in:bags,small_sack,big_sack',
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'required|integer|min:1|max:'.config('atice.max_stock_quantity'),
             'notes' => 'nullable|string',
             'pickup_date' => 'required|date',
         ]);
@@ -56,7 +56,7 @@ class PickupLogController extends Controller
         $validated = $request->validate([
             'company_name' => 'sometimes|required|string|max:255',
             'product_type' => 'sometimes|required|in:bags,small_sack,big_sack',
-            'quantity' => 'sometimes|required|integer|min:1',
+            'quantity' => 'sometimes|required|integer|min:1|max:'.config('atice.max_stock_quantity'),
             'notes' => 'nullable|string',
             'pickup_date' => 'sometimes|required|date',
         ]);

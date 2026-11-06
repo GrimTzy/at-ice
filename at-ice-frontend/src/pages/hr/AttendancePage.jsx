@@ -19,7 +19,7 @@ import { SkeletonList } from "../../components/Skeleton";
 import { useLiveTick } from "../../lib/live";
 import { fullName } from "../../lib/names";
 import { payPeriodLabel } from "../../lib/payPeriod";
-import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
+import { PRINT_BASE_CSS, cutoffPart, docFileName, printDocument } from "../../lib/printDocument";
 import { toast } from "../../lib/toast";
 import { TZ, formatDateTime, formatTime } from "../../lib/time";
 import Pagination from "../../components/Pagination";
@@ -164,6 +164,7 @@ export default function AttendancePage() {
     const hit = records.find((a) => workerCode(a) && workerCode(a).toLowerCase() === q);
     return hit ? { id: workerPk(hit), code: workerCode(hit), name: workerName(hit) } : null;
   }, [records, q]);
+  const exportName = docFileName("attendance", exactEmployee ? exactEmployee.code : "all-employees", cutoffPart(range?.start, range?.end)); // range is null until the pay period loads
 
   const exportCsv = async () => {
     try {
@@ -174,7 +175,7 @@ export default function AttendancePage() {
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement("a");
       a.href = url;
-      a.download = `attendance-${exactEmployee ? `${exactEmployee.code}-` : ""}${range.start}-to-${range.end}.csv`;
+      a.download = `${exportName}.csv`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } catch (e) {
@@ -193,7 +194,7 @@ export default function AttendancePage() {
       <h1>Attendance ${exactEmployee ? `· ${esc(exactEmployee.code)} ${esc(exactEmployee.name)}` : "· All employees"}</h1>
       <div class="sub">${esc(payPeriodLabel(range))} · ${shown.length} record${shown.length === 1 ? "" : "s"} · ${esc(activeCard?.label || "")} · printed ${formatDateTime(new Date())}</div>
       <table><thead><tr><th>Employee ID</th><th>Name</th><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours</th><th>Late (min)</th><th>Status</th><th>Notes</th></tr></thead><tbody>${rows || '<tr><td colspan="9">No records.</td></tr>'}</tbody></table>
-    </div></body></html>`);
+    </div></body></html>`, exportName);
   };
 
   const pager = usePagination(shown);
