@@ -26,6 +26,9 @@ class KioskController extends Controller
 {
     private const DEVICE_RULE = ['required', 'string', 'regex:/^[A-Za-z0-9-]{16,64}$/'];
 
+    // Wrong Admin override PINs allowed from one network address in an hour.
+    private const MAX_WRONG_ADMIN_PINS_PER_IP = 5;
+
     // POST /api/kiosk/unlock (public) { device_id, pin }
     public function unlock(Request $request)
     {
@@ -169,10 +172,27 @@ class KioskController extends Controller
         $device = KioskDevice::for($request->device_id, $ip);
         $setting = KioskSetting::current();
 
+        // The Admin PIN is only 4 digits, so wrong ones are also counted per
+        // network address across every kiosk for an hour (the route throttle
+        // only covers one minute).
+        $ipKey = 'kiosk-admin-pin:'.sha1($ip);
+        if (RateLimiter::tooManyAttempts($ipKey, self::MAX_WRONG_ADMIN_PINS_PER_IP)) {
+            $device->log('blocked', $ip);
+
+            return response()->json([
+                'message' => 'Too many wrong Admin PINs from this network. Try again in '.(int) ceil(RateLimiter::availableIn($ipKey) / 60).' minutes.',
+                'code' => 'kiosk_override_ip_blocked',
+            ], 403);
+        }
+
         if (! $setting->hasAdminPin()) {
             return response()->json(['message' => 'No Admin override PIN has been set. Admin sets it in Settings.'], 409);
         }
         if (! $setting->checkAdminPin((string) $request->admin_pin)) {
+            RateLimiter::hit($ipKey, 3600);
+            if (RateLimiter::attempts($ipKey) === self::MAX_WRONG_ADMIN_PINS_PER_IP) {
+                Audit::log('kiosk.override_ip_blocked', $device, null, ['ip' => $ip, 'wrong_pins' => self::MAX_WRONG_ADMIN_PINS_PER_IP]);
+            }
             $device->log('override_wrong', $ip);
             Audit::log('kiosk.override_failed', $device, null, ['ip' => $ip]);
 
@@ -234,7 +254,7 @@ class KioskController extends Controller
         return response()->json(['message' => 'Kiosk PIN saved. Every kiosk must be unlocked again with the new PIN.']);
     }
 
-    // PUT /api/admin/kiosk-override-pin (Admin). The 6-digit PIN Admin types on a
+    // PUT /api/admin/kiosk-override-pin (Admin). The 4-digit PIN Admin types on a
     // locked kiosk. Needs Admin's account password.
     public function setAdminPin(Request $request)
     {

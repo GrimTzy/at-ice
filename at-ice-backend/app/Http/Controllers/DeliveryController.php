@@ -394,17 +394,6 @@ class DeliveryController extends Controller
         ]);
     }
 
-    // Salesman: view assigned deliveries (not yet confirmed)
-    public function myDeliveries(Request $request)
-    {
-        $deliveries = Delivery::with(['driver', 'customer', 'items.product'])
-            ->where('status', 'pending')
-            ->whereDoesntHave('proofs')
-            ->get();
-
-        return response()->json($deliveries);
-    }
-
     // Driver: view assigned deliveries
     public function driverDeliveries(Request $request)
     {
