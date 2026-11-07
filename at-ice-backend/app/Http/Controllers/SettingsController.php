@@ -22,7 +22,7 @@ class SettingsController extends Controller
     // PUT settings { "key": "...", "value": ... }
     public function update(Request $request)
     {
-        $request->validate(['key' => 'required|string', 'value' => 'present']);
+        $request->validate(['key' => 'required|string|max:100', 'value' => 'present']);
         $key = $request->input('key');
         if ($error = Settings::validate($key, $request->input('value'))) {
             throw ValidationException::withMessages(['value' => [$error]]);

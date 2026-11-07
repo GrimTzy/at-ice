@@ -125,7 +125,7 @@ export default function ApplyPage() {
     if (isDriver && licenseError(form.license_number)) errs.license_number = [licenseError(form.license_number)];
     if (isDriver && expiryError(form.license_expiry)) errs.license_expiry = [expiryError(form.license_expiry)];
     if (resume && resume.size > RESUME_MAX) errs.resume = ["The resume is too large. Use a file up to 5 MB."];
-    if ([photo, ...documents].some((f) => f && f.size > FILE_MAX)) errs.documents = ["Each file must be up to 10 MB."];
+    if ([photo, ...documents].some((f) => f && f.size > FILE_MAX)) errs.documents = ["Each file must be 10 MB or less."];
     setErrors(errs);
     if (Object.keys(errs).length) {
       document.querySelector("[data-apply-error]")?.scrollIntoView({ behavior: "smooth", block: "center" });

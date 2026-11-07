@@ -228,6 +228,7 @@ export default function LoginPage() {
                   <input
                     id="login-email"
                     type="email"
+                    maxLength={255}
                     inputMode="email"
                     enterKeyHint="next"
                     placeholder="name@example.com"
@@ -251,6 +252,7 @@ export default function LoginPage() {
                   <input
                     id="login-password"
                     type={showPassword ? "text" : "password"}
+                    maxLength={255}
                     enterKeyHint="go"
                     placeholder="Enter your password"
                     value={password}

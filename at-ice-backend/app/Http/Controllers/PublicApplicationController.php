@@ -90,7 +90,12 @@ class PublicApplicationController extends Controller
             'photo.max' => 'The photo is too large. Use one up to 10 MB.',
             'documents.max' => 'Attach up to 4 documents.',
             'documents.*.mimes' => 'Attach documents as a PDF or a picture (JPG, PNG or WebP).',
-            'documents.*.max' => 'Each document must be up to 10 MB.',
+            'documents.*.max' => 'Each file must be 10 MB or less.',
+            // A file over the server's upload limit (10 MB) never reaches the size
+            // rule; PHP drops it and Laravel says "failed to upload". Say why.
+            'documents.*.uploaded' => 'Each file must be 10 MB or less.',
+            'photo.uploaded' => 'The photo must be 10 MB or less.',
+            'resume.uploaded' => 'The resume must be 5 MB or less.',
             'license_number.required' => "Driver applicants must give their driver's license number.",
             'license_number.regex' => DriverLicense::MESSAGE,
             'name.required' => 'Enter your full name.',

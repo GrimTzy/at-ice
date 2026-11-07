@@ -115,7 +115,7 @@ class PaymentProofTest extends TestCase
         // The overdue count is not reset: the invoice date is unchanged.
         $this->assertTrue($receipt->created_at->eq($created));
         $this->assertTrue(DB::table('audit_logs')->where('action', 'payment_proof.rejected')->where('subject_id', $proof->id)->exists());
-        $this->assertTrue(LiveEvent::where('message', 'like', '%was rejected: The reference number does not match.')->exists());
+        $this->assertTrue(LiveEvent::where('message', 'like', '%was declined: The reference number does not match.')->exists());
 
         // The customer sees the reason and may send a new proof.
         Sanctum::actingAs($this->customerUser);

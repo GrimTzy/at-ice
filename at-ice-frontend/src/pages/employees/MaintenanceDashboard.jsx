@@ -45,7 +45,7 @@ export default function MaintenanceDashboard() {
     ...projects.filter((p) => p.status === "stuck").map((p) => ({ key: `p${p.id}`, title: p.name, text: "Project is stuck. Talk to Admin about what is blocking it.", to: "/maintenance/projects", badge: "Stuck" })),
     ...projects.filter((p) => p.overdue && p.status !== "stuck").map((p) => ({ key: `o${p.id}`, title: p.name, text: "Project is past its due date.", to: "/maintenance/projects", badge: "Overdue" })),
     ...requests.filter((r) => r.status === "rejected" && new Date(r.updated_at || r.created_at).getTime() >= weekAgo)
-      .map((r) => ({ key: `r${r.id}`, title: r.product?.name || r.item_name, text: r.rejection_reason ? `Rejected: ${r.rejection_reason}` : "Request was rejected.", to: "/maintenance/stock-out-request?status=rejected", badge: "Rejected" })),
+      .map((r) => ({ key: `r${r.id}`, title: r.product?.name || r.item_name, text: r.rejection_reason ? `Declined: ${r.rejection_reason}` : "Request was declined.", to: "/maintenance/stock-out-request?status=rejected", badge: "Rejected" })),
   ];
   const count = (s) => requests.filter((r) => r.status === s).length;
 

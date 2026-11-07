@@ -206,7 +206,7 @@ export default function CheckerSupplierManagementPage() {
           </div>
           <div>
             <label htmlFor="sup-notes" className={LABEL}>Notes</label>
-            <textarea id="sup-notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={TEXTAREA} />
+            <textarea id="sup-notes" rows={2} maxLength={1000} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={TEXTAREA} />
           </div>
         </form>
       </BottomSheet>

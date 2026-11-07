@@ -101,6 +101,11 @@ class LiveFeed
 
     private static function label(?string $v): string
     {
+        // A turned-down request is stored as "rejected" but shown as Declined.
+        if ($v === 'rejected') {
+            return 'Declined';
+        }
+
         return ucwords(str_replace('_', ' ', (string) $v));
     }
 
@@ -242,7 +247,7 @@ class LiveFeed
                     return ['receipts', "Payment proof for Invoice {$no} sent by ".($m->customer?->name ?? 'a customer'), []];
                 }
                 if ($a === 'updated' && $m->status === 'rejected') {
-                    return ['receipts', "Your payment proof for Invoice {$no} was rejected: {$m->reject_reason}", [], [$m->customer?->user_id]];
+                    return ['receipts', "Your payment proof for Invoice {$no} was declined: {$m->reject_reason}", [], [$m->customer?->user_id]];
                 }
 
                 return null;

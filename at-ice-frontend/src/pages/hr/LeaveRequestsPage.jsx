@@ -49,9 +49,9 @@ async function api(url, options = {}) {
 const toList = (d) => (Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : []);
 const TYPE_LABEL = { sick: "Sick (SL)", vacation: "Vacation (VL)", emergency: "Emergency (EL)", maternity: "Maternity", paternity: "Paternity", other: "Other" };
 const typeLabel = (v) => TYPE_LABEL[v] || v || "—";
-const STATUS_LABEL = { pending: "Pending", approved: "Approved", rejected: "Rejected" };
+const STATUS_LABEL = { pending: "Pending", approved: "Approved", rejected: "Declined" };
 const STATUS_CLASS = { pending: "bg-amber-100 text-amber-700", approved: "bg-emerald-100 text-emerald-700", rejected: "bg-red-100 text-red-600" };
-const TABS = [["pending", "Pending"], ["approved", "Approved"], ["rejected", "Rejected"], ["all", "All"]];
+const TABS = [["pending", "Pending"], ["approved", "Approved"], ["rejected", "Declined"], ["all", "All"]];
 
 const empName = (e) => (e ? [e.first_name, e.middle_initial ? `${e.middle_initial}.` : "", e.last_name, e.suffix].filter(Boolean).join(" ") : "—");
 const empCode = (e) => (typeof e?.employee_id === "string" ? e.employee_id : "");
@@ -151,7 +151,7 @@ export default function LeaveRequestsPage() {
   const submitDecision = async () => {
     if (!decision) return;
     if (decision.status === "rejected" && rejectReason.trim().length < 3) {
-      setDecisionError("Give the reason for rejecting this leave.");
+      setDecisionError("Give the reason for declining this leave.");
       return;
     }
     setDeciding(true);
@@ -191,7 +191,7 @@ export default function LeaveRequestsPage() {
       <KpiGrid cols={5}>
         <KpiCard heroKey="pending" label="To review" icon="clock" tone="amber" value={counts.pending} sub="Waiting for your decision" bar={share(counts.pending)} onClick={() => setTab("pending")} active={tab === "pending"} live={counts.pending > 0} />
         <KpiCard heroKey="approved" label="Approved" icon="check" tone="emerald" value={counts.approved} sub={`${Math.round(share(counts.approved) * 100)}% of requests`} bar={share(counts.approved)} onClick={() => setTab("approved")} active={tab === "approved"} />
-        <KpiCard heroKey="rejected" label="Rejected" icon="x" tone="rose" value={counts.rejected} sub="With a reason given" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
+        <KpiCard heroKey="rejected" label="Declined" icon="x" tone="rose" value={counts.rejected} sub="With a reason given" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
         <KpiCard label="On leave today" icon="calendar" tone="violet" value={onLeaveToday} sub="Approved leave covering today" />
         <KpiCard heroKey="all" label="All requests" icon="file" tone="cyan" value={counts.all} sub="Filed by employees" onClick={() => setTab("all")} active={tab === "all"} />
       </KpiGrid>
@@ -202,7 +202,7 @@ export default function LeaveRequestsPage() {
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
           <div>
             <div className="text-[13px] font-semibold text-slate-800">Leave Requests</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Filed by employees from their own page. Approve or reject them here.</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">Filed by employees from their own page. Approve or decline them here.</div>
           </div>
           <div className="flex-1" />
           <div className="flex items-center gap-2 px-2.5 py-1.5 border border-black/[0.09] rounded-md text-slate-400 w-full sm:w-64">
@@ -265,7 +265,7 @@ export default function LeaveRequestsPage() {
                           {l.status === "pending" && (
                             <>
                               <button data-no-confirm onClick={() => openDecision(l, "approved")} className="px-2.5 py-1 bg-cyan-500 hover:bg-cyan-600 rounded-md text-[11px] font-semibold text-white cursor-pointer">Approve</button>
-                              <button data-no-confirm onClick={() => openDecision(l, "rejected")} className="px-2.5 py-1 bg-red-500 text-white rounded-md text-[11px] font-semibold cursor-pointer">Reject</button>
+                              <button data-no-confirm onClick={() => openDecision(l, "rejected")} className="px-2.5 py-1 bg-red-500 text-white rounded-md text-[11px] font-semibold cursor-pointer">Decline</button>
                             </>
                           )}
                         </div>
@@ -286,14 +286,14 @@ export default function LeaveRequestsPage() {
         <TipsWidget tips={[
           { title: "Sick leave needs a med cert", text: "SL is filed at most 1 day after returning; check the medical certificate before approving.", tone: "rose", icon: "file" },
           { title: "Credits are paid first", text: "Approved days are paid from the employee's credits; the rest are unpaid and feed payroll.", tone: "cyan", icon: "wallet" },
-          { title: "A reason is required to reject", text: "The employee sees it on their Leave Request page.", tone: "amber", icon: "message" },
+          { title: "A reason is required to decline", text: "The employee sees it on their Leave Request page.", tone: "amber", icon: "message" },
         ]} />
       </aside>
       </div>
 
       {/* APPROVE / REJECT */}
       {decision && (
-        <Modal title={decision.status === "approved" ? "Approve leave" : "Reject leave"} onClose={() => !deciding && setDecision(null)}>
+        <Modal title={decision.status === "approved" ? "Approve leave" : "Decline leave"} onClose={() => !deciding && setDecision(null)}>
           <div className="p-5 flex flex-col gap-3 text-xs">
             <DraftHint draft={decisionDraft} />
             <div className="text-slate-700">
@@ -322,7 +322,7 @@ export default function LeaveRequestsPage() {
               </>
             ) : (
               <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-slate-500">Reason for rejecting (required)</span>
+                <span className="text-[11px] font-medium text-slate-500">Reason for declining (required)</span>
                 <textarea name="reject_reason" rows={3} maxLength={300} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="px-2.5 py-2 border border-black/[0.09] rounded-md text-xs" autoFocus />
               </label>
             )}
@@ -331,7 +331,7 @@ export default function LeaveRequestsPage() {
               <button onClick={() => setDecision(null)} disabled={deciding} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 cursor-pointer">Cancel</button>
               <button onClick={submitDecision} disabled={deciding || (decision.status === "rejected" && rejectReason.trim().length < 3)}
                 className={`px-3.5 py-1.5 rounded-md text-white font-semibold disabled:opacity-50 cursor-pointer ${decision.status === "approved" ? "bg-cyan-500 hover:bg-cyan-600" : "bg-red-500 hover:bg-red-600"}`}>
-                {deciding ? "Saving…" : decision.status === "approved" ? "Approve" : "Reject"}
+                {deciding ? "Saving…" : decision.status === "approved" ? "Approve" : "Decline"}
               </button>
             </div>
           </div>

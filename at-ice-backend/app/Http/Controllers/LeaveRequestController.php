@@ -128,11 +128,11 @@ class LeaveRequestController extends Controller
             'admin_notes' => 'nullable|string|max:300', // older field name, still accepted
             'is_paid' => 'nullable|boolean',
         ], [
-            'reject_reason.required_if' => 'Give the reason for rejecting this leave.',
+            'reject_reason.required_if' => 'Give the reason for declining this leave.',
         ]);
 
         if ($leave->status !== 'pending') {
-            return response()->json(['message' => "This leave request was already {$leave->status}."], 422);
+            return response()->json(['message' => 'This leave request was already '.($leave->status === 'rejected' ? 'declined' : $leave->status).'.'], 422);
         }
 
         $update = [

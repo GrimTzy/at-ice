@@ -9,6 +9,7 @@ import { useReveal } from "../lib/useReveal";
 import { useLogoutConfirm } from "../lib/useLogoutConfirm";
 import { isStrongPassword } from "../lib/password";
 import { Icon } from "../components/icons";
+import { toast } from "../lib/toast";
 
 const PORTAL_LABEL = {
   admin: "Admin Portal",
@@ -80,6 +81,7 @@ export default function ChangePasswordPage() {
         throw new Error(firstFieldError || data.message || "Could not change the password.");
       }
       localStorage.removeItem("must_change_password");
+      toast.success("Password changed. Welcome!");
       navigate(homePathFor(role, subRole) || LOGIN_PATH, { replace: true });
     } catch (err) {
       setError(err.message);

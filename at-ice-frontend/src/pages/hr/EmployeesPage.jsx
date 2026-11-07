@@ -882,7 +882,7 @@ export default function EmployeesPage() {
                   <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number, address, birthday, sex, civil status, emergency contact, highest attainment, school and work history" />
                   <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
                     <Field label="First Name" required error={formErrors.first_name}>
-                      <input name="first_name" required value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
+                      <input name="first_name" required maxLength={100} value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
                     </Field>
                     <Field label="M.I." error={formErrors.middle_initial}>
                       <input name="middle_initial" value={form.middle_initial} onChange={(e) => setForm((f) => ({ ...f, middle_initial: cleanInitial(e.target.value) }))}
@@ -891,7 +891,7 @@ export default function EmployeesPage() {
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
                     <Field label="Last Name" required error={formErrors.last_name}>
-                      <input name="last_name" required value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
+                      <input name="last_name" required maxLength={100} value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
                     </Field>
                     <Field label="Suffix" error={formErrors.suffix}>
                       <select name="suffix" value={form.suffix} onChange={handleChange("suffix")} aria-label="Name suffix" className={inputCls}>

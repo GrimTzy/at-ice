@@ -655,7 +655,7 @@ export default function CustomersPage() {
                   inputClassName="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
                 />
                 <div className="col-span-2">
-                  <Field label="Notes" multiline placeholder="Delivery instructions, landmarks, contact hours…" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
+                  <Field label="Notes" multiline maxLength={1000} placeholder="Delivery instructions, landmarks, contact hours…" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
                 </div>
               </div>
               </div>
@@ -753,7 +753,7 @@ export default function CustomersPage() {
   );
 }
 
-function Field({ label, value, onChange, required, disabled, placeholder, inputMode, type = "text", multiline = false }) {
+function Field({ label, value, onChange, required, disabled, placeholder, inputMode, maxLength, type = "text", multiline = false }) {
   const Tag = multiline ? "textarea" : "input";
   const id = useId();
   return (
@@ -770,6 +770,7 @@ function Field({ label, value, onChange, required, disabled, placeholder, inputM
         disabled={disabled}
         placeholder={placeholder}
         inputMode={inputMode}
+        maxLength={maxLength ?? (multiline ? 1000 : 255)}
         className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
       />
     </div>

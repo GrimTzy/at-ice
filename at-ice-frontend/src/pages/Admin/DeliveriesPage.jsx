@@ -691,7 +691,7 @@ export default function DeliveriesPage() {
                         </div>
                         <div>
                           <label htmlFor={`deliveries-page-${block.key}-notes`} className="text-[11px] text-slate-500 mb-1 block">Notes</label>
-                          <textarea id={`deliveries-page-${block.key}-notes`} name="notes"
+                          <textarea id={`deliveries-page-${block.key}-notes`} name="notes" maxLength={1000}
                             rows={3}
                             value={block.notes}
                             onChange={(e) => updateBlock(bi, { notes: e.target.value })}
@@ -842,7 +842,7 @@ export default function DeliveriesPage() {
                   This delivery is in transit. It can only be cancelled for a real emergency.
                 </p>
                 <label htmlFor="deliveries-page-what-happened" className="text-[11px] text-slate-500 mb-1 block">What happened? *</label>
-                <textarea id="deliveries-page-what-happened" name="cancel_reason"
+                <textarea id="deliveries-page-what-happened" name="cancel_reason" maxLength={1000}
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   rows={2}
@@ -852,7 +852,7 @@ export default function DeliveriesPage() {
             ) : (
               <div className="mb-4">
                 <label htmlFor="deliveries-page-reason-optional" className="text-[11px] text-slate-500 mb-1 block">Reason (optional)</label>
-                <input id="deliveries-page-reason-optional" name="cancel_reason"
+                <input id="deliveries-page-reason-optional" name="cancel_reason" maxLength={1000}
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"

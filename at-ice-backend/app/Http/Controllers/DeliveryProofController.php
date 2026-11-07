@@ -69,6 +69,9 @@ class DeliveryProofController extends Controller
         // Only a delivery the Driver has started (in_transit) can be confirmed:
         // a pending one has not left the plant yet, and a cancelled (or
         // otherwise closed) delivery must never produce a receipt.
+        if ($delivery->isForLaterDay()) {
+            return response()->json(['message' => $delivery->laterDayMessage('confirmed')], 422);
+        }
         if ($delivery->status === 'pending') {
             return response()->json([
                 'message' => 'The driver has not started this delivery yet. You can confirm it once it is In Transit.',

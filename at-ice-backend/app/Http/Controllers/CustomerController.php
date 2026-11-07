@@ -125,7 +125,7 @@ class CustomerController extends Controller
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
             ...AddressFormatter::PSGC_RULES,
             'contact_person' => 'required|string|max:255',
-            'notes' => 'nullable|string',
+            'notes' => 'nullable|string|max:1000',
             'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
             // Made from the name when left blank.
@@ -249,7 +249,7 @@ class CustomerController extends Controller
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
             ...AddressFormatter::PSGC_RULES,
             'contact_person' => $changing('contact_person') ? 'required|string|max:255' : 'nullable|string|max:255',
-            'notes' => 'nullable|string',
+            'notes' => 'nullable|string|max:1000',
             'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
             // A saved number in an old format stays editable as long as it is not changed.

@@ -13,7 +13,7 @@ import { PILL } from "./statusTones";
 export const PAYMENT_BADGE = {
   paid: { label: "Paid", cls: PILL.success },
   review: { label: "Proof to review", cls: PILL.info },
-  rejected: { label: "Rejected", cls: PILL.danger },
+  rejected: { label: "Declined", cls: PILL.danger },
   overdue: { label: "Overdue", cls: PILL.danger },
   unpaid: { label: "Unpaid", cls: PILL.warning },
 };

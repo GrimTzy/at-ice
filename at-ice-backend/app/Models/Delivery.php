@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Support\DriverAvailability;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 class Delivery extends Model
 {
@@ -28,6 +30,30 @@ class Delivery extends Model
         'dispatched_at' => 'datetime',
         'delivered_at' => 'datetime',
     ];
+
+    // The stored date (Y-m-d), read raw so the app timezone cannot shift it.
+    public function scheduledDateString(): ?string
+    {
+        $raw = $this->getRawOriginal('scheduled_date') ?? $this->scheduled_date;
+
+        return $raw ? substr((string) ($raw instanceof \DateTimeInterface ? $raw->format('Y-m-d') : $raw), 0, 10) : null;
+    }
+
+    // Scheduled after today (business timezone): it cannot be started, arrived
+    // at or confirmed yet. Overdue deliveries (earlier days) still can.
+    public function isForLaterDay(): bool
+    {
+        $date = $this->scheduledDateString();
+
+        return $date !== null && $date > DriverAvailability::today();
+    }
+
+    public function laterDayMessage(string $action): string
+    {
+        $date = Carbon::parse($this->scheduledDateString())->format('M j, Y');
+
+        return "{$this->delivery_no} is scheduled for {$date}. It can be {$action} on that day, not before.";
+    }
 
     public function driver()
     {

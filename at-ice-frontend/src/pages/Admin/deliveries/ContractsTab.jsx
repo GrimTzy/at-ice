@@ -101,7 +101,7 @@ export default function ContractsTab({ stores, live, onChanged, search = "", typ
                   {c.status === "pending" ? <span className="text-slate-400">{c.planned} to make</span> : `${c.delivered_count} / ${c.deliveries_count} delivered`}
                 </td>
                 <td className="px-3 py-2.5">
-                  <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${CONTRACT_BADGE[c.status] || ""}`}>{c.status}</span>
+                  <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${CONTRACT_BADGE[c.status] || ""}`}>{c.status === "cancelled" && !c.approved_at ? "declined" : c.status}</span>
                   {c.approved_by && <div className="text-[11px] text-slate-400 mt-1">by {c.approved_by.name}</div>}
                 </td>
                 <td className="px-3 py-2.5">
@@ -110,7 +110,7 @@ export default function ContractsTab({ stores, live, onChanged, search = "", typ
                       <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "approve" })} className="px-2 py-1 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[11.5px] font-medium">Approve</button>
                     )}
                     {c.status !== "cancelled" && (
-                      <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "cancel" })} className="px-2 py-1 rounded-md border border-black/[0.09] text-red-600 text-[11.5px] hover:bg-red-50">Cancel</button>
+                      <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "cancel" })} className="px-2 py-1 rounded-md border border-black/[0.09] text-red-600 text-[11.5px] hover:bg-red-50">{c.status === "pending" ? "Decline" : "Cancel"}</button>
                     )}
                   </div>
                 </td>
@@ -129,17 +129,19 @@ export default function ContractsTab({ stores, live, onChanged, search = "", typ
       )}
 
       {confirm && (
-        <Modal title={confirm.action === "approve" ? "Approve contract?" : "Cancel contract?"} onClose={() => setConfirm(null)}>
+        <Modal title={confirm.action === "approve" ? "Approve contract?" : confirm.contract.status === "pending" ? "Decline contract?" : "Cancel contract?"} onClose={() => setConfirm(null)}>
           <div className="p-5 flex flex-col gap-4">
             <p className="text-[12.5px] text-slate-600">
               {confirm.action === "approve"
                 ? <>About <b>{confirm.contract.planned}</b> deliveries for <b>{confirm.contract.name}</b> will be made now, from {shortDate(confirm.contract.start_date)} to {shortDate(confirm.contract.end_date)}, each with its store's assigned driver.</>
-                : <>All of <b>{confirm.contract.name}</b>'s upcoming deliveries that have not started will be cancelled. Deliveries in transit or delivered stay.</>}
+                : confirm.contract.status === "pending"
+                  ? <><b>{confirm.contract.name}</b> will be declined. No deliveries are made.</>
+                  : <>All of <b>{confirm.contract.name}</b>'s upcoming deliveries that have not started will be cancelled. Deliveries in transit or delivered stay.</>}
             </p>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setConfirm(null)} className={btnGhost}>{confirm.action === "approve" ? "Cancel" : "Keep contract"}</button>
               <button type="button" disabled={busy} onClick={act} className={confirm.action === "approve" ? btnPrimary : "px-3.5 py-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white text-[12px] font-medium disabled:opacity-50"}>
-                {busy ? "Working…" : confirm.action === "approve" ? "Approve" : "Cancel contract"}
+                {busy ? "Working…" : confirm.action === "approve" ? "Approve" : confirm.contract.status === "pending" ? "Decline contract" : "Cancel contract"}
               </button>
             </div>
           </div>
@@ -267,7 +269,7 @@ function ContractForm({ stores, onClose, onSaved }) {
         </div>
         <div>
           <label htmlFor="contracts-tab-notes" className={labelCls}>Notes</label>
-          <textarea id="contracts-tab-notes" name="notes" rows={3} value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={inputCls} />
+          <textarea id="contracts-tab-notes" name="notes" rows={3} maxLength={1000} value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={inputCls} />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
           <button type="button" onClick={onClose} className={btnGhost}>Close</button>

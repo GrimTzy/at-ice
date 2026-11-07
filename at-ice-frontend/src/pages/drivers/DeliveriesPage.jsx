@@ -11,6 +11,7 @@ import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import { useTimedIn } from "../../lib/timeIn";
+import { formatDateShort, manilaDate, todayManila } from "../../lib/time";
 import TimeInNotice from "../../components/TimeInNotice";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
@@ -348,7 +349,12 @@ export function DeliveriesPage() {
                     </div>
                   </div>
 
-                  {d.status === "pending" && (
+                  {d.status === "pending" && manilaDate(d.scheduled_date) > todayManila() && (
+                    <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[12px] text-slate-600">
+                      Scheduled for {formatDateShort(d.scheduled_date, { year: true })}. You can start it on that day.
+                    </div>
+                  )}
+                  {d.status === "pending" && manilaDate(d.scheduled_date) <= todayManila() && (
                     <div className="flex gap-2 mt-1">
                       <button
                         onClick={() => startDelivery(d.id)}

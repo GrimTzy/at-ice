@@ -61,7 +61,7 @@ const toList = (d) => (Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : 
 // Positions at Bella Erin (an older free-text value is still shown)
 const POSITIONS = APPLICANT_POSITIONS;
 
-const STATUS_LABEL = { pending: "Pending", interviewed: "Interviewed", hired: "Hired", rejected: "Rejected" };
+const STATUS_LABEL = { pending: "Pending", interviewed: "Interviewed", hired: "Hired", rejected: "Declined" };
 const STATUS_CLASS = {
   pending: "bg-amber-100 text-amber-600",
   interviewed: "bg-cyan-100 text-cyan-600",
@@ -643,8 +643,11 @@ export default function InterviewsPage() {
                             {!isFinal(a) && (
                               <button onClick={() => openEdit(a)} className={`${actionBtn} border-black/[0.09] text-slate-600 hover:border-cyan-400 hover:text-cyan-500`}>Edit</button>
                             )}
-                            {a.status === "hired" && (
+                            {a.status === "hired" && !a.employee_id && (
                               <button onClick={() => addAsEmployee(a)} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`} title="Open Add Employee with this applicant's details">Add as Employee</button>
+                            )}
+                            {a.status === "hired" && a.employee_id && (
+                              <span className="text-[11px] text-emerald-700 font-medium" title="This applicant already has an employee record">Employee {a.employee?.employee_id || ""}</span>
                             )}
                             {a.status === "pending" && (interviewDue(a) ? (
                               <button data-no-confirm onClick={() => openStatus(a, "interviewed")} className={`${actionBtn} border-cyan-200 text-cyan-600 hover:bg-cyan-50`}>Mark Interviewed</button>
@@ -655,7 +658,7 @@ export default function InterviewsPage() {
                               <button data-no-confirm onClick={() => openStatus(a, "hired")} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`}>Hire</button>
                             )}
                             {(a.status === "pending" || a.status === "interviewed") && (
-                              <button data-no-confirm onClick={() => openStatus(a, "rejected")} className={`${actionBtn} border-transparent bg-red-500 text-white`}>Reject</button>
+                              <button data-no-confirm onClick={() => openStatus(a, "rejected")} className={`${actionBtn} border-transparent bg-red-500 text-white`}>Decline</button>
                             )}
                             {!isFinal(a) && (
                               <button data-no-confirm onClick={() => { setDeleteTarget(a); setDeleteError(""); }} className={`${actionBtn} border-black/[0.09] text-slate-500 hover:border-red-300 hover:text-red-500`}>Delete</button>
@@ -926,7 +929,7 @@ export default function InterviewsPage() {
               <div className="text-[11px] text-slate-400 pt-1">This applicant is {STATUS_LABEL[viewing.status]}. The interview record is view only.</div>
             )}
             <div className="flex justify-end gap-2 pt-2">
-              {viewing.status === "hired" && (
+              {viewing.status === "hired" && !viewing.employee_id && (
                 <button onClick={() => addAsEmployee(viewing)} className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-md cursor-pointer">Add as Employee</button>
               )}
               <button onClick={() => setViewing(null)} className="px-3.5 py-2 border border-black/[0.09] rounded-md text-xs text-slate-600 cursor-pointer hover:bg-slate-50">Close</button>

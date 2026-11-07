@@ -156,7 +156,7 @@ export default function ReceiptsPage() {
       }
       const no = proof.receipt?.receipt_no || "the invoice";
       if (action === "approve") toast.success(`Payment proof approved. ${no} is now Paid.`);
-      else toast.success(`Payment proof for ${no} rejected. The customer will see the reason.`);
+      else toast.success(`Payment proof for ${no} declined. The customer will see the reason.`);
       setRejectTarget(null);
       setRejectReason("");
       fetchAll();
@@ -241,7 +241,7 @@ export default function ReceiptsPage() {
                     disabled={proofBusy === p.id}
                     className="px-2.5 py-1 rounded-md bg-red-500 text-white text-[12px] font-medium"
                   >
-                    Reject
+                    Decline
                   </button>
                 </div>
               </div>
@@ -354,7 +354,7 @@ export default function ReceiptsPage() {
                           {badge.label}
                         </button>
                         {state === "rejected" && (
-                          <span className="text-[10px] text-red-800">Proof rejected. Waiting for the customer to re-upload.</span>
+                          <span className="text-[10px] text-red-800">Proof declined. Waiting for the customer to re-upload.</span>
                         )}
                       </div>
                     </td>
@@ -370,7 +370,7 @@ export default function ReceiptsPage() {
                           <button data-no-confirm
                             onClick={() => { setPayTarget(r); setPayMethod("cash"); }}
                             disabled={!!proofByReceipt[r.id]}
-                            title={proofByReceipt[r.id] ? "The customer sent a payment proof. Approve or reject it under Payment proofs to review." : undefined}
+                            title={proofByReceipt[r.id] ? "The customer sent a payment proof. Approve or decline it under Payment proofs to review." : undefined}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-black/[0.09] text-cyan-600 hover:bg-cyan-50 text-[12px] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                           >
                             <CheckIcon /> Mark Paid
@@ -463,7 +463,7 @@ export default function ReceiptsPage() {
                           )}
                           {p.reviewed_at && (
                             <div className="mt-1 text-[11px] text-slate-400">
-                              {p.status === "approved" ? "Approved" : "Rejected"} by {p.reviewer?.name || "Admin"} · {formatDateTime(p.reviewed_at, { year: false })}
+                              {p.status === "approved" ? "Approved" : "Declined"} by {p.reviewer?.name || "Admin"} · {formatDateTime(p.reviewed_at, { year: false })}
                             </div>
                           )}
                           <button
@@ -489,10 +489,10 @@ export default function ReceiptsPage() {
       {rejectTarget && (
         <ConfirmCard
           danger
-          title="Reject payment proof?"
+          title="Decline payment proof?"
           context={rejectTarget.receipt?.receipt_no}
           message="The invoice stays unpaid and its overdue count goes on. The customer sees your reason and can send a new proof."
-          confirmLabel={proofBusy === rejectTarget.id ? "Saving…" : "Reject"}
+          confirmLabel={proofBusy === rejectTarget.id ? "Saving…" : "Decline"}
           busy={proofBusy === rejectTarget.id}
           confirmDisabled={rejectReason.trim().length < 3}
           onCancel={() => setRejectTarget(null)}

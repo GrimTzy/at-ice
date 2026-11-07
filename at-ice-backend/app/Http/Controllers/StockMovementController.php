@@ -25,9 +25,9 @@ class StockMovementController extends Controller
             'product_id' => 'required|exists:products,id',
             'type' => 'required|in:stock_in,stock_out,adjustment',
             'quantity' => 'required|integer|min:1|max:'.config('atice.max_stock_quantity'),
-            'reference_no' => 'nullable|string',
-            'source' => 'nullable|string',
-            'reason' => 'nullable|string',
+            'reference_no' => 'nullable|string|max:255',
+            'source' => 'nullable|string|max:255',
+            'reason' => 'nullable|string|max:1000',
         ]);
 
         $product = Product::findOrFail($validated['product_id']);
@@ -147,8 +147,8 @@ class StockMovementController extends Controller
         $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1|max:'.config('atice.max_stock_quantity'),
-            'reason' => 'required|string',
-            'reference_no' => 'nullable|string',
+            'reason' => 'required|string|max:1000',
+            'reference_no' => 'nullable|string|max:255',
         ]);
 
         $product = Product::findOrFail($validated['product_id']);

@@ -317,13 +317,13 @@ export default function LeaveRequestPage() {
                   </span>
                 )}
               </div>
-              <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${STATUS_STYLE[l.status] || ""}`}>{l.status}</span>
+              <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${STATUS_STYLE[l.status] || ""}`}>{l.status === "rejected" ? "declined" : l.status}</span>
             </div>
             <p className="text-[12px] text-slate-500">{l.start_date === l.end_date ? fmtDate(l.start_date) : `${fmtDate(l.start_date)} to ${fmtDate(l.end_date)}`}</p>
             <div className="flex flex-col gap-2.5 mt-1">
               <MessageBubble mine from="You" role="Reason" at={l.created_at}>{l.reason}</MessageBubble>
               {l.status === "rejected" && l.reject_reason && (
-                <MessageBubble from={(l.approved_by && typeof l.approved_by === "object" && l.approved_by.name) || "HR"} role="Reason for rejection" at={l.approved_at}>{l.reject_reason}</MessageBubble>
+                <MessageBubble from={(l.approved_by && typeof l.approved_by === "object" && l.approved_by.name) || "HR"} role="Reason for declining" at={l.approved_at}>{l.reject_reason}</MessageBubble>
               )}
               {l.status !== "pending" && l.admin_notes && (
                 <MessageBubble from={(l.approved_by && typeof l.approved_by === "object" && l.approved_by.name) || "HR"} role="HR remarks" at={l.approved_at}>{l.admin_notes}</MessageBubble>

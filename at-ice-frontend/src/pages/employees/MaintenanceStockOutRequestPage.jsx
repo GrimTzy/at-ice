@@ -13,8 +13,8 @@ import TimeInNotice from "../../components/TimeInNotice";
 import FilterSelect from "../../components/FilterSelect";
 import { QTY_CEILING, QTY_INPUT_PROPS, cleanQty, qtyWasCapped } from "../../lib/quantity";
 
-const STATUS_LABEL = { pending: "Pending", approved: "Approved", released: "Released", rejected: "Rejected" };
-const FILTERS = [["all", "All"], ["pending", "Pending"], ["approved", "Approved"], ["released", "Released"], ["rejected", "Rejected"]];
+const STATUS_LABEL = { pending: "Pending", approved: "Approved", released: "Released", rejected: "Declined" };
+const FILTERS = [["all", "All"], ["pending", "Pending"], ["approved", "Approved"], ["released", "Released"], ["rejected", "Declined"]];
 
 function firstError(data, fallback) {
   if (data?.errors) {

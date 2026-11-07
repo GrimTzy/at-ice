@@ -143,6 +143,19 @@ class Applicant extends Model
         return $this->belongsTo(Employee::class, 'referred_by_employee_id');
     }
 
+    // The status as people read it: "rejected" is stored, "declined" is shown.
+    public static function statusLabel(?string $status): string
+    {
+        return $status === 'rejected' ? 'declined' : (string) $status;
+    }
+
+    // The employee record made from this applicant once hired (at most one).
+    // employee_id is not fillable: only EmployeeController::store sets it.
+    public function employee()
+    {
+        return $this->belongsTo(Employee::class, 'employee_id');
+    }
+
     protected static function booted(): void
     {
         // A deleted applicant's files go too: the resume and every document (2x2 photo, IDs,
