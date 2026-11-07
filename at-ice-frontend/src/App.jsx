@@ -33,6 +33,7 @@ const ProjectsPage = lazy(() => import('./pages/Admin/ProjectsPage'))
 const MaintenanceProjectsPage = lazy(() => import('./pages/employees/MaintenanceProjectsPage'))
 const EmployeesOverviewPage = lazy(() => import('./pages/Admin/EmployeesOverviewPage'))
 const PerformancePage = lazy(() => import('./pages/Admin/PerformancePage'))
+const PerformanceHistoryPage = lazy(() => import('./pages/Admin/PerformanceHistoryPage'))
 const CustomersPage = lazy(() => import('./pages/Admin/CustomersPage'))
 const DeliveriesPage = lazy(() => import('./pages/Admin/DeliveriesPage'))
 const ReceiptsPage = lazy(() => import('./pages/Admin/ReceiptsPage'))
@@ -235,6 +236,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <PerformancePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/performance/:employeeId"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <PerformanceHistoryPage />
             </ProtectedRoute>
           }
         />

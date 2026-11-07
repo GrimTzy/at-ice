@@ -134,13 +134,7 @@ class ProjectController extends Controller
         $released = $reqs->where('status', 'released');
         $cost = $released->sum(fn ($r) => (float) $r->quantity * (float) ($r->product?->unit_price ?? 0));
 
-        $progress = null;
-        if ($p->status === 'done') {
-            $progress = 100;
-        } elseif ($p->start_date && $p->due_date) {
-            $span = max(1, $p->start_date->diffInDays($p->due_date));
-            $progress = (int) max(0, min(100, round($p->start_date->diffInDays(now(config('atice.timezone')), false) / $span * 100)));
-        }
+        $progress = $p->scheduleProgress();
 
         return $p->toArray() + [
             'requests_total' => $reqs->count(),

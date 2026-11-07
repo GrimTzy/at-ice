@@ -1,0 +1,263 @@
+/* Employee performance history (Admin > HRIS > Performance > employee name),
+   a page inside the admin layout. Surfaces come from the same --neu-* tokens
+   as the rest of the system (raised cards, inset tracks and fields); pastel
+   blue, mint and yellow are accents behind dark text, never the only signal. */
+
+:root {
+  --ph-blue: #2563b8;
+  --ph-blue-soft: #d9e6fa;
+  --ph-cyan: #0e7490;
+  --ph-cyan-soft: #d0eef5;
+  --ph-mint: #1b7a5a;
+  --ph-mint-soft: #d4f0e3;
+  --ph-yellow: #8a5d00;
+  --ph-yellow-soft: #faefc8;
+  --ph-rose: #b4234a;
+  --ph-rose-soft: #fadde4;
+  --ph-line: #2f73d0;
+  --ph-on: #0e7490; /* active segment */
+}
+.cp-dark,
+.neu-dark {
+  --ph-blue: #9cc2ff;
+  --ph-blue-soft: rgba(96, 150, 230, 0.2);
+  --ph-cyan: #7fe0f2;
+  --ph-cyan-soft: rgba(34, 190, 220, 0.18);
+  --ph-mint: #7be3b8;
+  --ph-mint-soft: rgba(60, 200, 140, 0.18);
+  --ph-yellow: #f3d27a;
+  --ph-yellow-soft: rgba(230, 180, 40, 0.18);
+  --ph-rose: #ffa3b8;
+  --ph-rose-soft: rgba(240, 90, 120, 0.2);
+  --ph-line: #7db1ff;
+  --ph-on: #0e8aa6;
+}
+
+/* Page: one column, every table straight down */
+/* position: relative keeps the screen-reader-only elements (absolute) inside the scrolling main; otherwise they stretch the whole document and the page scrolls past its end */
+.ph-page { position: relative; display: flex; flex-direction: column; gap: 18px; color: var(--neu-text); min-width: 0; }
+.ph-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* Buttons and fields */
+.ph-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--neu-bg);
+  color: var(--neu-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: var(--neu-raised-sm);
+}
+.ph-btn:hover { color: var(--neu-accent); }
+.ph-btn:active { box-shadow: var(--neu-inset-sm); }
+.ph-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.ph-btn:focus-visible,
+.ph-name-btn:focus-visible,
+.ph-field:focus-visible,
+.ph-link:focus-visible { outline: none; box-shadow: var(--neu-focus); }
+.ph-field {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--neu-bg);
+  color: var(--neu-text);
+  font: inherit;
+  font-size: 13px;
+  box-shadow: var(--neu-inset-sm);
+}
+.ph-field-label { font-size: 11px; color: var(--neu-muted); display: block; margin-bottom: 3px; }
+
+
+/* Cards */
+.ph-card {
+  background: var(--neu-bg);
+  border-radius: 18px;
+  box-shadow: var(--neu-raised);
+  padding: 18px 20px;
+  min-width: 0;
+}
+.ph-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.ph-card-title { display: flex; align-items: flex-start; gap: 10px; min-width: 0; flex: 1 1 260px; }
+.ph-card-title h3 { font-size: 15px; font-weight: 700; color: var(--neu-text); margin: 0; }
+.ph-card-sub { font-size: 12px; color: var(--neu-muted); margin-top: 1px; }
+.ph-cover { font-size: 11.5px; color: var(--neu-faint); margin-top: 2px; }
+.ph-icon-well {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-sm);
+  color: var(--neu-accent);
+}
+
+/* Employee header */
+.ph-profile { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; }
+.ph-avatar {
+  flex: none;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised-sm);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--neu-accent);
+}
+.ph-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.ph-person { min-width: 0; flex: 1 1 200px; }
+.ph-person-name { font-size: 22px; font-weight: 700; line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
+.ph-person-id { font-size: 13px; color: var(--neu-muted); margin-top: 2px; }
+.ph-facts { display: flex; flex-wrap: wrap; gap: 14px 26px; flex: 2 1 280px; margin: 0; }
+.ph-fact dt { font-size: 11px; color: var(--neu-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.ph-fact dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ph-rating-box { flex: 1 1 220px; max-width: 300px; border-radius: 16px; padding: 12px 16px; box-shadow: var(--neu-inset); background: var(--neu-bg); }
+.ph-rating-box .ph-rating-num { font-size: 26px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ph-rating-box .ph-rating-note { font-size: 11.5px; color: var(--neu-muted); margin-top: 4px; }
+
+/* Rating tones: pale tint, dark readable text, always with the number */
+.ph-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ph-tone-mint { background: var(--ph-mint-soft); color: var(--ph-mint); }
+.ph-tone-cyan { background: var(--ph-cyan-soft); color: var(--ph-cyan); }
+.ph-tone-blue { background: var(--ph-blue-soft); color: var(--ph-blue); }
+.ph-tone-yellow { background: var(--ph-yellow-soft); color: var(--ph-yellow); }
+.ph-tone-rose { background: var(--ph-rose-soft); color: var(--ph-rose); }
+.ph-tone-slate { background: var(--neu-bg); color: var(--neu-muted); box-shadow: var(--neu-inset-sm); }
+.ph-dot-mint { background: var(--ph-mint); }
+.ph-dot-cyan { background: var(--ph-cyan); }
+.ph-dot-blue { background: var(--ph-blue); }
+.ph-dot-yellow { background: var(--ph-yellow); }
+.ph-dot-rose { background: var(--ph-rose); }
+.ph-dot-slate { background: var(--neu-faint); }
+
+/* Name link on the Performance page */
+.ph-name-btn {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--neu-accent, #155e75);
+  text-align: left;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.ph-name-btn:hover { text-decoration: underline; }
+.ph-link { color: var(--neu-accent); font-weight: 600; text-decoration: underline; border-radius: 6px; }
+
+/* Chart */
+.ph-detail { margin-top: 8px; border-radius: 14px; padding: 10px 14px; background: var(--neu-bg); box-shadow: var(--neu-inset-sm); font-size: 13px; }
+.ph-detail ul { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+.ph-chart-table { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Tables: full width, each one under the other */
+.ph-table-wrap { overflow-x: auto; border-radius: 14px; }
+.ph-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ph-table th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--neu-muted);
+  padding: 9px 12px;
+  white-space: nowrap;
+}
+.ph-table thead tr { background: var(--neu-bg); box-shadow: var(--neu-inset-sm); }
+.ph-table thead th:first-child { border-radius: 12px 0 0 12px; }
+.ph-table thead th:last-child { border-radius: 0 12px 12px 0; }
+.ph-table td, .ph-table tbody th { padding: 9px 12px; border-top: 1px solid color-mix(in srgb, var(--neu-lo) 45%, transparent); vertical-align: middle; font-variant-numeric: tabular-nums; }
+.ph-table tbody tr:first-child td, .ph-table tbody tr:first-child th { border-top: 0; }
+.ph-table tbody th { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--neu-text); }
+.ph-num { text-align: right; }
+
+/* Feedback rows */
+.ph-fb-period { display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; }
+.ph-fb-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: var(--neu-raised-sm); flex: none; }
+.ph-tl-text { margin: 4px 0 2px; font-size: 13px; line-height: 1.5; color: var(--neu-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ph-link-btn { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--neu-accent); cursor: pointer; text-decoration: underline; }
+.ph-flag { font-size: 10.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--ph-yellow-soft); color: var(--ph-yellow); white-space: nowrap; }
+
+.ph-empty { font-size: 13px; color: var(--neu-muted); padding: 14px; text-align: center; border-radius: 14px; box-shadow: var(--neu-inset-sm); }
+.ph-error { border-radius: 14px; padding: 12px 14px; background: var(--ph-rose-soft); color: var(--ph-rose); font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ph-note { font-size: 12px; color: var(--neu-muted); line-height: 1.45; }
+.ph-sk { border-radius: 14px; background: var(--neu-bg); box-shadow: var(--neu-inset-sm); animation: ph-pulse 1.4s ease-in-out infinite; }
+@keyframes ph-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .ph-sk { animation: none; } }
+
+.sr-only-ph { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Phone: tables with long rows become stacked cards, the rest scroll sideways */
+@media (max-width: 640px) {
+  .ph-card { padding: 14px; }
+  .ph-person-name { font-size: 19px; }
+  .ph-rating-box { max-width: none; }
+  .ph-filter { width: 100%; }
+  .ph-stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .ph-stack, .ph-stack tbody, .ph-stack tr, .ph-stack td { display: block; width: 100%; }
+  .ph-stack tr { padding: 10px 4px; border-top: 1px solid color-mix(in srgb, var(--neu-lo) 45%, transparent); }
+  .ph-stack tbody tr:first-child { border-top: 0; }
+  .ph-stack td { border: 0 !important; padding: 3px 8px; display: flex; gap: 10px; justify-content: space-between; text-align: right; }
+  .ph-stack td::before { content: attr(data-label); flex: none; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--neu-muted); text-align: left; padding-top: 2px; }
+  .ph-stack td > * { text-align: right; }
+  .ph-stack td[data-label="Feedback"] { display: block; text-align: left; min-width: 0 !important; }
+  .ph-stack td[data-label="Feedback"]::before { display: none; }
+  .ph-stack td[data-label="Feedback"] > * { text-align: left; }
+}
+
+
+/* The system gives every table 640px (index.css) so wide tables scroll on a phone; stacked tables fit the screen, small ones may be narrower */
+@media (max-width: 640px) {
+  :is(.ice-main, .ice-scope) .ph-stack { min-width: 0; }
+  .ph-stack td[data-label="Date"] { white-space: normal !important; }
+}
+:is(.ice-main, .ice-scope) .ph-chart-table table { min-width: 0; }
+
+/* Trend chart (Chart.js, same look as the dashboard chart) */
+.ph-chart-box { position: relative; height: 270px; border-radius: 12px; }
+.ph-chart-box:focus-visible { outline: none; box-shadow: var(--neu-focus); }
+
+/* Tables stay put when switching Monthly / Quarterly: equal fixed columns. The system's row cascade slides each row up 8px, which moved the lines, so here the rows stay still and only the text comes in (same 40ms stagger per row, same easing): cell text fades from transparent, chips and bars fade from 0 */
+.ph-table.ph-fixed { table-layout: fixed; }
+@keyframes ph-text-in { from { color: transparent; } }
+@keyframes ph-fade-in { from { opacity: 0; } }
+html[data-fx="on"] :is(.ice-main, .role-shell main) .ph-page .ph-table tbody tr { animation: none !important; }
+html[data-fx="on"] :is(.ice-main, .role-shell main) .ph-page .ph-table tbody :is(td, th) {
+  animation: ph-text-in 420ms var(--fx-ease) backwards;
+  animation-delay: calc(var(--fx-i, 9) * 40ms);
+}
+html[data-fx="on"] :is(.ice-main, .role-shell main) .ph-page .ph-table tbody :is(td, th) > * {
+  animation: ph-fade-in 420ms var(--fx-ease) backwards;
+  animation-delay: calc(var(--fx-i, 9) * 40ms);
+}
+
+.ph-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

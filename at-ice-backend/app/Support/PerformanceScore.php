@@ -109,21 +109,7 @@ class PerformanceScore
         $rows = [];
         foreach ($employees as $e) {
             $from = max($start, $e->date_hired ? Carbon::parse($e->date_hired)->toDateString() : $start);
-            $leaveDays = [];
-            foreach ($leaves->get($e->id, collect()) as $l) {
-                foreach (CarbonPeriod::create(max($from, Carbon::parse($l->start_date)->toDateString()), min($last, Carbon::parse($l->end_date)->toDateString())) as $d) {
-                    $leaveDays[$d->toDateString()] = true;
-                }
-            }
-            $expected = 0;
-            if ($from <= $last) {
-                foreach (CarbonPeriod::create($from, $last) as $d) {
-                    $ds = $d->toDateString();
-                    if (in_array($d->isoWeekday(), $workDays, true) && ! isset($holidays[$ds]) && ! isset($leaveDays[$ds])) {
-                        $expected++;
-                    }
-                }
-            }
+            $expected = self::expectedWorkDays($from, $last, $workDays, $holidays, $leaves->get($e->id, collect()));
 
             $days = $att->get($e->id, collect())->unique(fn ($a) => Carbon::parse($a->date)->toDateString());
             $present = $days->count();
@@ -179,6 +165,80 @@ class PerformanceScore
         }
 
         return $rows;
+    }
+
+    // Work days to expect between $from and $last (inclusive): the Settings work
+    // days, minus holidays and the employee's approved leave. Shared by the
+    // period rows and the attendance history so both follow the same rules.
+    private static function expectedWorkDays(string $from, string $last, array $workDays, $holidays, Collection $leaves): int
+    {
+        if ($from > $last) {
+            return 0;
+        }
+        $leaveDays = [];
+        foreach ($leaves as $l) {
+            $ls = max($from, Carbon::parse($l->start_date)->toDateString());
+            $le = min($last, Carbon::parse($l->end_date)->toDateString());
+            if ($ls > $le) {
+                continue;
+            }
+            foreach (CarbonPeriod::create($ls, $le) as $d) {
+                $leaveDays[$d->toDateString()] = true;
+            }
+        }
+        $expected = 0;
+        foreach (CarbonPeriod::create($from, $last) as $d) {
+            $ds = $d->toDateString();
+            if (in_array($d->isoWeekday(), $workDays, true) && ! isset($holidays[$ds]) && ! isset($leaveDays[$ds])) {
+                $expected++;
+            }
+        }
+
+        return $expected;
+    }
+
+    // Attendance of one employee between two dates, with the same rules as the
+    // Performance page: from the hire date up to today, holidays and approved
+    // leave left out. Used by the history for any date range (e.g. a quarter).
+    public static function attendanceStats(Employee $e, string $start, string $end): array
+    {
+        return self::attendanceSeries($e, [[$start, $end]])[0];
+    }
+
+    // The same for many date ranges (months or quarters) with one read of the
+    // attendance, leave and holiday records.
+    /** @param array<int, array{0:string,1:string}> $ranges
+     *  @return array<int, array{work_days:int,present_days:int,on_time_days:int}> */
+    public static function attendanceSeries(Employee $e, array $ranges): array
+    {
+        if (! $ranges) {
+            return [];
+        }
+        $today = DriverAvailability::today();
+        $lo = min(array_column($ranges, 0));
+        $hi = min(max(array_column($ranges, 1)), $today);
+        $hired = $e->date_hired ? Carbon::parse($e->date_hired)->toDateString() : null;
+        $workDays = array_map('intval', explode(',', (string) Settings::get('attendance.work_days')));
+        $holidays = Holiday::byDate();
+        $leaves = LeaveRequest::where('employee_id', $e->id)->where('status', 'approved')
+            ->whereDate('start_date', '<=', $hi)->whereDate('end_date', '>=', $lo)->get(['employee_id', 'start_date', 'end_date']);
+        $days = Attendance::where('employee_id', $e->id)->whereDate('date', '>=', $lo)->whereDate('date', '<=', $hi)->whereNotNull('time_in')
+            ->get(['date', 'late_minutes'])->unique(fn ($a) => Carbon::parse($a->date)->toDateString())
+            ->map(fn ($a) => [Carbon::parse($a->date)->toDateString(), (int) $a->late_minutes])->values();
+
+        $out = [];
+        foreach ($ranges as [$start, $end]) {
+            $last = min($end, $today);
+            $from = max($start, $hired ?? $start);
+            $in = $days->filter(fn ($d) => $d[0] >= $start && $d[0] <= $last);
+            $out[] = [
+                'work_days' => self::expectedWorkDays($from, $last, $workDays, $holidays, $leaves),
+                'present_days' => $in->count(),
+                'on_time_days' => $in->filter(fn ($d) => $d[1] === 0)->count(),
+            ];
+        }
+
+        return $out;
     }
 
     private static function sum(Collection ...$counts): Collection

@@ -28,6 +28,21 @@ class Project extends Model
         return $this->hasMany(StockOutRequest::class);
     }
 
+    // Schedule progress, not work progress: the share of the time from start to
+    // due date that has passed (done = 100). Null without both dates.
+    public function scheduleProgress(): ?int
+    {
+        if ($this->status === 'done') {
+            return 100;
+        }
+        if (! $this->start_date || ! $this->due_date) {
+            return null;
+        }
+        $span = max(1, $this->start_date->diffInDays($this->due_date));
+
+        return (int) max(0, min(100, round($this->start_date->diffInDays(now(config('atice.timezone')), false) / $span * 100)));
+    }
+
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');

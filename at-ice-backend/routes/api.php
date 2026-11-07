@@ -130,6 +130,9 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         // Performance appraisals: draft ratings from the records, Admin overrides and publishes
         Route::get('performance', [PerformanceController::class, 'index']);
         Route::put('performance/{employee}', [PerformanceController::class, 'update']);
+        // Read-only history of one employee (published ratings by quarter, attendance, goals, feedback)
+        Route::get('performance/{employee}/history', [PerformanceController::class, 'history']);
+        Route::get('performance/{employee}/photo', [PerformanceController::class, 'photo']);
 
         // Rates and rules (AppSupportSettings) and the audit log
         Route::get('settings', [SettingsController::class, 'index']);

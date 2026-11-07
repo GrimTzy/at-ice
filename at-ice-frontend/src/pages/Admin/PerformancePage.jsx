@@ -10,6 +10,8 @@ import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, InsightPanel, ProgressRing, StatusBreakdown } from "../../components/Insight";
 import { PILL } from "../../lib/statusTones";
 import { Icon } from "../../components/icons";
+import { Link } from "react-router-dom";
+import "./performanceHistory.css";
 
 // Admin > HRIS > Performance (owner, 2026-10-20). Every active employee gets a
 // Draft Base Rating each pay period from the records (attendance, punctuality
@@ -54,9 +56,14 @@ const NO_FILTER = { q: "", department: "", rating: "" };
 const LOW_RATING = "__under-2.5";
 
 export default function PerformancePage() {
+  // The cutoff and filters survive opening an employee's history and coming back
+  const saved0 = useMemo(() => { try { return JSON.parse(sessionStorage.getItem("performance.view") || "{}"); } catch { return {}; } }, []);
   const [data, setData] = useState({ rows: [], periods: [], labels: [], period: null });
-  const [periodStart, setPeriodStart] = useState("");
-  const [filter, setFilter] = useState(NO_FILTER);
+  const [periodStart, setPeriodStart] = useState(saved0.periodStart || "");
+  const [filter, setFilter] = useState({ ...NO_FILTER, ...(saved0.filter || {}) });
+  useEffect(() => {
+    try { sessionStorage.setItem("performance.view", JSON.stringify({ periodStart, filter })); } catch { /* storage blocked: the page works without it */ }
+  }, [periodStart, filter]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reviewing, setReviewing] = useState(null);
@@ -183,7 +190,9 @@ export default function PerformancePage() {
                   return (
                     <tr key={r.employee_id} className="border-b border-black/[0.06] last:border-0 hover:bg-slate-50/60">
                       <td className="px-5 py-3">
-                        <div className="font-medium text-slate-800">{r.name}</div>
+                        <Link to={`/admin/performance/${r.employee_id}`} data-tip="Opens the performance history of this employee. Nothing is changed." className="ph-name-btn">
+                          {r.name}
+                        </Link>
                         <div className="text-[11px] text-slate-400">{r.code}</div>
                       </td>
                       <td className="px-5 py-3 text-slate-600">{r.department || <span className="text-slate-300">—</span>}</td>
