@@ -21,23 +21,42 @@ use Tests\TestCase;
 // exercised for real. SQLite cannot do this (it has no row locks).
 //
 // Skipped unless the suite is pointed at a throwaway MySQL database whose name
-// contains "test" or "audit". It runs migrate:fresh on that database, so the guard
-// is deliberate. Example:
+// contains "test" or "audit". It rebuilds the schema once, then deletes fixture
+// rows between cases, so the guard is deliberate. Example:
 //   DB_CONNECTION=mysql DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=atice_test \
 //   DB_USERNAME=root DB_PASSWORD= php artisan test --filter=ConcurrentWritesMysqlTest
 class ConcurrentWritesMysqlTest extends TestCase
 {
+    private static bool $migrated = false;
+
     private string $kioskToken = 'concurrency-test-kiosk-token';
 
     protected function setUp(): void
     {
-        // Checked first: migrate:fresh below wipes the database.
+        // Checked first: the initial migration wipes the throwaway database.
         if (getenv('DB_CONNECTION') !== 'mysql' || ! preg_match('/test|audit/i', (string) getenv('DB_DATABASE'))) {
             $this->markTestSkipped('MySQL-only test: set DB_CONNECTION=mysql and a DB_DATABASE that contains "test" or "audit".');
         }
         parent::setUp();
-        // A fresh schema, not a rollback afterwards: the throwaway database is rebuilt for every test.
-        $this->artisan('migrate:fresh', ['--force' => true]);
+        if (! self::$migrated) {
+            $this->artisan('migrate:fresh', ['--force' => true])->assertSuccessful();
+            self::$migrated = true;
+        }
+        // Child requests commit on separate connections, so a test transaction
+        // cannot clean them up. Keep the schema and reset committed fixture rows.
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        try {
+            DB::transaction(function () {
+                foreach (DB::select('SHOW TABLES') as $row) {
+                    $table = array_values((array) $row)[0];
+                    if ($table !== 'migrations') {
+                        DB::table($table)->delete();
+                    }
+                }
+            });
+        } finally {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        }
 
         $setting = KioskSetting::current();
         $setting->setPin('424242', null);
