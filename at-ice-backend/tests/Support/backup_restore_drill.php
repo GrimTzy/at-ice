@@ -30,6 +30,7 @@ $restoreProcess = new Process(array_merge([getenv('MYSQL_BIN') ?: 'mysql'], $com
 $restoreProcess->mustRun();
 
 $signatures = function (string $name) use ($pdo): array {
+    $pdo->exec("USE `{$name}`");
     $tables = $pdo->query("SHOW TABLES FROM `{$name}`")->fetchAll(PDO::FETCH_COLUMN);
     sort($tables);
     $result = [];
@@ -38,8 +39,11 @@ $signatures = function (string $name) use ($pdo): array {
         $rows = $pdo->query("SELECT * FROM `{$name}`.`{$quoted}`")->fetchAll(PDO::FETCH_ASSOC);
         $encoded = array_map(fn ($row) => json_encode($row, JSON_THROW_ON_ERROR), $rows);
         sort($encoded);
-        $columns = $pdo->query("SHOW COLUMNS FROM `{$name}`.`{$quoted}`")->fetchAll(PDO::FETCH_ASSOC);
+        $columns = $pdo->query("SHOW FULL COLUMNS FROM `{$name}`.`{$quoted}`")->fetchAll(PDO::FETCH_ASSOC);
         $definition = $pdo->query("SHOW CREATE TABLE `{$name}`.`{$quoted}`")->fetch(PDO::FETCH_NUM)[1];
+        // MySQL can make an inherited character set explicit after an import.
+        // Compare actual column collations above, then normalize that DDL spelling.
+        $definition = preg_replace('/ CHARACTER SET [a-zA-Z0-9_]+/', '', $definition);
         $result[$table] = ['rows' => count($rows), 'sha256' => hash('sha256', implode("\n", $encoded)), 'columns' => hash('sha256', json_encode($columns, JSON_THROW_ON_ERROR)), 'definition' => hash('sha256', $definition)];
     }
 
@@ -48,6 +52,7 @@ $signatures = function (string $name) use ($pdo): array {
 $source = $signatures($database);
 $restored = $signatures($restore);
 if ($source !== $restored || $source === []) {
+    file_put_contents($output.'/comparison-failed.json', json_encode(['source' => $source, 'restored' => $restored], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
     throw new RuntimeException('Restored rows or column definitions do not match.');
 }
 
