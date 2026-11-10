@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "../../../lib/toast";
-import { api, nextMonday, todayStr, shortDate, storeName, inputCls, labelCls, btnPrimary } from "./utils";
+import { api, nextMonday, todayStr, ymd, shortDate, storeName, inputCls, labelCls, btnPrimary } from "./utils";
+import Req from "../../../components/Req";
 import { StorePicker } from "./shared";
 
 // Driver Stores: Admin picks which Driver handles which stores, from a date
@@ -9,9 +10,22 @@ import { StorePicker } from "./shared";
 // timed in a while after their shift starts, or on approved leave, is off and
 // their stops are reassigned (owner, 2026-10-20).
 // The page toolbar passes `search` and `type` (customer type) to narrow "Stores per driver".
+
+// How long an assignment runs (owner, 2026-11-10). The dates stay hidden until
+// one is picked, then fill in: one day is today; one week is today to six days
+// later; no end date starts next Monday and is the store's regular driver
+// until changed. Moving the start moves the end with it.
+const LENGTHS = [
+  { value: "day", label: "One day" },
+  { value: "week", label: "One week" },
+  { value: "open", label: "No end date" },
+];
+const plusDays = (date, n) => { const d = new Date(`${date}T00:00:00`); d.setDate(d.getDate() + n); return ymd(d); };
+// The Until date a length gives for a start date ("" = no end date)
+const untilFor = (length, from) => (length === "day" ? from : length === "week" ? plusDays(from, 6) : "");
 export default function DriverStoresTab({ stores, drivers, live, onChanged, search = "", type = "" }) {
   const [assignments, setAssignments] = useState([]);
-  const [form, setForm] = useState({ driver_id: "", store_ids: [], effective_from: nextMonday(), effective_to: "" });
+  const [form, setForm] = useState({ driver_id: "", store_ids: [], length: "", effective_from: "", effective_to: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -32,6 +46,18 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged, sear
     if (from <= today || !currentDriver[a.store_id]) currentDriver[a.store_id] = a.driver?.name;
   });
 
+  // Picking a length shows the dates and fills them in
+  function pickLength(length) {
+    const from = length === "open" ? nextMonday() : today;
+    setForm({ ...form, length, effective_from: from, effective_to: untilFor(length, from) });
+    setError("");
+  }
+  // A new start moves the Until date with it for one day and one week
+  function pickFrom(from) {
+    setForm({ ...form, effective_from: from, effective_to: form.length === "open" ? (form.effective_to && form.effective_to < from ? "" : form.effective_to) : untilFor(form.length, from) });
+  }
+  const fixedUntil = form.length !== "open";
+
   async function save(e) {
     e.preventDefault();
     if (!form.driver_id) return setError("Please select a driver.");
@@ -39,7 +65,7 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged, sear
     setSaving(true);
     setError("");
     try {
-      const res = await api("driver-store-assignments", { method: "POST", body: { ...form, effective_to: form.effective_to || null } });
+      const res = await api("driver-store-assignments", { method: "POST", body: { driver_id: form.driver_id, store_ids: form.store_ids, effective_from: form.effective_from, effective_to: form.effective_to || null } });
       toast.success(res.message);
       setForm({ ...form, store_ids: [] });
       load();
@@ -83,24 +109,37 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged, sear
         </div>
         {error && <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div>
-          <label htmlFor="assign-driver" className={labelCls}>Driver *</label>
-          <select id="assign-driver" name="driver_id" value={form.driver_id} onChange={(e) => { setForm({ ...form, driver_id: e.target.value }); setError(""); }} className={inputCls}>
+          <label htmlFor="assign-driver" className={labelCls}>Driver<Req /></label>
+          <select id="assign-driver" name="driver_id" required value={form.driver_id} onChange={(e) => { setForm({ ...form, driver_id: e.target.value }); setError(""); }} className={inputCls}>
             <option value="">Select driver…</option>
             {drivers.map((dr) => <option key={dr.id} value={dr.id}>{dr.name}{dr.employee_id ? ` · ${dr.employee_id}` : ""}</option>)}
           </select>
         </div>
+        <div>
+          <label htmlFor="assign-length" className={labelCls}>Assign for<Req /></label>
+          <select id="assign-length" name="length" required value={form.length} onChange={(e) => pickLength(e.target.value)} className={inputCls}>
+            <option value="" disabled>Select how long…</option>
+            {LENGTHS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+          </select>
+        </div>
+        {form.length && (
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="assign-from" className={labelCls}>From *</label>
-            <input id="assign-from" name="effective_from" type="date" min={today} value={form.effective_from} onChange={(e) => setForm({ ...form, effective_from: e.target.value })} className={inputCls} />
+            <label htmlFor="assign-from" className={labelCls}>From<Req /></label>
+            <input id="assign-from" name="effective_from" type="date" required min={today} value={form.effective_from} onChange={(e) => pickFrom(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label htmlFor="assign-until" className={labelCls}>Until (optional)</label>
-            <input id="assign-until" name="effective_to" type="date" min={form.effective_from} value={form.effective_to} onChange={(e) => setForm({ ...form, effective_to: e.target.value })} className={inputCls} />
+            <label htmlFor="assign-until" className={labelCls}>{fixedUntil ? "Until" : "Until (optional)"}</label>
+            <input id="assign-until" name="effective_to" type="date" min={form.effective_from} value={form.effective_to} readOnly={fixedUntil} aria-readonly={fixedUntil || undefined}
+              onChange={(e) => setForm({ ...form, effective_to: e.target.value })} aria-describedby="assign-until-hint" className={`${inputCls} ${fixedUntil ? "cursor-default" : ""}`} />
           </div>
+          <p id="assign-until-hint" className="col-span-2 -mt-1.5 text-[11px] text-slate-400">
+            {form.length === "day" ? "One day: Until is the same day." : form.length === "week" ? "One week: Until moves with From, six days after it." : "Leave Until empty to keep this driver until changed."}
+          </p>
         </div>
+        )}
         <div>
-          <div className={labelCls}>Stores *</div>
+          <div className={labelCls}>Stores<Req /></div>
           <StorePicker stores={stores} value={form.store_ids} onChange={(ids) => { setForm({ ...form, store_ids: ids }); setError(""); }}
             note={(s) => (currentDriver[s.id] ? `now: ${currentDriver[s.id]}` : "no driver")} />
         </div>
