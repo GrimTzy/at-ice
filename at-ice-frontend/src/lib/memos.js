@@ -5,6 +5,8 @@
 
 export const MEMO_STATUS = {
   draft: { label: "Draft (HR review)", cls: "bg-slate-100 text-slate-700 border-slate-200" },
+  for_approval: { label: "Waiting for Admin approval", cls: "bg-violet-50 text-violet-800 border-violet-200" },
+  approved: { label: "Approved, ready to release", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   sent: { label: "Sent, awaiting acknowledgment", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   acknowledged: { label: "Acknowledged", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   awaiting_physical: { label: "Sent to account, awaiting physical sign-off", cls: "bg-rose-50 text-rose-800 border-rose-200" },
@@ -17,8 +19,18 @@ export const MEMO_LEVEL = {
   first_written: { label: "First Written Warning", cls: "bg-amber-50 text-amber-800 border-amber-300" },
   final_written: { label: "Final Written Warning", cls: "bg-rose-50 text-rose-700 border-rose-200" },
   nte: { label: "Notice to Explain", cls: "bg-rose-100 text-rose-900 border-rose-300" },
+  announcement: { label: "Announcement", cls: "bg-cyan-50 text-cyan-800 border-cyan-200" },
 };
 
 export const MEMO_FILE_ACCEPT = ".pdf,.jpg,.jpeg,.png,.webp,.docx";
 
 export const isUrgentMemo = (m) => m.status === "awaiting_physical";
+
+// Final written warning, Notice to Explain or zero tolerance: Admin approves
+// before HR releases it (App\Models\EmployeeMemo::isFormal)
+export const FORMAL_LEVELS = ["final_written", "nte"];
+export const isFormalMemo = (levelOrMemo, category) => {
+  const level = typeof levelOrMemo === "string" ? levelOrMemo : levelOrMemo?.level;
+  const cat = typeof levelOrMemo === "string" ? category : levelOrMemo?.category;
+  return FORMAL_LEVELS.includes(level) || cat === "zero_tolerance";
+};

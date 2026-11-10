@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "../lib/toast";
 import { ICE_PRODUCTS } from "../lib/iceProducts";
 import { useMaxQuantity } from "../lib/limits";
+import { plural } from "../lib/plural";
 
 // Urgent top-up (2026-10-22): a store that got today's delivery runs out and
 // asks for more sacks by a later time (App\Support\DeliveryAdjust::topUp). The
@@ -78,7 +79,7 @@ export default function TopUpForm({ url, onDone, onCancel, products = ICE_PRODUC
       <div className="flex flex-wrap justify-end gap-2">
         {onCancel && <button type="button" data-no-confirm onClick={onCancel} className="px-3 py-1.5 rounded-lg text-[12px] border border-black/[0.09] text-slate-600 hover:bg-slate-50 cursor-pointer">Back</button>}
         <button type="button" disabled={busy} onClick={submit} title="Book another delivery today to this store" className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium cursor-pointer disabled:opacity-50">
-          {busy ? "Booking…" : `Book top-up${total ? ` (${total} sacks)` : ""}`}
+          {busy ? "Booking…" : `Book top-up${total ? ` (${plural(total, "sack")})` : ""}`}
         </button>
       </div>
     </div>

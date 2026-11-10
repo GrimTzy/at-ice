@@ -7,6 +7,7 @@ import { useLiveTick } from "../../lib/live";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { plural } from "../../lib/plural";
 
 const headers = () => ({ Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` });
 const list = (d) => (Array.isArray(d) ? d : d?.data || []);
@@ -57,7 +58,7 @@ export default function CheckerDashboard() {
         <>
           <KpiGrid cols={4}>
             <KpiCard label="Trucks to count" icon="truck" tone="amber" value={toCount} sub={`${data.trucks.length} trucks today`} bar={data.trucks.length ? (data.trucks.length - toCount) / data.trucks.length : 0} />
-            <KpiCard to="/checker/inventory?filter=low" label="Low stock" icon="alert" tone={low.length ? "rose" : "emerald"} value={low.length} sub={`${data.products.length} items tracked`} />
+            <KpiCard to="/checker/inventory?filter=low" label="Low stock" icon="alert" tone={low.length ? "rose" : "emerald"} value={low.length} sub={`${plural(data.products.length, "item")} tracked`} />
             <KpiCard to="/checker/stock-movements" label="To confirm" icon="clock" tone="violet" value={waiting} sub="Stock movements" live={waiting > 0} />
             <KpiCard to="/checker/inventory" label="Items in stock" icon="box" tone="cyan" value={data.products.filter((p) => Number(p.current_stock) > 0).length} sub="Supplies on hand" />
           </KpiGrid>

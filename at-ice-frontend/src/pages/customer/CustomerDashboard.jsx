@@ -18,6 +18,7 @@ import { PAYMENT_BADGE, paymentState } from "../../lib/paymentStatus";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { MiniBars, TipsWidget } from "../../components/Insight";
 import { Icon } from "../../components/icons";
+import { plural } from "../../lib/plural";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -60,11 +61,11 @@ function CompanyCard() {
         </div>
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-cyan-600"><MailIcon /></span> Email:
-          <a href={`mailto:${COMPANY.email}`} className="font-mono text-cyan-600 truncate">{COMPANY.email}</a>
+          <a href={`mailto:${COMPANY.email}`} className="font-mono text-cyan-600 truncate py-2.5 -my-2.5">{COMPANY.email}</a>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-cyan-600"><PhoneIcon /></span> Hotline:
-          <a href={COMPANY.hotlineHref} className="font-mono text-cyan-600">{COMPANY.hotline}</a>
+          <a href={COMPANY.hotlineHref} className="font-mono text-cyan-600 py-2.5 -my-2.5">{COMPANY.hotline}</a>
         </div>
       </div>
       <button
@@ -167,7 +168,7 @@ export default function CustomerDashboard() {
           <KpiGrid cols={4}>
             <KpiCard to="/customer/deliveries?filter=pending" label="Pending" icon="clock" tone="amber" value={pendingCount} sub="Not yet dispatched" bar={deliveries.length ? pendingCount / deliveries.length : 0} />
             <KpiCard to="/customer/deliveries?filter=in_transit" label="In transit" icon="truck" tone="cyan" value={inTransitCount} sub="On the way to you" live={inTransitCount > 0} bar={deliveries.length ? inTransitCount / deliveries.length : 0} />
-            <KpiCard to="/customer/deliveries?filter=delivered" label="Delivered" icon="check" tone="emerald" value={deliveredCount} sub={`${deliveries.length} deliveries in all`} bar={deliveries.length ? deliveredCount / deliveries.length : 0} />
+            <KpiCard to="/customer/deliveries?filter=delivered" label="Delivered" icon="check" tone="emerald" value={deliveredCount} sub={`${plural(deliveries.length, "delivery", "deliveries")} in all`} bar={deliveries.length ? deliveredCount / deliveries.length : 0} />
             <KpiCard to="/customer/receipts?filter=unpaid" label="Balance due" icon="wallet" tone={overdueCount ? "rose" : "violet"} money value={balanceDue} sub={overdueCount > 0 ? `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}` : "All current"} />
           </KpiGrid>
 

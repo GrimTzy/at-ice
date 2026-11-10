@@ -48,11 +48,11 @@ function AdjustForm({ delivery, onDone }) {
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Change</span>
-          <select name="mode" value={form.mode} onChange={set("mode")} className={inputCls}><option value="reduce">Reduce</option><option value="add">Add</option></select></label>
+          <select name="adjust_mode" value={form.mode} onChange={set("mode")} className={inputCls}><option value="reduce">Reduce</option><option value="add">Add</option></select></label>
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">By</span>
-          <select name="by" value={form.by} onChange={set("by")} className={inputCls}><option value="count">Sacks</option><option value="percent">Percent</option></select></label>
+          <select name="adjust_by" value={form.by} onChange={set("by")} className={inputCls}><option value="count">Sacks</option><option value="percent">Percent</option></select></label>
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">{form.by === "percent" ? "Percent" : "Sacks"}</span>
-          <input name="number" type="number" min={1} max={form.by === "percent" ? 100 : 1000} value={form.value} onChange={set("value")} className={inputCls} /></label>
+          <input name="adjust_value" type="number" min={1} max={form.by === "percent" ? 100 : 1000} value={form.value} onChange={set("value")} className={inputCls} /></label>
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Product</span>
           <select name="product_type" value={form.product_type} onChange={set("product_type")} className={inputCls}>
             <option value="">Every product</option>

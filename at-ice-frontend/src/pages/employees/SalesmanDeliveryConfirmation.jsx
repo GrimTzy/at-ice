@@ -22,6 +22,11 @@ const PRODUCTS = [
 ];
 const token = () => localStorage.getItem("token") || "";
 const peso = (n) => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// "unpaid" -> "Unpaid", "partially_paid" -> "Partially paid"
+const paymentLabel = (status = "unpaid") => {
+  const text = String(status || "unpaid").replace(/_/g, " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
 
 // Quantities Admin booked on the delivery, by product: { bags: "20", ... }, at most
 // the shared per-product limit when `max` is given (the prefill); uncapped without it.
@@ -264,7 +269,7 @@ export default function SalesmanDeliveryConfirmation() {
             <div className="flex items-center justify-between text-[17px] font-bold border-t border-slate-200 pt-2">
               <span>Total</span><span className="font-mono">{peso(result.receipt?.total_amount)}</span>
             </div>
-            <div className="flex items-center justify-between"><span className="text-[13px] text-slate-500">Payment</span><StatusBadge tone="pending">{result.receipt?.payment_status || "unpaid"}</StatusBadge></div>
+            <div className="flex items-center justify-between"><span className="text-[13px] text-slate-500">Payment</span><StatusBadge tone="pending">{paymentLabel(result.receipt?.payment_status)}</StatusBadge></div>
           </div>
           <LoadingButton variant="secondary" className="w-full" onClick={() => printDeliveryConfirmation({
             delivery, proof: result.proof, receipt: result.receipt,

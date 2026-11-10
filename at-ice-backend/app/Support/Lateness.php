@@ -50,6 +50,22 @@ class Lateness
         return self::seconds($end) <= self::seconds($start) ? 'night' : 'day';
     }
 
+    // Night-shift staff (HR and Admin employee lists): the shift crosses midnight,
+    // or it is exactly the night hours in Settings.
+    public static function isNight(?string $start, ?string $end, ?string $label = null): bool
+    {
+        if (! $start || ! $end) {
+            return $label === 'night';
+        }
+        if (self::label($start, $end) === 'night') {
+            return true;
+        }
+        $nightStart = (string) Settings::get('attendance.night_shift_start');
+        $nightEnd = (string) Settings::get('attendance.night_shift_end');
+
+        return substr($start, 0, 5) === substr($nightStart, 0, 5) && substr($end, 0, 5) === substr($nightEnd, 0, 5);
+    }
+
     private static function seconds(string $time): int
     {
         [$h, $m, $s] = array_map('intval', array_pad(explode(':', $time), 3, 0));

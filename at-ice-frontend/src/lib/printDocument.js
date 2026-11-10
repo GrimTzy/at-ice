@@ -8,7 +8,30 @@
 //   - narrow paper (A5 and smaller) stacks the two-column parts
 //   - colors and the status stamp print without "Background graphics"
 // Each document puts PRINT_BASE_CSS first in its <style> and its content in
-// <div class="sheet">.
+// <div class="sheet">, and starts with letterhead() on the left of its header.
+import { COMPANY } from "./company";
+import printLogo from "../assets/print-logo.png";
+
+// The Bella Erin Tube Ice logo on a clear background (no black box on paper).
+// An absolute URL, since the print frame has no address of its own.
+export const PRINT_LOGO_URL = new URL(printLogo, window.location.origin).href;
+const LOGO_URL = PRINT_LOGO_URL;
+
+const escHtml = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Letterhead used on every printout (business-letter order): logo at the top
+// left, then the registered name, the address and the contacts. The document
+// title (INVOICE, PAYSLIP...) goes on the right of the same header row.
+// compact: logo and name only, for lists such as the attendance report.
+export function letterhead({ compact = false } = {}) {
+  return `<div class="brand">
+    <img class="brand-logo" src="${LOGO_URL}" alt="Bella Erin Tube Ice">
+    <div class="brand-text">
+      <div class="brand-name">${escHtml(COMPANY.name)}</div>
+      ${compact ? "" : `<div class="brand-sub">${escHtml(COMPANY.address)}<br>${escHtml(COMPANY.hotline)} · ${escHtml(COMPANY.email)}</div>`}
+    </div>
+  </div>`;
+}
 
 export const PRINT_BASE_CSS = `
   @page { margin: 0; }
@@ -23,6 +46,13 @@ export const PRINT_BASE_CSS = `
   .head > div:first-child { min-width: 0; }
   .title { flex-shrink: 0; }
 
+  /* Letterhead: logo 18 mm tall (about 34 mm wide), text beside it */
+  .brand { display: flex; align-items: center; gap: 4mm; min-width: 0; }
+  .brand-logo { height: 18mm; width: auto; flex-shrink: 0; display: block; }
+  .brand-text { min-width: 0; }
+  .brand-name { font-family: Arial, Helvetica, sans-serif; font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.25; }
+  .brand-sub { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #475569; line-height: 1.45; margin-top: 2px; max-width: 95mm; }
+
   /* A5 and other narrow paper: one column, smaller border */
   @media (max-width: 160mm) {
     .sheet { padding: 8mm 8mm 7mm; }
@@ -31,6 +61,7 @@ export const PRINT_BASE_CSS = `
     .title { text-align: left !important; }
     .info { grid-template-columns: 1fr !important; }
     .sign { grid-template-columns: 1fr !important; gap: 28px !important; }
+    .brand-logo { height: 14mm; }
   }
 
   /* Receipt rolls (about 80 mm or less) */
@@ -40,6 +71,8 @@ export const PRINT_BASE_CSS = `
     .title h1 { font-size: 14px !important; letter-spacing: 1px !important; }
     .info span { width: auto !important; margin-right: 6px; }
     th, td { padding: 3px 4px !important; }
+    .brand { flex-direction: column; align-items: flex-start; gap: 2mm; }
+    .brand-logo { height: 12mm; }
   }
 `;
 
@@ -83,10 +116,21 @@ export function printDocument(html, fileName) {
   let restoreTitle = () => {};
   const cleanup = () => { restoreTitle(); setTimeout(() => frame.remove(), 1000); };
   frame.contentWindow.onafterprint = cleanup;
-  setTimeout(() => {
+  // The logo and any photo must be loaded first, or they print blank
+  whenImagesLoaded(doc).then(() => {
     restoreTitle = setPrintTitle(fileName);
     frame.contentWindow.focus();
     frame.contentWindow.print();
     setTimeout(cleanup, 60000); // fallback if onafterprint does not fire
-  }, 250);
+  });
+}
+
+// Resolves once every image of the document has loaded or failed (at most 4 s).
+export function whenImagesLoaded(doc) {
+  const waits = [...doc.images].filter((img) => !img.complete).map((img) => new Promise((done) => {
+    img.addEventListener("load", done, { once: true });
+    img.addEventListener("error", done, { once: true });
+  }));
+  const timeout = new Promise((done) => setTimeout(done, 4000));
+  return Promise.race([Promise.all(waits), timeout]).then(() => new Promise((done) => setTimeout(done, 100)));
 }

@@ -15,7 +15,7 @@ import AdjustmentRequests from "./deliveries/AdjustmentRequests";
 import ContractsTab from "./deliveries/ContractsTab";
 import DriverStoresTab from "./deliveries/DriverStoresTab";
 import { ReassignedTag } from "./deliveries/shared";
-import { STATUS_STYLE } from "./deliveries/utils";
+import { STATUS_STYLE, DRIVER_GROUPS, driverGroup, timeOf } from "./deliveries/utils";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
@@ -24,6 +24,7 @@ import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { PILL } from "../../lib/statusTones";
 import { Icon } from "../../components/icons";
 import { QTY_INPUT_PROPS, cleanQty } from "../../lib/quantity";
+import { plural } from "../../lib/plural";
 
 const API_BASE = "/api";
 // Proof photos are on Laravel's public disk, served by the backend at /storage/.
@@ -133,6 +134,7 @@ export default function DeliveriesPage() {
   // one) a status filter.
   const [typeFilter, setTypeFilter] = useState("");
   const [subStatus, setSubStatus] = useState("all"); // Store View and Contracts
+  const [driverFilter, setDriverFilter] = useState("all"); // Driver View: driver status
   const [contractList, setContractList] = useState([]);
 
   const maxQty = useMaxQuantity(); // same limit as Ice Loading and the Salesman confirmation
@@ -394,17 +396,27 @@ export default function DeliveriesPage() {
   ];
 
   // Driver View and Store View: the day's deliveries narrowed by the toolbar.
+  // Driver View filters by driver status, not by customer type.
+  const byType = tab !== "drivers" && typeFilter;
   const viewBoard = useMemo(() => {
     if (!board) return board;
-    const match = (d) => (!typeFilter || typeOf(d.customer) === typeFilter)
+    const match = (d) => (!byType || typeOf(d.customer) === byType)
       && (!needle || `${d.customer?.name || ""} ${d.customer?.branch_code || ""} ${d.customer?.chain || ""} ${d.driver?.name || ""} ${d.delivery_no || ""}`.toLowerCase().includes(needle))
       && (tab !== "stores" || subStatus === "all" || d.status === subStatus);
     const narrowed = boardDeliveries(board).filter(match);
-    const drivers = typeFilter || needle
+    let drivers = byType || needle
       ? (board.drivers || []).filter((dr) => (needle && `${dr.name} ${dr.employee_id || ""}`.toLowerCase().includes(needle)) || narrowed.some((d) => String(d.driver_id) === String(dr.id)))
-      : board.drivers;
-    return { ...board, deliveries: narrowed, drivers };
-  }, [board, typeFilter, needle, tab, subStatus]);
+      : board.drivers || [];
+    if (tab === "drivers" && driverFilter !== "all") drivers = drivers.filter((dr) => driverGroup(dr) === driverFilter);
+    return { ...board, deliveries: narrowed, drivers, driverFilter: tab === "drivers" ? driverFilter : "all" };
+  }, [board, byType, needle, tab, subStatus, driverFilter]);
+
+  // Driver View: one option per status, in the order the cards are shown
+  const boardDrivers = board?.drivers || [];
+  const driverFilterOptions = [
+    { value: "all", label: "All Status", count: boardDrivers.length },
+    ...DRIVER_GROUPS.map((g) => ({ ...g, count: boardDrivers.filter((dr) => driverGroup(dr) === g.value).length })),
+  ];
 
   // The status filter of the current tab (Driver View and Driver Stores have none).
   const boardForType = boardDeliveries(board).filter((d) => !typeFilter || typeOf(d.customer) === typeFilter);
@@ -418,17 +430,20 @@ export default function DeliveriesPage() {
   const today = todayStr();
   const todays = deliveries.filter((d) => String(d.scheduled_date || d.ordered_at || "").slice(0, 10) === today && d.status !== "cancelled");
   const todayOf = (s) => todays.filter((d) => d.status === s).length;
+  // Still on the road counts even when it was scheduled on an earlier day,
+  // so the card matches the list it opens.
+  const onRoad = deliveries.filter((d) => d.status === "in_transit").length;
   const driversOn = availability.drivers.filter((d) => d.status !== "unavailable").length;
   const driversFree = availability.drivers.filter((d) => d.status === "available").length;
 
   return (
     <AdminLayout pageTitle="Deliveries" breadcrumb="Delivery / Deliveries">
       <KpiGrid cols={5}>
-        <KpiCard label="Stops today" icon="store" tone="cyan" value={todays.length} sub={`${counts.all || 0} deliveries on record`} />
+        <KpiCard label="Stops today" icon="store" tone="cyan" value={todays.length} sub={`${plural(counts.all || 0, "delivery", "deliveries")} on record`} />
         <KpiCard label="Delivered today" icon="check" tone="emerald" value={todayOf("delivered")} sub={todays.length ? `${Math.round((todayOf("delivered") / todays.length) * 100)}% of today's stops` : "No stops today"} bar={todays.length ? todayOf("delivered") / todays.length : 0} />
-        <KpiCard label="In transit" icon="truck" tone="cyan" value={todayOf("in_transit")} sub="On the road now" live={todayOf("in_transit") > 0} onClick={() => setParams({ tab: "list", status: tab === "list" && statusFilter === "in_transit" ? "all" : "in_transit" })} active={tab === "list" && statusFilter === "in_transit"} bar={todays.length ? todayOf("in_transit") / todays.length : 0} />
+        <KpiCard label="In transit" icon="truck" tone="cyan" value={onRoad} sub="On the road now" live={onRoad > 0} onClick={() => setParams({ tab: "list", status: tab === "list" && statusFilter === "in_transit" ? "all" : "in_transit" })} active={tab === "list" && statusFilter === "in_transit"} bar={onRoad ? onRoad / Math.max(todays.length, onRoad) : 0} />
         <KpiCard label="Waiting" icon="clock" tone="amber" value={todayOf("pending") + todayOf("queued")} sub={`${todayOf("queued")} queued without a driver`} bar={todays.length ? (todayOf("pending") + todayOf("queued")) / todays.length : 0} />
-        <KpiCard label="Drivers available" icon="users" tone="violet" value={driversFree} sub={`${driversOn} on shift of ${availability.drivers.length} drivers`} bar={availability.drivers.length ? driversOn / availability.drivers.length : 0} />
+        <KpiCard label="Drivers available" icon="users" tone="violet" value={driversFree} sub={`${driversOn} on shift of ${plural(availability.drivers.length, "driver")}`} bar={availability.drivers.length ? driversOn / availability.drivers.length : 0} />
       </KpiGrid>
 
       <AdjustmentRequests onChanged={refreshAll} />
@@ -482,14 +497,18 @@ export default function DeliveriesPage() {
                 className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
               />
             </div>
-            <FilterSelect label="Customer type" hideLabel value={typeFilter} onChange={(v) => setTypeFilter(v || "")} options={typeOptions} className="!min-w-0" />
+            {tab === "drivers" ? (
+              <FilterSelect label="Driver status" hideLabel value={driverFilter} onChange={(v) => setDriverFilter(v || "all")} options={driverFilterOptions} className="!min-w-0" />
+            ) : (
+              <FilterSelect label="Customer type" hideLabel value={typeFilter} onChange={(v) => setTypeFilter(v || "")} options={typeOptions} className="!min-w-0" />
+            )}
             {statusFilterFor && (
               <FilterSelect label="Status" value={statusFilterFor.value} onChange={statusFilterFor.set} options={statusFilterFor.options} />
             )}
-            {(search || typeFilter || (statusFilterFor && statusFilterFor.value !== "all")) && (
+            {(search || byType || (tab === "drivers" && driverFilter !== "all") || (statusFilterFor && statusFilterFor.value !== "all")) && (
               <button
                 type="button"
-                onClick={() => { setSearch(""); setTypeFilter(""); statusFilterFor?.set("all"); }}
+                onClick={() => { setSearch(""); setTypeFilter(""); setDriverFilter("all"); statusFilterFor?.set("all"); }}
                 className="clear-filters"
               >
                 Clear filters
@@ -661,8 +680,8 @@ export default function DeliveriesPage() {
                           )}
                         </div>
                         <div>
-                          <label htmlFor={`deliveries-page-${block.key}-customer`} className="text-[11px] text-slate-500 mb-1 block">Customer *</label>
-                          <select id={`deliveries-page-${block.key}-customer`} name="customer_id"
+                          <label htmlFor={`delivery-${block.key}-customer`} className="text-[11px] text-slate-500 mb-1 block">Customer *</label>
+                          <select id={`delivery-${block.key}-customer`} name="customer_id"
                             value={block.customer_id}
                             onChange={(e) => updateBlock(bi, { customer_id: e.target.value })}
                             className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
@@ -680,8 +699,8 @@ export default function DeliveriesPage() {
                           <p className="text-[11px] text-slate-400 mt-1">Customers with a delivery on this date are greyed out.</p>
                         </div>
                         <div>
-                          <label htmlFor={`deliveries-page-${block.key}-scheduled-date`} className="text-[11px] text-slate-500 mb-1 block">Scheduled Date *</label>
-                          <input id={`deliveries-page-${block.key}-scheduled-date`} name="scheduled_date"
+                          <label htmlFor={`delivery-${block.key}-date`} className="text-[11px] text-slate-500 mb-1 block">Scheduled Date *</label>
+                          <input id={`delivery-${block.key}-date`} name="scheduled_date"
                             type="date"
                             min={todayStr()}
                             value={block.scheduled_date}
@@ -690,8 +709,8 @@ export default function DeliveriesPage() {
                           />
                         </div>
                         <div>
-                          <label htmlFor={`deliveries-page-${block.key}-notes`} className="text-[11px] text-slate-500 mb-1 block">Notes</label>
-                          <textarea id={`deliveries-page-${block.key}-notes`} name="notes"
+                          <label htmlFor={`delivery-${block.key}-notes`} className="text-[11px] text-slate-500 mb-1 block">Notes</label>
+                          <textarea id={`delivery-${block.key}-notes`} name="notes"
                             rows={3}
                             value={block.notes}
                             onChange={(e) => updateBlock(bi, { notes: e.target.value })}
@@ -841,8 +860,8 @@ export default function DeliveriesPage() {
                 <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2 mb-2">
                   This delivery is in transit. It can only be cancelled for a real emergency.
                 </p>
-                <label htmlFor="deliveries-page-what-happened" className="text-[11px] text-slate-500 mb-1 block">What happened? *</label>
-                <textarea id="deliveries-page-what-happened" name="cancel_reason"
+                <label htmlFor="delivery-issue" className="text-[11px] text-slate-500 mb-1 block">What happened? *</label>
+                <textarea id="delivery-issue" name="cancel_reason"
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   rows={2}
@@ -851,8 +870,8 @@ export default function DeliveriesPage() {
               </div>
             ) : (
               <div className="mb-4">
-                <label htmlFor="deliveries-page-reason-optional" className="text-[11px] text-slate-500 mb-1 block">Reason (optional)</label>
-                <input id="deliveries-page-reason-optional" name="cancel_reason"
+                <label htmlFor="cancel-reason" className="text-[11px] text-slate-500 mb-1 block">Reason (optional)</label>
+                <input id="cancel-reason" name="cancel_reason"
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
@@ -973,7 +992,10 @@ function DriverPicker({ drivers, loading, enforced, value, onChange, onOpen }) {
   const needle = q.trim().toLowerCase();
   const list = drivers
     .filter((d) => !needle || `${d.name} ${d.employee_id || ""}`.toLowerCase().includes(needle))
-    .sort((a, b) => (DRIVER_ORDER[a.status] ?? 3) - (DRIVER_ORDER[b.status] ?? 3) || a.name.localeCompare(b.name));
+    // FIFO: among the available ones, the Driver who finished their list first is on top
+    .sort((a, b) => (DRIVER_ORDER[a.status] ?? 3) - (DRIVER_ORDER[b.status] ?? 3)
+      || String(a.trip_completed_at || "~").localeCompare(String(b.trip_completed_at || "~"))
+      || a.name.localeCompare(b.name));
   const selectable = (d) => !enforced || d.status === "available";
 
   function toggle() {
@@ -1059,6 +1081,7 @@ function DriverPicker({ drivers, loading, enforced, value, onChange, onOpen }) {
                       <span className="block truncate text-slate-800">{d.name}</span>
                       <span className="block text-[11px] text-slate-400">
                         {d.employee_id || "No employee ID"}{d.status === "in_transit" && d.reason ? ` · ${d.reason}` : ""}
+                        {d.status === "available" && (d.trip_completed_at ? ` · Done since ${timeOf(d.trip_completed_at)}` : d.open_stops ? ` · ${plural(d.open_stops, "stop")} left` : "")}
                       </span>
                     </span>
                   </span>

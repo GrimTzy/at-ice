@@ -18,7 +18,7 @@ import DraftHint from "../../components/DraftHint";
 import { useDraft } from "../../lib/useDraft";
 import { biodataFilledFrom, filledFrom } from "../../lib/scanDocument";
 import { formatLicense, licenseError, expiryError, tomorrowStr } from "../../lib/license";
-import { formatDateTime } from "../../lib/time";
+import { formatDateTime, formatShift } from "../../lib/time";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import DocumentDrop from "../../components/DocumentDrop";
@@ -29,7 +29,7 @@ import {
 import { printBiodata } from "../../lib/printBiodata";
 import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
-import { roleBadge } from "../../lib/roleColors";
+import { roleBadge, shiftBadge } from "../../lib/roleColors";
 import { Icon } from "../../components/icons";
 
 const API_BASE = "/api";
@@ -132,6 +132,8 @@ const emptyForm = {
   // New hires start probationary (no leave filing until regular)
   employment_status: "probationary", pay_basis: "daily", monthly_rate: "",
   shift_start: "09:00", shift_end: "18:00",
+  // Edit only: the saved hours, and when and why a change starts (schedule history)
+  _shiftStart0: "", _shiftEnd0: "", shift_effective_date: "", shift_reason: "",
   license_number: "", // Driver-only, required for Drivers (LTO format, see lib/license.js)
   license_expiry: "", // Driver-only, required: the license must not have expired
   vehicle_plate: "", // Driver-only — ignored server-side for every other role
@@ -163,6 +165,7 @@ export default function EmployeesPage() {
   const [faceFor, setFaceFor]         = useState(null); // employee whose face is being enrolled
 
   const [roleFilter, setRoleFilter]   = useState("all");
+  const [shiftFilter, setShiftFilter] = useState("all"); // all | day | night
   const [statusView, setStatusView]   = useState("active"); // active | inactive (archived)
   const [unenrolledFirst, setUnenrolledFirst] = useState(false);
   // Hero card filter: "" (all) | enrolled | unenrolled | probationary | license
@@ -205,6 +208,7 @@ export default function EmployeesPage() {
 
   const filtered = employees
     .filter((e) => roleFilter === "all" || displayRole(e) === roleFilter)
+    .filter((e) => shiftFilter === "all" || (shiftFilter === "night") === Boolean(e.is_night))
     .filter((e) => {
       if (cardFilter === "enrolled") return !!e.face_data;
       if (cardFilter === "unenrolled") return !e.face_data;
@@ -303,6 +307,10 @@ export default function EmployeesPage() {
       monthly_rate: emp.monthly_rate != null ? String(Number(emp.monthly_rate)) : "",
       shift_start: (emp.shift_start || "09:00").slice(0, 5),
       shift_end: (emp.shift_end || "18:00").slice(0, 5),
+      _shiftStart0: (emp.shift_start || "").slice(0, 5),
+      _shiftEnd0: (emp.shift_end || "").slice(0, 5),
+      shift_effective_date: todayStr(),
+      shift_reason: "",
       sub_role: emp.user?.sub_role || "",  // display-only in edit mode
       vehicle_plate: emp.vehicle_plate || "",
       license_number: emp.license_number || "",
@@ -487,6 +495,15 @@ export default function EmployeesPage() {
       showErrors({ date_hired: ["The hire date can be at most 14 days from today."] });
       return;
     }
+    if (form.shift_start && form.shift_start === form.shift_end) {
+      showErrors({ shift_end: ["The shift must end at a different time than it starts."] });
+      return;
+    }
+    const shiftEdited = editingId !== null && (form.shift_start !== form._shiftStart0 || form.shift_end !== form._shiftEnd0);
+    if (shiftEdited && form.shift_effective_date && !/^\d{4}-\d{2}-\d{2}$/.test(form.shift_effective_date)) {
+      showErrors({ shift_effective_date: ["Enter a valid effective date."] });
+      return;
+    }
 
     setSaving(true);
 
@@ -528,6 +545,7 @@ export default function EmployeesPage() {
           employment_status: form.employment_status, pay_basis: form.pay_basis,
           monthly_rate: form.pay_basis === "monthly" ? Number(form.monthly_rate) || null : null,
           shift_start: form.shift_start || null, shift_end: form.shift_end || null,
+          ...(shiftEdited ? { shift_effective_date: form.shift_effective_date || null, shift_reason: form.shift_reason.trim() || null } : {}),
           vehicle_plate: form._userRole === "driver" ? (form.vehicle_plate || null) : null,
           license_number: form._userRole === "driver" ? (form.license_number || null) : null,
           license_expiry: form._userRole === "driver" ? (form.license_expiry || null) : null,
@@ -673,6 +691,12 @@ export default function EmployeesPage() {
             options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Archived" }]} />
           <FilterSelect label="Role" value={roleFilter} onChange={setRoleFilter}
             options={ROLE_FILTERS.map((r) => ({ value: r, label: r === "all" ? "All" : roleLabel(r), count: r === "all" ? employees.length : roleCounts[r] || 0 }))} />
+          <FilterSelect label="Shift" value={shiftFilter} onChange={setShiftFilter}
+            options={[
+              { value: "all", label: "All", count: employees.length },
+              { value: "day", label: "Day", count: employees.filter((e) => !e.is_night).length },
+              { value: "night", label: "Night", count: employees.filter((e) => e.is_night).length },
+            ]} />
           <div className="flex-1" />
           <button
             type="button"
@@ -713,7 +737,7 @@ export default function EmployeesPage() {
                 <SkeletonTableRows cols={8} />
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-400 text-xs">
-                  {search || roleFilter !== "all" ? "No employees match your search or filter." : "No employees yet. Use Add Employee to create one."}
+                  {search || roleFilter !== "all" || shiftFilter !== "all" ? "No employees match your search or filter." : "No employees yet. Use Add Employee to create one."}
                 </td></tr>
               ) : (
                 pager.pageItems.map((emp) => (
@@ -746,7 +770,10 @@ export default function EmployeesPage() {
                         <div className="text-[10px] text-slate-400 mt-1 font-mono">PN: {emp.vehicle_plate}</div>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-slate-600 whitespace-nowrap font-mono text-[12px]">{shiftLabel(emp)}</td>
+                    <td className="px-5 py-3 text-slate-600 whitespace-nowrap font-mono text-[12px]">
+                      {shiftLabel(emp)}
+                      {emp.is_night && <span className={`cell-note px-2 py-0.5 rounded-full text-[10.5px] font-medium font-sans ${shiftBadge("night")}`}>Night</span>}
+                    </td>
                     <td className="px-5 py-3">
                       {emp.face_data ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
@@ -1060,6 +1087,16 @@ export default function EmployeesPage() {
                         <span className="text-[10px] text-cyan-600 mt-0.5 block">Overnight: ends the next day.</span>
                       )}
                     </Field>
+                    {editingId && (form.shift_start !== form._shiftStart0 || form.shift_end !== form._shiftEnd0) && (
+                      <>
+                        <Field label="Schedule Change Starts" required error={formErrors.shift_effective_date}>
+                          <input name="shift_effective_date" required type="date" value={form.shift_effective_date} onChange={handleChange("shift_effective_date")} className={inputCls} />
+                        </Field>
+                        <Field label="Reason for the Change" error={formErrors.shift_reason}>
+                          <input name="shift_reason" maxLength={255} value={form.shift_reason} onChange={handleChange("shift_reason")} placeholder="e.g. Moved to the night crew" className={inputCls} />
+                        </Field>
+                      </>
+                    )}
                     {!editingId && (
                       <Field label="Date Hired" required error={formErrors.date_hired}>
                         <input name="date_hired" required type="date" max={addDaysStr(14)} value={form.date_hired} onChange={handleChange("date_hired")} className={inputCls} />
@@ -1067,6 +1104,8 @@ export default function EmployeesPage() {
                       </Field>
                     )}
                   </div>
+
+                  {editingId && <ScheduleHistory employeeId={editingId} authHeaders={authHeaders} />}
 
                   {isDriverForm && (
                     <>
@@ -1087,7 +1126,7 @@ export default function EmployeesPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 pt-1">
                           {RESTRICTIONS.map(([code, label]) => (
                             <label key={code} className="flex items-center gap-2 text-[12px] text-slate-700 cursor-pointer">
-                              <input name="code" type="checkbox" checked={(form.license_restrictions || []).includes(code)}
+                              <input name="license_restriction" type="checkbox" checked={(form.license_restrictions || []).includes(code)}
                                 onChange={(e) => setForm((f) => ({ ...f, license_restrictions: e.target.checked ? [...(f.license_restrictions || []), code] : (f.license_restrictions || []).filter((c) => c !== code) }))} />
                               <span><b className="font-mono">{code}</b> · {label}</span>
                             </label>
@@ -1284,6 +1323,64 @@ export default function EmployeesPage() {
 
 const timeSelectCls = "px-2 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20";
 const inputCls = "w-full px-3 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20";
+
+// Agreed schedule, current schedule and every change (HR > Employees > Edit)
+function ScheduleHistory({ employeeId, authHeaders }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_BASE}/employees/${employeeId}/shift-changes`, { headers: authHeaders })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive) setData(d); })
+      .catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeId]);
+  if (!data) return null;
+
+  const hours = (s) => formatShift(s?.start, s?.end) || "—";
+  return (
+    <div className="mt-1">
+      <div className="text-[12px] font-semibold text-slate-700">Schedule history</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 text-[12px]">
+        <div className="rounded-md border border-black/[0.09] px-3 py-2">
+          <div className="text-[10.5px] uppercase tracking-wide text-slate-400">Original schedule</div>
+          <div className="text-slate-800 font-medium">{hours(data.original)}</div>
+        </div>
+        <div className="rounded-md border border-black/[0.09] px-3 py-2">
+          <div className="text-[10.5px] uppercase tracking-wide text-slate-400">Current schedule</div>
+          <div className="text-slate-800 font-medium">{hours(data.current)}</div>
+        </div>
+      </div>
+      {data.changes.length === 0 ? (
+        <p className="text-[11px] text-slate-400 mt-2">No changes yet. This is the schedule the employee started with.</p>
+      ) : (
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="text-slate-400">
+                <th className="px-3 py-1.5 font-medium">Starts</th>
+                <th className="px-3 py-1.5 font-medium">From</th>
+                <th className="px-3 py-1.5 font-medium">To</th>
+                <th className="px-3 py-1.5 font-medium">Changed by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.changes.map((c) => (
+                <tr key={c.id} className="border-t border-black/[0.06]" title={c.reason || undefined}>
+                  <td className="px-3 py-1.5 text-slate-700">{c.effective_date}</td>
+                  <td className="px-3 py-1.5 text-slate-500">{hours(c.from)}</td>
+                  <td className="px-3 py-1.5 text-slate-800">{hours(c.to)}</td>
+                  <td className="px-3 py-1.5 text-slate-500">{c.changed_by || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Field({ label, error, required, children }) {
   return (

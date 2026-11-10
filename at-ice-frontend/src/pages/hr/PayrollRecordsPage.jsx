@@ -19,7 +19,7 @@ import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 import { payPeriodLabel } from "../../lib/payPeriod";
-import { PRINT_BASE_CSS, cutoffPart, docFileName, printDocument } from "../../lib/printDocument";
+import { PRINT_BASE_CSS, cutoffPart, docFileName, letterhead, printDocument } from "../../lib/printDocument";
 import { COMPANY } from "../../lib/company";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
@@ -50,6 +50,7 @@ function printPayslip(p) {
     line(`Holiday pay (${n(p.holiday_hours)} h)`, p.holiday_pay),
     line("Holiday overtime", p.holiday_ot_pay),
     line(`Overtime (${n(p.ot_hours)} h approved)`, p.overtime_pay),
+    line(`Night differential (${n(p.night_hours)} h, 10 PM to 6 AM)`, p.night_diff_pay),
     ...(p.adjustments || []).map((a) => line(`${a.label}${a.taxable ? "" : " (non-taxable)"}`, a.amount)),
   ].join("");
   const deductions = [
@@ -64,15 +65,15 @@ function printPayslip(p) {
   ].join("");
   printDocument(`<!doctype html><html><head><title>Payslip ${esc(e.employee_id)} ${esc(p.period_start)}</title><style>${PRINT_BASE_CSS}
     body { font-family: Arial, sans-serif; font-size: 12px; color: #0f172a; }
-    .head { display: flex; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
-    h1 { margin: 0; font-size: 18px; } .muted { color: #475569; }
+    .head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0e7490; padding-bottom: 8px; margin-bottom: 12px; }
+    .title h1 { margin: 0; font-size: 16px; letter-spacing: 2px; color: #0e7490; } .muted { color: #475569; }
     h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin: 14px 0 4px; color: #334155; }
     td { padding: 4px 0; border-bottom: 1px solid #e2e8f0; } .amt { text-align: right; font-family: monospace; }
     .net td { font-size: 15px; font-weight: bold; border-top: 2px solid #0f172a; border-bottom: 0; padding-top: 8px; }
     .info { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
   </style></head><body><div class="sheet">
-    <div class="head"><div><h1>${esc(COMPANY?.name || "AT-ICE")}</h1><div class="muted">Payslip</div></div>
-      <div class="title" style="text-align:right"><b>${esc(payPeriodLabel({ start: p.period_start, end: p.period_end }))}</b><div class="muted">Pay day ${esc(p.pay_day || "")}</div></div></div>
+    <div class="head">${letterhead()}
+      <div class="title" style="text-align:right"><h1>PAYSLIP</h1><b>${esc(payPeriodLabel({ start: p.period_start, end: p.period_end }))}</b><div class="muted">Pay day ${esc(p.pay_day || "")}</div></div></div>
     <div class="info"><div><b>${esc(e.full_name || "")}</b></div><div>Employee ID: <b>${esc(e.employee_id || "")}</b></div>
       <div class="muted">${esc(e.position || "")}</div><div class="muted">Status: ${p.status === "paid" ? "Paid" : "Unpaid (approved)"}</div></div>
     <h2>Earnings</h2><table>${earnings}</table>
@@ -137,7 +138,7 @@ function AdjustModal({ payroll, onClose, onChanged }) {
           ))}
         </ul>
         <form onSubmit={add} className="grid grid-cols-2 gap-2">
-          <select name="label" aria-label="Kind" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} className="px-2 py-1.5 border border-black/[0.09] rounded-md">
+          <select name="adjustment_type" aria-label="Kind" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} className="px-2 py-1.5 border border-black/[0.09] rounded-md">
             {["Bonus", "Incentive", "Referral bonus", "Allowance", "Other earning"].map((l) => <option key={l}>{l}</option>)}
           </select>
           <input name="amount" aria-label="Amount" type="number" min="0.01" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Amount" className="px-2 py-1.5 border border-black/[0.09] rounded-md" />
@@ -296,11 +297,11 @@ export default function PayrollRecordsPage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-left text-slate-400 border-b border-black/[0.09]">
-                      <th className="px-[18px] py-2.5"><input name="all_on" type="checkbox" data-native aria-label="Select all unpaid" checked={allOn} onChange={() => setSelected(allOn ? new Set() : new Set(payable.map((r) => r.payroll.id)))} /></th>
+                      <th className="px-[18px] py-2.5"><input name="select_all" type="checkbox" data-native aria-label="Select all unpaid" checked={allOn} onChange={() => setSelected(allOn ? new Set() : new Set(payable.map((r) => r.payroll.id)))} /></th>
                       <th className="px-3 py-2.5 font-medium">Employee ID</th>
                       <th className="px-3 py-2.5 font-medium">Name</th>
                       <th className="px-3 py-2.5 font-medium text-right">Basic</th>
-                      <th className="px-3 py-2.5 font-medium text-right">Holiday / OT</th>
+                      <th className="px-3 py-2.5 font-medium text-right" title="Holiday pay, overtime and night differential">Holiday / OT / Night</th>
                       <th className="px-3 py-2.5 font-medium text-right">Late / absence / leave</th>
                       <th className="px-3 py-2.5 font-medium text-right">SSS · PhilHealth · Pag-IBIG</th>
                       <th className="px-3 py-2.5 font-medium text-right">Tax</th>
@@ -315,13 +316,13 @@ export default function PayrollRecordsPage() {
                       const p = r.payroll;
                       return (
                         <tr key={r.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
-                          <td className="px-[18px] py-2.5">{p?.status === "unpaid" && <input name="id" type="checkbox" data-native aria-label={`Select ${r.employee_id}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} />}</td>
+                          <td className="px-[18px] py-2.5">{p?.status === "unpaid" && <input name="select_payroll" type="checkbox" data-native aria-label={`Select ${r.employee_id}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} />}</td>
                           <td className="px-3 py-2.5 font-mono text-slate-600">{r.employee_id}</td>
                           <td className="px-3 py-2.5 text-slate-800 font-medium whitespace-nowrap">{r.name}</td>
                           {p ? (
                             <>
                               <td className="px-3 py-2.5 text-right font-mono">{peso(n(p.basic_pay) + n(p.paid_leave_pay))}</td>
-                              <td className="px-3 py-2.5 text-right font-mono text-violet-700">{peso(n(p.holiday_pay) + n(p.holiday_ot_pay) + n(p.overtime_pay))}</td>
+                              <td className="px-3 py-2.5 text-right font-mono text-violet-700">{peso(n(p.holiday_pay) + n(p.holiday_ot_pay) + n(p.overtime_pay) + n(p.night_diff_pay))}</td>
                               <td className="px-3 py-2.5 text-right font-mono text-red-600">{peso(n(p.late_deduction) + n(p.absence_deduction) + n(p.leave_deduction))}</td>
                               <td className="px-3 py-2.5 text-right font-mono">{peso(n(p.sss_deduction) + n(p.philhealth_deduction) + n(p.pagibig_deduction))}</td>
                               <td className="px-3 py-2.5 text-right font-mono">{peso(p.tax_deduction)}</td>

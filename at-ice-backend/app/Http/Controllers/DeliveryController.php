@@ -57,6 +57,9 @@ class DeliveryController extends Controller
         $drivers = User::where('role', 'driver')->with('employee')
             ->orderBy('name')->get(['id', 'name']);
 
+        // Ice still on each truck (it stays on board between trips), oldest first
+        $truck = \App\Support\TruckStock::onTruck($drivers->pluck('id')->all());
+
         $assignments = DriverStoreAssignment::activeOn($date)->with('store:id,name,chain,branch_code,customer_type')->get()->groupBy('driver_id');
 
         $deliveries = Delivery::with(['customer:id,name,chain,branch_code,city,customer_type', 'items', 'reassignedFrom:id,name', 'driver:id,name', 'contract:id,contract_no,name', 'proofs:id,delivery_id,photo_path,confirmed_at'])
@@ -75,6 +78,8 @@ class DeliveryController extends Controller
                 'vehicle_plate' => $u->employee?->vehicle_plate,
                 'status' => isset($off[$u->id]) ? 'off' : ($status[$u->id]['status'] ?? null),
                 'reason' => $off[$u->id] ?? ($status[$u->id]['reason'] ?? null),
+                'trip_completed_at' => isset($off[$u->id]) ? null : ($status[$u->id]['trip_completed_at'] ?? null),
+                'truck_stock' => $truck[$u->id] ?? [],
                 'stores' => ($assignments[$u->id] ?? collect())->map(fn ($a) => [
                     'assignment_id' => $a->id,
                     'id' => $a->store_id,
@@ -147,6 +152,16 @@ class DeliveryController extends Controller
             }
         });
         Audit::log('delivery.edited', $delivery, $before, ['driver_id' => $driverId] + (isset($data['items']) ? ['items' => $data['items']] : []));
+
+        // The store hears when its delivery goes to another driver
+        if ($driverId !== $before['driver_id']) {
+            $delivery->loadMissing('customer');
+            $name = $driverId ? \App\Models\User::whereKey($driverId)->value('name') : null;
+            $day = DeliveryDispatch::day($delivery);
+            DeliveryDispatch::notifyChange($delivery, 'driver_changed', $name
+                ? "Your delivery {$delivery->delivery_no} on {$day} was reassigned to driver {$name}."
+                : "Your delivery {$delivery->delivery_no} on {$day} is being moved to another driver. The schedule stays the same.");
+        }
 
         return response()->json($delivery->fresh(['driver:id,name', 'customer', 'items', 'reassignedFrom:id,name']));
     }
@@ -351,6 +366,12 @@ class DeliveryController extends Controller
 
         if ($error) {
             return response()->json(['message' => $error, 'errors' => ['reason' => [$error]]], 422);
+        }
+
+        // The store hears that it will not come (the reason stays internal)
+        $cancelled = Delivery::with('customer')->find($id);
+        if ($cancelled) {
+            DeliveryDispatch::notifyChange($cancelled, 'cancelled', "Your delivery {$cancelled->delivery_no} on ".DeliveryDispatch::day($cancelled).' was cancelled. Contact us to set a new date.');
         }
 
         return response()->json(['message' => 'Delivery cancelled']);

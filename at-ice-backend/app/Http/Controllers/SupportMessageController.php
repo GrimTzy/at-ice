@@ -17,7 +17,7 @@ use Illuminate\Validation\Rule;
 // There is no other recipient.
 class SupportMessageController extends Controller
 {
-    private const DETAIL = ['customer:id,name,customer_code,contact_person,contact_number,email', 'resolver:id,name', 'assignee:id,name'];
+    private const DETAIL = ['customer:id,name,customer_code,contact_person,contact_number,email', 'resolver:id,name', 'assignee:id,name', 'escalator:id,name'];
 
     private function myCustomer(Request $request): ?Customer
     {
@@ -37,7 +37,7 @@ class SupportMessageController extends Controller
             SupportMessage::where('customer_id', $customer->id)
                 ->with(['replies' => fn ($q) => $q->whereIn('kind', SupportReply::CUSTOMER_VISIBLE)->select('id', 'support_message_id', 'kind', 'body', 'created_at')])
                 ->latest()->limit(20)
-                ->get(['id', 'ticket_no', 'customer_id', 'topic', 'message', 'status', 'resolved_at', 'resolution_note', 'created_at'])
+                ->get(['id', 'ticket_no', 'customer_id', 'topic', 'message', 'status', 'escalated_at', 'resolved_at', 'resolution_note', 'created_at'])
         );
     }
 
@@ -120,6 +120,7 @@ class SupportMessageController extends Controller
         return response()->json([
             'messages' => SupportMessage::with(self::DETAIL)->withCount('replies')->latest()->limit(500)->get(),
             'open_count' => SupportMessage::where('status', 'open')->count(),
+            'escalated_count' => SupportMessage::whereNotNull('escalated_at')->whereIn('status', SupportMessage::ACTIVE)->count(),
             'overdue_hours' => (int) Settings::get('support.overdue_hours'),
             'assignees' => User::where('role', 'admin')->orderBy('name')->get(['id', 'name']),
         ]);
@@ -208,6 +209,46 @@ class SupportMessageController extends Controller
 
         $supportMessage->update(['status' => 'closed', 'closed_at' => now()]);
         Audit::log('support.close', $supportMessage, ['status' => 'resolved'], ['status' => 'closed']);
+
+        return $this->show($supportMessage);
+    }
+
+    // PATCH /api/support-messages/{supportMessage}/escalate (admin): a ticket that
+    // needs management attention, with the reason. The status flow is unchanged.
+    public function escalate(Request $request, SupportMessage $supportMessage)
+    {
+        $data = $request->validate(
+            ['reason' => 'required|string|min:5|max:500'],
+            ['reason.required' => 'Write why this ticket is escalated.', 'reason.min' => 'Write why this ticket is escalated (at least 5 characters).']
+        );
+
+        if (! in_array($supportMessage->status, SupportMessage::ACTIVE, true)) {
+            return response()->json(['message' => 'Only an open or in-progress ticket can be escalated.'], 422);
+        }
+        if ($supportMessage->escalated_at) {
+            return response()->json(['message' => 'This ticket is already escalated.'], 422);
+        }
+
+        $supportMessage->update([
+            'escalated_at' => now(),
+            'escalated_by' => $request->user()->id,
+            'escalation_reason' => trim($data['reason']),
+        ]);
+        Audit::log('support.escalated', $supportMessage, null, ['reason' => trim($data['reason'])]);
+
+        return $this->show($supportMessage);
+    }
+
+    // PATCH /api/support-messages/{supportMessage}/de-escalate (admin)
+    public function deEscalate(SupportMessage $supportMessage)
+    {
+        if (! $supportMessage->escalated_at) {
+            return response()->json(['message' => 'This ticket is not escalated.'], 422);
+        }
+
+        $before = ['reason' => $supportMessage->escalation_reason];
+        $supportMessage->update(['escalated_at' => null, 'escalated_by' => null, 'escalation_reason' => null]);
+        Audit::log('support.de_escalated', $supportMessage, $before, null);
 
         return $this->show($supportMessage);
     }

@@ -1,8 +1,8 @@
 import { formatDateTime } from "./time";
-import { docFileName, setPrintTitle } from "./printDocument";
+import { PRINT_BASE_CSS, docFileName, letterhead, printDocument } from "./printDocument";
 // Printable delivery confirmation for a Salesman-confirmed delivery: customer,
-// items and quantities, date, driver, salesman and the proof. Printed from a
-// hidden iframe with its own print CSS, so the page layout is not involved.
+// items and quantities, date, driver, salesman and the proof. Same letterhead
+// and print base as the invoice and payslip (lib/printDocument.js).
 
 const PRODUCT_LABEL = { bags: "Bags (5kg)", small_sack: "Small Sack (30kg)", big_sack: "Big Sack (50kg)" };
 
@@ -33,11 +33,10 @@ export function printDeliveryConfirmation({ delivery, proof, receipt, photoUrl, 
   const address = c.address || [c.street, c.barangay, c.city, c.province].filter(Boolean).join(", ") || "—";
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Delivery ${esc(delivery?.delivery_no)}</title>
 <style>
-  @page { size: A4; margin: 14mm; }
-  * { box-sizing: border-box; }
+  ${PRINT_BASE_CSS}
   body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; margin: 0; }
-  h1 { font-size: 18px; margin: 0; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 12px; }
+  .title h1 { font-size: 16px; margin: 0; letter-spacing: 2px; color: #0e7490; }
+  .head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0e7490; padding-bottom: 8px; margin-bottom: 12px; }
   .muted { color: #555; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin-bottom: 14px; }
   .grid div span { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #555; }
@@ -50,10 +49,10 @@ export function printDeliveryConfirmation({ delivery, proof, receipt, photoUrl, 
   .proof img { width: 220px; max-height: 220px; object-fit: cover; border: 1px solid #999; }
   .sign { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-top: 40px; }
   .sign div { border-top: 1px solid #111; padding-top: 4px; text-align: center; font-size: 11px; }
-</style></head><body>
+</style></head><body><div class="sheet">
 <div class="head">
-  <div><h1>AT Ice — Delivery Confirmation</h1><div class="muted">Proof of delivery confirmed by the Salesman</div></div>
-  <div style="text-align:right"><div><b>${esc(delivery?.delivery_no || "")}</b></div>${receipt?.receipt_no ? `<div>Invoice ${esc(receipt.receipt_no)}</div>` : ""}</div>
+  ${letterhead()}
+  <div class="title" style="text-align:right"><h1>DELIVERY CONFIRMATION</h1><div><b>${esc(delivery?.delivery_no || "")}</b></div>${receipt?.receipt_no ? `<div>Invoice ${esc(receipt.receipt_no)}</div>` : ""}<div class="muted">Proof of delivery confirmed by the Salesman</div></div>
 </div>
 <div class="grid">
   <div><span>Customer</span>${esc(c.name || "—")}${c.branch_code ? ` · ${esc(c.branch_code)}` : ""}</div>
@@ -78,32 +77,9 @@ export function printDeliveryConfirmation({ delivery, proof, receipt, photoUrl, 
   </div>
 </div>
 <div class="sign"><div>Driver</div><div>Salesman</div><div>Received by (customer)</div></div>
-</body></html>`;
+</div></body></html>`;
 
-  const frame = document.createElement("iframe");
-  frame.setAttribute("aria-hidden", "true");
-  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
-  document.body.appendChild(frame);
-  const doc = frame.contentWindow.document;
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  // Wait for the photo so it is on the printout, then print and clean up.
-  const fileName = docFileName("delivery-confirmation", delivery?.delivery_no, receipt?.receipt_no,
-    String(delivery?.delivered_at || delivery?.scheduled_date || receipt?.created_at || "").slice(0, 10));
-  const go = () => {
-    const restoreTitle = setPrintTitle(fileName);
-    frame.contentWindow.onafterprint = restoreTitle;
-    frame.contentWindow.focus();
-    frame.contentWindow.print();
-    setTimeout(() => { restoreTitle(); frame.remove(); }, 1000);
-  };
-  const img = doc.querySelector("img");
-  if (img && !img.complete) {
-    img.onload = go;
-    img.onerror = go;
-  } else {
-    setTimeout(go, 50);
-  }
+  // Shared printer: waits for the logo and the proof photo, then prints.
+  printDocument(html, docFileName("delivery-confirmation", delivery?.delivery_no, receipt?.receipt_no,
+    String(delivery?.delivered_at || delivery?.scheduled_date || receipt?.created_at || "").slice(0, 10)));
 }

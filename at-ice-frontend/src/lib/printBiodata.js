@@ -1,7 +1,6 @@
-import { PRINT_BASE_CSS, docFileName, printDocument } from "./printDocument";
+import { PRINT_BASE_CSS, docFileName, letterhead, printDocument } from "./printDocument";
 import { CIVIL_STATUSES, EDUCATION_LEVELS, GOV_IDS, RESTRICTIONS, SEXES, labelOf } from "./biodata";
 import { fullName, shiftLabel } from "./names";
-import { COMPANY } from "./company";
 
 // The employee's biodata as a printable hard copy, made from the saved record
 // (HR > Employees, Biodata; owner 2026-10-20). Same print base as the
@@ -51,8 +50,8 @@ export async function printBiodata(emp, documents = []) {
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Biodata ${esc(emp.employee_id)}</title><style>${PRINT_BASE_CSS}
     body { font-family: Arial, Helvetica, sans-serif; color: #111827; font-size: 12px; }
-    .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0e7490; padding-bottom: 8px; }
-    .head h1 { margin: 0; font-size: 18px; letter-spacing: 2px; }
+    .head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0e7490; padding-bottom: 8px; }
+    .head h1 { margin: 0; font-size: 16px; letter-spacing: 2px; color: #0e7490; }
     .head .co { font-size: 11px; color: #374151; }
     .who { display: flex; gap: 14px; align-items: flex-start; margin-top: 12px; }
     .photo { width: 2in; height: 2in; flex-shrink: 0; border: 1px solid #9ca3af; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #6b7280; overflow: hidden; }
@@ -69,8 +68,8 @@ export async function printBiodata(emp, documents = []) {
     .foot { margin-top: 18px; font-size: 9.5px; color: #6b7280; }
   </style></head><body><div class="sheet">
     <div class="head">
-      <div><h1>EMPLOYEE BIODATA</h1><div class="co">${esc(COMPANY?.name || "Bella Erin Tube Ice Inc.")}</div></div>
-      <div class="title" style="text-align:right"><div><b>${esc(emp.employee_id)}</b></div><div class="co">Printed ${esc(date(new Date().toISOString()))}</div></div>
+      ${letterhead()}
+      <div class="title" style="text-align:right"><h1>EMPLOYEE BIODATA</h1><div><b>${esc(emp.employee_id)}</b></div><div class="co">Printed ${esc(date(new Date().toISOString()))}</div></div>
     </div>
     <div class="who">
       <div class="photo">${photo ? `<img src="${photo}" alt="">` : "2x2 photo"}</div>

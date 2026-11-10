@@ -46,8 +46,9 @@ class DriverAssignmentController extends Controller
         $from = Carbon::parse($data['effective_from'])->toDateString();
         $dayBefore = Carbon::parse($from)->subDay()->toDateString();
         $moved = 0;
+        $changedIds = [];
 
-        $made = DB::transaction(function () use ($data, $from, $dayBefore, $request, &$moved) {
+        $made = DB::transaction(function () use ($data, $from, $dayBefore, $request, &$moved, &$changedIds) {
             $made = [];
             foreach ($data['store_ids'] as $storeId) {
                 $open = DriverStoreAssignment::where('store_id', $storeId)
@@ -67,7 +68,8 @@ class DriverAssignmentController extends Controller
                     'effective_to' => $data['effective_to'] ?? null,
                     'created_by' => $request->user()->id,
                 ]);
-                $moved += DeliveryDispatch::applyAssignment($a);
+                $moved += DeliveryDispatch::applyAssignment($a, $changed);
+                $changedIds = array_merge($changedIds, $changed);
                 $made[] = $a;
             }
 
@@ -85,6 +87,7 @@ class DriverAssignmentController extends Controller
             'actor_id' => $request->user()->id,
         ]);
         Audit::log('driver_assignment.saved', $driver, null, $data + ['deliveries_updated' => $moved]);
+        self::tellStores($changedIds, fn ($first, $n) => "From {$first}, ".($n === 1 ? 'your delivery' : "your {$n} upcoming deliveries")." will be handled by driver {$driver->name}.");
 
         return response()->json([
             'message' => "{$driver->name} was assigned {$count} ".($count === 1 ? 'store' : 'stores').". {$moved} upcoming deliveries now go to them.",
@@ -101,20 +104,37 @@ class DriverAssignmentController extends Controller
         $today = DriverAvailability::today();
         $yesterday = Carbon::parse($today)->subDay()->toDateString();
 
-        DB::transaction(function () use ($a, $today, $yesterday) {
-            Delivery::where('customer_id', $a->store_id)
+        $freed = [];
+        DB::transaction(function () use ($a, $today, $yesterday, &$freed) {
+            $q = Delivery::where('customer_id', $a->store_id)
                 ->where('driver_id', $a->driver_id)
                 ->where('status', 'pending')
                 ->whereNull('reassigned_from_driver_id')
-                ->whereDate('scheduled_date', '>', $today)
-                ->update(['driver_id' => null, 'updated_at' => now()]);
+                ->whereDate('scheduled_date', '>', $today);
+            $freed = (clone $q)->pluck('id')->all();
+            $q->update(['driver_id' => null, 'updated_at' => now()]);
 
             $a->effective_from->toDateString() > $yesterday
                 ? $a->delete()
                 : $a->update(['effective_to' => $yesterday]);
         });
         Audit::log('driver_assignment.ended', $a);
+        self::tellStores($freed, fn ($first, $n) => "From {$first}, ".($n === 1 ? 'your delivery is' : "your {$n} upcoming deliveries are")." being moved to another driver. The schedule stays the same.");
 
         return response()->json(['message' => 'Assignment ended.']);
+    }
+
+    // One notice per store (on its first changed delivery), not one per delivery.
+    private static function tellStores(array $ids, callable $message): void
+    {
+        if (! $ids) {
+            return;
+        }
+        Delivery::with('customer')->whereIn('id', $ids)->orderBy('scheduled_date')->get()
+            ->groupBy('customer_id')
+            ->each(function ($list) use ($message) {
+                $first = $list->first();
+                DeliveryDispatch::notifyChange($first, 'driver_changed', $message(DeliveryDispatch::day($first), $list->count()));
+            });
     }
 }

@@ -160,8 +160,8 @@ export default function AccountSettings() {
       >
         <form onSubmit={submitPassword} className="space-y-3">
           <div>
-            <label htmlFor="account-settings-current-password" className="mb-1 block text-xs font-medium text-slate-600">Current password</label>
-            <PasswordInput name="current_password" id="account-settings-current-password"
+            <label htmlFor="settings-current-password" className="mb-1 block text-xs font-medium text-slate-600">Current password</label>
+            <PasswordInput name="current_password" id="settings-current-password"
               value={form.current_password}
               onChange={(e) => setForm({ ...form, current_password: e.target.value })}
               autoComplete="current-password"
@@ -169,8 +169,8 @@ export default function AccountSettings() {
             />
           </div>
           <div>
-            <label htmlFor="account-settings-new-password" className="mb-1 block text-xs font-medium text-slate-600">New password</label>
-            <PasswordInput name="new_password" id="account-settings-new-password"
+            <label htmlFor="settings-new-password" className="mb-1 block text-xs font-medium text-slate-600">New password</label>
+            <PasswordInput name="new_password" id="settings-new-password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               autoComplete="new-password"
@@ -179,8 +179,8 @@ export default function AccountSettings() {
             <PasswordRules password={form.password} />
           </div>
           <div>
-            <label htmlFor="account-settings-confirm-new-password" className="mb-1 block text-xs font-medium text-slate-600">Confirm new password</label>
-            <PasswordInput name="confirm_new_password" id="account-settings-confirm-new-password"
+            <label htmlFor="settings-confirm-password" className="mb-1 block text-xs font-medium text-slate-600">Confirm new password</label>
+            <PasswordInput name="confirm_new_password" id="settings-confirm-password"
               value={form.password_confirmation}
               onChange={(e) => setForm({ ...form, password_confirmation: e.target.value })}
               autoComplete="new-password"

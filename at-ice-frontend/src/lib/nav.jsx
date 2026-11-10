@@ -19,6 +19,7 @@ export const ADMIN_NAV = [
   { icon: UsersIcon, label: "HRIS", children: [
       { label: "Employees", to: "/admin/employees" },
       { label: "Performance", to: "/admin/performance" },
+      { label: "Memo Approvals", to: "/admin/memo-approvals" },
       { label: "Holidays", to: "/admin/holidays" },
     ] },
   // Delivery proofs live inside Deliveries (Proof column and View dialog).
@@ -34,13 +35,16 @@ export const ADMIN_NAV = [
       { label: "Invoices", to: "/admin/receipts" },
       { label: "Support Tickets", to: "/admin/support-inbox" },
     ] },
-  // One page per Settings item (pages/Admin/SettingsPage.jsx).
-  // "Rates and rules" also holds the holiday and overtime pay rates.
+  // One page per Settings item (pages/Admin/SettingsPage.jsx). Rates and
+  // rules moved to HR (owner, 2026-11-09).
   { icon: SettingsIcon, label: "Settings", children: [
       { label: "Account", to: "/admin/settings/account" },
-      { label: "Rates and rules", to: "/admin/settings/rates" },
+      // moved from HR > Rates and rules (owner, 2026-11-10)
+      { label: "Deliveries", to: "/admin/settings/deliveries" },
+      { label: "Support tickets", to: "/admin/settings/support" },
       { label: "Admin PIN", to: "/admin/settings/admin-pin" },
       { label: "Old records", to: "/admin/settings/old-records" },
+      { label: "Recent changes", to: "/admin/settings/changes" },
     ] },
 ];
 
@@ -56,6 +60,19 @@ export const HR_NAV = [
       { label: "Payroll", to: "/hr/payroll" },
       { label: "Holidays", to: "/hr/holidays" },
       { label: "Kiosk PIN", to: "/hr/kiosk-pin" },
+    ] },
+  // Rates and rules, one page per item (pages/hr/RatesRulesPage.jsx), like
+  // Admin's Settings menu (owner, 2026-11-10). hoverOnly: this menu alone opens
+  // only while hovered; closed, it shows just the page that is open (SideNav).
+  { icon: SettingsIcon, label: "Rates and rules", hoverOnly: true, children: [
+      { label: "Payroll", to: "/hr/rates/payroll" },
+      { label: "Attendance", to: "/hr/rates/attendance" },
+      { label: "Leave", to: "/hr/rates/leave" },
+      { label: "Kiosk", to: "/hr/rates/kiosk" },
+      { label: "Disciplinary memos", to: "/hr/rates/memos" },
+      { label: "13th month", to: "/hr/rates/thirteenth" },
+      { label: "Records", to: "/hr/rates/records" },
+      { label: "Holiday and overtime pay", to: "/hr/rates/pay-rates" },
     ] },
 ];
 

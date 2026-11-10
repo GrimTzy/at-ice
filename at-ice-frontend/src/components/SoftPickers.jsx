@@ -28,7 +28,8 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 function isSoftField(el) {
-  if (!el || el.disabled || el.readOnly) return false;
+  // a key event can come from the document itself, which is not an element
+  if (!(el instanceof Element) || el.disabled || el.readOnly) return false;
   if (el.closest("[data-soft-popover]") || el.hasAttribute("data-native")) return false;
   if (el.tagName === "SELECT") return !el.multiple && el.size <= 1;
   return el.tagName === "INPUT" && DATE_TYPES.has(el.type);

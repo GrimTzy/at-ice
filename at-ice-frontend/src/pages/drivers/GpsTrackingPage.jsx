@@ -6,6 +6,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import EmptyState from "../../components/EmptyState";
 import { Icon } from "../../components/icons";
+import { plural } from "../../lib/plural";
 
 // Icons (unchanged)
 const MapIcon = () => (
@@ -347,7 +348,7 @@ export function GpsTrackingPage() {
           <div className="flex items-center gap-2 text-[13px] font-semibold text-slate-800">
             <MapIcon />
             Delivery Stops
-            <span className="text-[11px] font-normal text-slate-400 ml-1">{stores.length} stops today</span>
+            <span className="text-[11px] font-normal text-slate-400 ml-1">{plural(stores.length, "stop")} today</span>
           </div>
           <span className="text-slate-400">{panelOpen ? <ChevronDownIcon /> : <ChevronUpIcon />}</span>
         </button>

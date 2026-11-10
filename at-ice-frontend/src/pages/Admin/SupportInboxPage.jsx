@@ -40,6 +40,11 @@ const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
 const TOPIC_TONES = ["cyan", "amber", "violet", "emerald", "rose", "slate"];
 
 const isActive = (t) => t.status === "open" || t.status === "in_progress";
+const isEscalated = (t) => Boolean(t.escalated_at) && isActive(t);
+
+const EscalatedPill = () => (
+  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap bg-rose-50 text-rose-800 border-rose-200">Escalated</span>
+);
 
 // "4m", "18h", "2d" since the ticket came in
 function age(from, to = Date.now()) {
@@ -76,6 +81,8 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
   const [resolving, setResolving] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState("");
+  const [escalating, setEscalating] = useState(false);
+  const [reason, setReason] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -93,8 +100,21 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
     setText("");
     setNote("");
     setResolving(false);
+    setEscalating(false);
+    setReason("");
     load();
   }, [load]);
+
+  const escalate = async () => {
+    if (reason.trim().length < 5) {
+      setError("Write why this ticket is escalated (at least 5 characters).");
+      return;
+    }
+    if (await run("escalate", `/api/support-messages/${id}/escalate`, "PATCH", { reason: reason.trim() }, "Ticket escalated.")) {
+      setEscalating(false);
+      setReason("");
+    }
+  };
 
   const run = async (key, url, method, body, done) => {
     setBusy(key);
@@ -151,6 +171,7 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
         <span className="font-mono text-[12px] font-semibold text-slate-800">{t.ticket_no}</span>
         <Pill map={PRIORITY} value={t.priority} />
         <Pill map={STATUS} value={t.status} />
+        {isEscalated(t) && <EscalatedPill />}
         {overdue && <span className="px-2 py-0.5 rounded-full text-[10px] font-medium border bg-rose-50 text-rose-800 border-rose-200">Overdue</span>}
         <button type="button" onClick={onClose} title="Close this panel" data-no-confirm className="ml-auto px-2 py-1 rounded-md text-[12px] text-slate-500 hover:bg-slate-50 cursor-pointer">
           Close panel
@@ -193,6 +214,15 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
             </select>
           </label>
         </div>
+
+        {t.escalated_at && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50/60 px-3 py-2">
+            <div className="text-[11px] text-rose-800 font-medium">
+              Escalated · {t.escalator?.name || "Admin"} · {formatDateTime(t.escalated_at, { year: false })}
+            </div>
+            <div className="text-[13px] text-slate-800 whitespace-pre-wrap break-words">{t.escalation_reason}</div>
+          </div>
+        )}
 
         <div>
           <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Conversation</div>
@@ -267,7 +297,39 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
           </div>
         )}
 
+        {escalating && (
+          <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50/50 p-3">
+            <div className="text-[12px] font-medium text-rose-800">Why is this ticket escalated? (required)</div>
+            <textarea name="escalation_reason"
+              rows={2}
+              value={reason}
+              maxLength={500}
+              onChange={(e) => { setReason(e.target.value); setError(""); }}
+              placeholder="e.g. Third short delivery this week, needs the manager"
+              className={`${fieldCls} text-[13px] resize-y`}
+            />
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={busy === "escalate"} onClick={escalate} title="Mark the ticket for management attention" className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-rose-600 hover:bg-rose-700 text-white cursor-pointer disabled:opacity-50">
+                Escalate ticket
+              </button>
+              <button type="button" data-no-confirm onClick={() => { setEscalating(false); setReason(""); setError(""); }} title="Go back without escalating" className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-black/[0.09] text-slate-600 hover:bg-slate-50 cursor-pointer">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 pt-1 border-t border-black/[0.06]">
+          {active && !t.escalated_at && !escalating && !resolving && (
+            <button type="button" data-no-confirm onClick={() => { setEscalating(true); setError(""); }} title="Write a reason, then escalate the ticket" className="mt-3 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer">
+              Escalate
+            </button>
+          )}
+          {t.escalated_at && (
+            <button type="button" disabled={busy === "deescalate"} onClick={() => run("deescalate", `/api/support-messages/${id}/de-escalate`, "PATCH", null, "Escalation removed.")} title="The ticket no longer needs management attention" className="mt-3 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-black/[0.09] text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50">
+              Remove escalation
+            </button>
+          )}
           {t.status === "open" && (
             <button type="button" disabled={busy === "progress"} onClick={() => run("progress", `/api/support-messages/${id}`, "PATCH", { status: "in_progress" }, "Ticket marked in progress.")} title="Show the customer that someone is working on it" className="mt-3 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-black/[0.09] text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50">
               Mark in progress
@@ -331,10 +393,11 @@ export default function SupportInboxPage() {
   const isOverdue = useCallback((t) => isActive(t) && now - new Date(t.created_at) > overdueHours * 3600000, [now, overdueHours]);
 
   const counts = useMemo(() => {
-    const c = { open: 0, in_progress: 0, resolved: 0, closed: 0, overdue: 0, active: 0 };
+    const c = { open: 0, in_progress: 0, resolved: 0, closed: 0, overdue: 0, active: 0, escalated: 0 };
     all.forEach((t) => {
       c[t.status] = (c[t.status] || 0) + 1;
       if (isActive(t)) c.active += 1;
+      if (isEscalated(t)) c.escalated += 1;
       if (isOverdue(t)) c.overdue += 1;
     });
     return c;
@@ -352,6 +415,7 @@ export default function SupportInboxPage() {
       .filter((t) => {
         if (filter === "active") return isActive(t);
         if (filter === "overdue") return isOverdue(t);
+        if (filter === "escalated") return isEscalated(t);
         if (filter === "all") return true;
         return t.status === filter;
       })
@@ -380,6 +444,7 @@ export default function SupportInboxPage() {
     { value: "open", label: "Open", count: counts.open },
     { value: "in_progress", label: "In progress", count: counts.in_progress },
     { value: "overdue", label: "Overdue", count: counts.overdue },
+    { value: "escalated", label: "Escalated", count: counts.escalated },
     { value: "resolved", label: "Resolved", count: counts.resolved },
     { value: "closed", label: "Closed", count: counts.closed },
     { value: "all", label: "All", count: all.length },
@@ -456,7 +521,9 @@ export default function SupportInboxPage() {
                           <td className="px-[18px] py-2.5 text-slate-800">{t.customer?.name || "Customer"}</td>
                           <td className="px-[18px] py-2.5 text-slate-600">{t.topic_label}</td>
                           <td className="px-[18px] py-2.5"><Pill map={PRIORITY} value={t.priority} /></td>
-                          <td className="px-[18px] py-2.5"><Pill map={STATUS} value={t.status} /></td>
+                          <td className="px-[18px] py-2.5">
+                            <span className="inline-flex flex-wrap items-center gap-1"><Pill map={STATUS} value={t.status} />{isEscalated(t) && <EscalatedPill />}</span>
+                          </td>
                           <td className="px-[18px] py-2.5 text-slate-600">{t.assignee?.name || <span className="text-slate-400">Nobody yet</span>}</td>
                           <td className={`px-[18px] py-2.5 text-right whitespace-nowrap ${overdue ? "text-rose-700 font-semibold" : "text-slate-500"}`} title={formatDateTime(t.created_at)}>
                             {age(t.created_at, isActive(t) ? now : new Date(t.resolved_at || t.updated_at).getTime())}

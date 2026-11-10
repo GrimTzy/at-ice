@@ -43,8 +43,8 @@ class CustomerPortalController extends Controller
         ]);
     }
 
-    // GET /api/my-delivery-notices: "may be delayed" notices of the last 7 days
-    // (a delivery moved to another driver), App\Support\DeliveryDispatch.
+    // GET /api/my-delivery-notices: notices of the last 7 days (may be delayed,
+    // moved to another driver, cancelled), App\Support\DeliveryDispatch.
     public function myDeliveryNotices(Request $request)
     {
         $customer = $this->resolveCustomer($request);

@@ -39,9 +39,9 @@ class ExpensePayMultiplierAlertTest extends TestCase
         $this->postJson('/api/bi/expenses', ['category' => 'fuel', 'amount' => -5, 'expense_date' => '2026-10-05'])->assertUnprocessable();
     }
 
-    public function test_admin_sets_a_holiday_or_overtime_rate_from_a_date(): void
+    public function test_hr_sets_a_holiday_or_overtime_rate_from_a_date(): void
     {
-        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+        Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
 
         $this->postJson('/api/pay-multipliers', ['key' => 'OT_ORDINARY', 'value' => 1.25, 'effective_date' => '2026-01-01'])
             ->assertOk();

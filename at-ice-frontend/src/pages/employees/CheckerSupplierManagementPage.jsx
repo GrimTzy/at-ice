@@ -189,8 +189,8 @@ export default function CheckerSupplierManagementPage() {
             <input id="sup-person" value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} className={FIELD} />
           </div>
           <div>
-            <label htmlFor="checker-supplier-management-page-contact-number" className={LABEL}>Contact number</label>
-            <PhoneInput name="contact_number" id="checker-supplier-management-page-contact-number" value={form.contact_number} onChange={(v) => setForm({ ...form, contact_number: v })} placeholder="917 123 4567" className={FIELD}
+            <label htmlFor="supplier-contact" className={LABEL}>Contact number</label>
+            <PhoneInput name="contact_number" id="supplier-contact" value={form.contact_number} onChange={(v) => setForm({ ...form, contact_number: v })} placeholder="917 123 4567" className={FIELD}
               invalid={!!form.contact_number && !ANY_REGEX.test(form.contact_number)} />
           </div>
           <div>

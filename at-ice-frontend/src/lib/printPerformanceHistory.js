@@ -1,5 +1,4 @@
-import { PRINT_BASE_CSS, docFileName, printDocument } from "./printDocument";
-import { COMPANY } from "./company";
+import { PRINT_BASE_CSS, docFileName, letterhead, printDocument } from "./printDocument";
 
 // The employee performance history as a printable hard copy (Admin > HRIS >
 // Performance > employee name > Print / Save PDF). Same print base as the
@@ -86,8 +85,8 @@ export async function printPerformanceHistory(data, photoUrl = "") {
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Performance history ${esc(emp.code)}</title><style>${PRINT_BASE_CSS}
     body { font-family: Arial, Helvetica, sans-serif; color: #111827; font-size: 12px; }
-    .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0e7490; padding-bottom: 8px; }
-    .head h1 { margin: 0; font-size: 18px; letter-spacing: 2px; }
+    .head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0e7490; padding-bottom: 8px; }
+    .head h1 { margin: 0; font-size: 16px; letter-spacing: 2px; color: #0e7490; }
     .head .co { font-size: 11px; color: #374151; }
     .who { display: flex; gap: 14px; align-items: flex-start; margin-top: 12px; }
     .photo { width: 1.1in; height: 1.1in; flex-shrink: 0; border: 1px solid #9ca3af; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #155e75; overflow: hidden; }
@@ -106,8 +105,8 @@ export async function printPerformanceHistory(data, photoUrl = "") {
     .foot { margin-top: 18px; font-size: 9.5px; color: #6b7280; }
   </style></head><body><div class="sheet">
     <div class="head">
-      <div><h1>EMPLOYEE PERFORMANCE HISTORY</h1><div class="co">${esc(COMPANY?.name || "Bella Erin Tube Ice Inc.")}</div></div>
-      <div class="title" style="text-align:right"><div><b>${esc(emp.code)}</b></div><div class="co">Printed ${esc(dmy(new Date().toISOString()))}</div></div>
+      ${letterhead()}
+      <div class="title" style="text-align:right"><h1>PERFORMANCE HISTORY</h1><div><b>${esc(emp.code)}</b></div><div class="co">Printed ${esc(dmy(new Date().toISOString()))}</div></div>
     </div>
     <div class="who">
       <div class="photo">${photo ? `<img src="${photo}" alt="">` : esc((emp.name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase())}</div>

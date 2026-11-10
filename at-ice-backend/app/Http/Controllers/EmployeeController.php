@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Applicant;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
+use App\Models\EmployeeShiftChange;
 use App\Models\User;
 use App\Services\AddressFormatter;
 use App\Services\DriverLicense;
@@ -111,8 +112,25 @@ class EmployeeController extends Controller
             'pay_basis' => 'sometimes|in:daily,monthly',
             'monthly_rate' => 'nullable|required_if:pay_basis,monthly|numeric|min:0|max:1000000',
             'shift_start' => 'nullable|date_format:H:i',
-            'shift_end' => 'nullable|date_format:H:i',
+            'shift_end' => 'nullable|date_format:H:i|different:shift_start',
+            // Schedule change (HR > Employees): when it starts and why
+            'shift_effective_date' => 'nullable|date',
+            'shift_reason' => 'nullable|string|max:255',
         ];
+    }
+
+    private const WORK_MESSAGES = [
+        'shift_end.different' => 'The shift must end at a different time than it starts.',
+        'shift_effective_date.date' => 'Enter a valid effective date.',
+    ];
+
+    // Changes are logged with these fields named only, never their values.
+    private const PRIVATE_FIELDS = ['sss_no', 'tin_no', 'philhealth_no', 'pagibig_no', 'daily_rate', 'monthly_rate'];
+
+    // HH:MM of a stored time ("07:00:00" and "07:00" are the same shift).
+    private static function hm(?string $time): ?string
+    {
+        return $time === null || $time === '' ? null : substr($time, 0, 5);
     }
 
     // A new hire may start up to 14 days from today. Until then they are left
@@ -194,6 +212,9 @@ class EmployeeController extends Controller
             })
             ->get();
 
+        // Night-shift flag for the Day / Night filter and badge (list only)
+        $employees->each(fn ($e) => $e->setAttribute('is_night', Lateness::isNight($e->shift_start, $e->shift_end, $e->shift)));
+
         return response()->json($employees);
     }
 
@@ -257,7 +278,7 @@ class EmployeeController extends Controller
             'license_number.required' => "Enter the driver's license number.",
             'license_number.regex' => DriverLicense::MESSAGE,
             'license_number.unique' => 'Another employee already has this license number.',
-        ] + ['date_hired.before_or_equal' => 'The hire date can be at most '.self::HIRE_DAYS_AHEAD.' days from today.'] + self::NAME_MESSAGES);
+        ] + ['date_hired.before_or_equal' => 'The hire date can be at most '.self::HIRE_DAYS_AHEAD.' days from today.'] + self::NAME_MESSAGES + self::WORK_MESSAGES);
 
         // The login role is derived from Position, so the two cannot disagree.
         // Any sub_role sent by the client is ignored.
@@ -442,7 +463,7 @@ class EmployeeController extends Controller
             'license_number.required' => "Enter the driver's license number.",
             'license_number.regex' => DriverLicense::MESSAGE,
             'license_number.unique' => 'Another employee already has this license number.',
-        ] + self::NAME_MESSAGES);
+        ] + self::NAME_MESSAGES + self::WORK_MESSAGES);
 
         $data = $request->only([
             ...Biodata::FIELDS,
@@ -496,7 +517,20 @@ class EmployeeController extends Controller
             $data['regularized_at'] = now(config('atice.timezone'))->toDateString();
         }
 
+        $oldStart = self::hm($employee->shift_start);
+        $oldEnd = self::hm($employee->shift_end);
+        $before = $employee->getAttributes();
+
+        // Work schedules are HR's (client rule, docs/ACCESS-MATRIX.md). RoleMiddleware
+        // lets Admin through every role:hr route, so the schedule is checked here.
+        $newStartIn = array_key_exists('shift_start', $data) ? self::hm($data['shift_start']) : $oldStart;
+        $newEndIn = array_key_exists('shift_end', $data) ? self::hm($data['shift_end']) : $oldEnd;
+        if (($newStartIn !== $oldStart || $newEndIn !== $oldEnd) && $request->user()?->role !== 'hr') {
+            return response()->json(['message' => 'Only HR can change an employee\'s work schedule.'], 403);
+        }
+
         $employee->update($data);
+        $this->logChanges($request, $employee, $before, $oldStart, $oldEnd);
         if ($regularized) {
             Audit::log('employee.regularized', $employee, ['employment_status' => 'probationary'], ['employment_status' => 'regular', 'regularized_at' => $employee->regularized_at?->toDateString()]);
         }
@@ -509,6 +543,83 @@ class EmployeeController extends Controller
         return response()->json([
             'message' => 'Employee updated successfully!',
             'employee' => $employee,
+        ]);
+    }
+
+    // Recent Changes for an employee edit (only the fields that changed), and a
+    // row in the schedule history when the shift hours changed.
+    private function logChanges(Request $request, Employee $employee, array $before, ?string $oldStart, ?string $oldEnd): void
+    {
+        $changed = array_keys(array_diff_key($employee->getChanges(), ['updated_at' => true, 'address' => true]));
+        $newStart = self::hm($employee->shift_start);
+        $newEnd = self::hm($employee->shift_end);
+        $shiftChanged = $newStart !== $oldStart || $newEnd !== $oldEnd;
+
+        // "07:00" saved over "07:00:00" is no change
+        $changed = array_values(array_filter($changed, fn ($f) => ! in_array($f, ['shift_start', 'shift_end'], true) || $shiftChanged));
+        if (! $changed) {
+            return;
+        }
+
+        $old = [];
+        $new = [];
+        $private = [];
+        foreach ($changed as $field) {
+            if (in_array($field, self::PRIVATE_FIELDS, true)) {
+                $private[] = $field;
+
+                continue;
+            }
+            $old[$field] = $before[$field] ?? null;
+            $new[$field] = $employee->getAttributes()[$field] ?? null;
+        }
+        if ($private) {
+            $new['private_fields_changed'] = $private;
+        }
+        Audit::log('employee.updated', $employee, $old, $new);
+
+        if ($shiftChanged && $newStart && $newEnd) {
+            EmployeeShiftChange::create([
+                'employee_id' => $employee->id,
+                'from_start' => $oldStart,
+                'from_end' => $oldEnd,
+                'to_start' => $newStart,
+                'to_end' => $newEnd,
+                'effective_date' => $request->input('shift_effective_date') ?: now(config('atice.timezone'))->toDateString(),
+                'changed_by' => $request->user()?->id,
+                'reason' => $request->input('shift_reason') ?: null,
+            ]);
+            Audit::log('employee.shift_changed', $employee,
+                ['shift_start' => $oldStart, 'shift_end' => $oldEnd],
+                ['shift_start' => $newStart, 'shift_end' => $newEnd, 'effective_date' => $request->input('shift_effective_date') ?: now(config('atice.timezone'))->toDateString()]);
+        }
+    }
+
+    // GET employees/{id}/shift-changes : the agreed (first) schedule, the current
+    // one and every change, newest first.
+    public function shiftChanges($id)
+    {
+        $employee = Employee::findOrFail($id);
+        $changes = EmployeeShiftChange::with('changedBy:id,name,role')
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('created_at')->orderByDesc('id')
+            ->get();
+        $first = $changes->last();
+
+        return response()->json([
+            'original' => $first
+                ? ['start' => $first->from_start, 'end' => $first->from_end]
+                : ['start' => self::hm($employee->shift_start), 'end' => self::hm($employee->shift_end)],
+            'current' => ['start' => self::hm($employee->shift_start), 'end' => self::hm($employee->shift_end)],
+            'changes' => $changes->map(fn ($c) => [
+                'id' => $c->id,
+                'effective_date' => $c->effective_date?->toDateString(),
+                'from' => ['start' => $c->from_start, 'end' => $c->from_end],
+                'to' => ['start' => $c->to_start, 'end' => $c->to_end],
+                'reason' => $c->reason,
+                'changed_by' => $c->changedBy?->name,
+                'changed_at' => $c->created_at?->toIso8601String(),
+            ])->values(),
         ]);
     }
 

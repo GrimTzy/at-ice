@@ -19,6 +19,24 @@ const TIP_DELAY = 450;
 const isSheet = (el) => window.innerWidth < 640 || !!el?.closest?.(".role-shell");
 const isDark = (el) => !!(el?.closest?.(".cp-dark, .neu-dark") || document.querySelector(".cp-dark"));
 
+// The submit button of a form whose required fields are not all filled in
+// correctly: the form is marked (red fields, controls.css), the first field to
+// fix is scrolled to the middle of its dialog or page and focused, and its
+// message shows. Returns true when the click must stop here.
+function blockInvalidSubmit(btn) {
+  if (btn.tagName !== "BUTTON" || btn.type !== "submit" || btn.hasAttribute("formnovalidate")) return false;
+  const form = btn.form;
+  if (!form || form.checkValidity()) return false;
+  form.setAttribute("data-tried", "");
+  const first = [...form.elements].find((el) => el.willValidate && !el.checkValidity());
+  if (first) {
+    first.scrollIntoView({ block: "center", behavior: "smooth" });
+    first.focus({ preventScroll: true });
+    first.reportValidity();
+  }
+  return true;
+}
+
 export default function ActionGuard() {
   const [ask, setAsk] = useState(null); // { title, message, context, confirmLabel, danger, sheet, dark, resolve }
   const [tip, setTip] = useState(null); // { text, x, y, below, dark }
@@ -55,6 +73,14 @@ export default function ActionGuard() {
       const btn = e.target.closest?.("button, [role='button']");
       if (!btn) return;
       if (passRef.current === btn) { passRef.current = null; return; }
+      // A form with an empty or wrong required field is never sent and never
+      // asks "Add ...?": it scrolls to the first field to fix (owner, 2026-11-10).
+      if (blockInvalidSubmit(btn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return;
+      }
       const c = confirmationFor(btn);
       if (!c) return;
       e.preventDefault();
@@ -66,8 +92,15 @@ export default function ActionGuard() {
         btn.click();
       });
     };
+    // The browser's own check (forms without noValidate, Enter in a field)
+    // marks the form too, so the fields to fix show in red.
+    const onInvalid = (e) => e.target.form?.setAttribute("data-tried", "");
     document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
+    document.addEventListener("invalid", onInvalid, true);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("invalid", onInvalid, true);
+    };
   }, [open]);
 
   // Buttons and links never carry a browser title: it would pop up on top of

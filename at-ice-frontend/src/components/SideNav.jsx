@@ -171,14 +171,28 @@ export default function SideNav({ items, onNavigate, counts = {} }) {
       {items.map((item) => {
         const isActive = item === activeItem;
         const first = pagesOf(item)[0].to;
-        // closed only when the user closed it with the chevron (or never opened it)
-        const open = Boolean(item.children) && (pinned.has(item.label) || (isActive && !closedActive.has(item.label)) || hovered === item.label);
+        // closed only when the user closed it with the chevron (or never opened it).
+        // A hoverOnly menu (HR > Rates and rules) opens only while the pointer or
+        // keyboard focus is on it, even when one of its pages is open; closed, it
+        // still shows the page that is open (peek).
+        const open = Boolean(item.children) && (item.hoverOnly
+          ? hovered === item.label
+          : pinned.has(item.label) || (isActive && !closedActive.has(item.label)) || hovered === item.label);
+        const keep = (label) => { if (!item.hoverOnly) { pin(label); unclose(label); } };
+        // Closed hoverOnly menu on one of its pages: only that page stays shown
+        const peek = Boolean(item.hoverOnly && !open && item.children?.some((c) => isCurrentPage(c.to)));
         return (
-          <div key={item.label} onMouseEnter={() => hoverIn(item.label)} onMouseLeave={hoverOut}>
+          <div
+            key={item.label}
+            onMouseEnter={() => hoverIn(item.label)}
+            onMouseLeave={hoverOut}
+            onFocus={item.hoverOnly ? () => { clearTimeout(hoverTimer.current); setHovered(item.label); } : undefined}
+            onBlur={item.hoverOnly ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) hoverOut(); } : undefined}
+          >
             <div className="relative">
             <Link
               to={first}
-              onClick={() => { if (item.children) { pin(item.label); unclose(item.label); } go(); }}
+              onClick={() => { if (item.children) keep(item.label); go(); }}
               title={item.label}
               aria-current={isActive && !item.children ? "page" : undefined}
               className={`flex items-center gap-2.5 px-[18px] ${item.children ? "pr-9" : ""} py-[7px] text-[13px] cursor-pointer transition-[color,background-color,border-color,box-shadow,transform] duration-100 border-l-2 ${isActive ? "text-cyan-500 bg-cyan-500/[0.08] border-cyan-500" : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50"}`}
@@ -202,6 +216,7 @@ export default function SideNav({ items, onNavigate, counts = {} }) {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (item.hoverOnly) { clearTimeout(hoverTimer.current); setHovered(open ? "" : item.label); return; } // touch screens: the chevron opens it
                     if (open) { pin(item.label, false); closeActive(item.label); setHovered(""); } else { pin(item.label); unclose(item.label); }
                   }}
                   className="rail-label sidenav-chev-btn absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-6 h-6 rounded-md hover:bg-slate-100 cursor-pointer"
@@ -211,16 +226,17 @@ export default function SideNav({ items, onNavigate, counts = {} }) {
               )}
             </div>
             {item.children && (
-              <div className={`sidenav-sub${open ? " is-open" : ""}`} inert={!open}>
+              <div className={`sidenav-sub${open || peek ? " is-open" : ""}`} inert={!open && !peek}>
                 <div>
                   <ul className="sidenav-list">
                     {item.children.map((child) => {
                       const current = isCurrentPage(child.to);
+                      if (peek && !current) return null;
                       return (
                         <li key={child.to}>
                           <Link
                             to={child.to}
-                            onClick={() => { pin(item.label); unclose(item.label); go(); }}
+                            onClick={() => { keep(item.label); go(); }}
                             aria-current={current ? (splitTo(child.to).hash ? "location" : "page") : undefined}
                             className={`sidenav-link rail-label${current ? " is-current" : ""}`}
                           >

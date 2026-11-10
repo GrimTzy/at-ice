@@ -1,5 +1,4 @@
-import { COMPANY } from "./company";
-import { PRINT_BASE_CSS, docFileName, printDocument } from "./printDocument";
+import { PRINT_BASE_CSS, docFileName, letterhead, printDocument } from "./printDocument";
 import { formatDateTime } from "./time";
 
 // Prints a delivery invoice (Admin > Invoices and Customer > Invoices & Balance).
@@ -47,9 +46,7 @@ export function printReceipt(receipt, customer) {
 <style>
   ${PRINT_BASE_CSS}
   body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; font-size: 12px; margin: 0; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0e7490; padding-bottom: 10px; }
-  .co { font-size: 16px; font-weight: 700; color: #0e7490; }
-  .sub { color: #475569; font-size: 10.5px; margin-top: 3px; max-width: 360px; line-height: 1.4; }
+  .head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0e7490; padding-bottom: 10px; }
   .title { text-align: right; }
   .title h1 { margin: 0; font-size: 18px; letter-spacing: 2px; color: #0e7490; }
   .title div { color: #334155; font-size: 11px; margin-top: 4px; }
@@ -71,10 +68,7 @@ export function printReceipt(receipt, customer) {
 </style></head>
 <body><div class="sheet">
   <div class="head">
-    <div>
-      <div class="co">${esc(COMPANY.name)}</div>
-      <div class="sub">${esc(COMPANY.address)}<br>${esc(COMPANY.hotline)} · ${esc(COMPANY.email)}</div>
-    </div>
+    ${letterhead()}
     <div class="title">
       <h1>DELIVERY INVOICE</h1>
       <div>No. <strong>${esc(r.receipt_no || "—")}</strong></div>

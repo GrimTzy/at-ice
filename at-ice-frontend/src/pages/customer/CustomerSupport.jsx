@@ -29,9 +29,13 @@ const TICKET_STATUS = {
   in_progress: { label: "In progress", cls: "bg-cyan-50 text-cyan-800 border-cyan-200" },
   resolved: { label: "Resolved", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   closed: { label: "Closed", cls: "bg-slate-100 text-slate-600 border-slate-200" },
+  escalated: { label: "Escalated", cls: "bg-rose-50 text-rose-800 border-rose-200" },
 };
 
 const ACTIVE = ["open", "in_progress"];
+
+// An open ticket the Admin escalated shows as Escalated (the reason stays internal)
+const statusOf = (m) => (m.escalated_at && ACTIVE.includes(m.status) ? "escalated" : m.status);
 
 const fieldCls =
   "w-full bg-white border border-black/[0.12] rounded-xl px-3.5 py-2.5 text-[13px] text-slate-800 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition";
@@ -222,7 +226,7 @@ export default function CustomerSupport() {
                 Your Tickets <span className="text-slate-400 font-normal">· {history.length}</span>
               </div>
               {history.map((m) => {
-                const s = TICKET_STATUS[m.status] || TICKET_STATUS.open;
+                const s = TICKET_STATUS[statusOf(m)] || TICKET_STATUS.open;
                 return (
                   <div key={m.id} className={`${ICE_CARD} overflow-hidden`}>
                     <div className="px-5 py-3 border-b border-black/[0.06] flex flex-wrap items-center gap-x-3 gap-y-1">

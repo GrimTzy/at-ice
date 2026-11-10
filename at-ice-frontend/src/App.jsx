@@ -34,6 +34,7 @@ const MaintenanceProjectsPage = lazy(() => import('./pages/employees/Maintenance
 const EmployeesOverviewPage = lazy(() => import('./pages/Admin/EmployeesOverviewPage'))
 const PerformancePage = lazy(() => import('./pages/Admin/PerformancePage'))
 const PerformanceHistoryPage = lazy(() => import('./pages/Admin/PerformanceHistoryPage'))
+const MemoApprovalsPage = lazy(() => import('./pages/Admin/MemoApprovalsPage'))
 const CustomersPage = lazy(() => import('./pages/Admin/CustomersPage'))
 const DeliveriesPage = lazy(() => import('./pages/Admin/DeliveriesPage'))
 const ReceiptsPage = lazy(() => import('./pages/Admin/ReceiptsPage'))
@@ -64,6 +65,7 @@ const TimesheetsPage = lazy(() => import('./pages/hr/TimesheetsPage'))
 const HolidaysPage = lazy(() => import('./pages/hr/HolidaysPage'))
 const PayrollRecordsPage = lazy(() => import('./pages/hr/PayrollRecordsPage'))
 const KioskPinPage = lazy(() => import('./pages/hr/KioskPinPage'))
+const RatesRulesPage = lazy(() => import('./pages/hr/RatesRulesPage'))
 
 // -- Employee Module
 const CheckerDashboard = lazy(() => import('./pages/employees/CheckerDashboard'))
@@ -247,6 +249,15 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* Formal memos HR endorsed: Admin approves or returns them */}
+        <Route
+          path="/admin/memo-approvals"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <MemoApprovalsPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/admin/employees"
           element={
@@ -373,6 +384,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["hr"]}>
               <KioskPinPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Rates and rules: moved from Admin > Settings, HR only */}
+        <Route
+          path="/hr/rates/:section?"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <RatesRulesPage />
             </ProtectedRoute>
           }
         />

@@ -57,7 +57,7 @@ class Employee extends Model
     ];
 
     protected $casts = [
-        'date_hired' => 'date',
+        'date_hired' => 'date:Y-m-d',
         'license_expiry' => 'date:Y-m-d',
         'birth_date' => 'date:Y-m-d',
         'work_history' => 'array',

@@ -19,6 +19,8 @@ import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, ProgressRing, StatusBreakdown } from "../../components/Insight";
 import { Icon } from "../../components/icons";
 import { focusRecord } from "../../lib/destination";
+import { plural } from "../../lib/plural";
+import { ContractForm } from "./deliveries/ContractsTab";
 
 const API_BASE = "/api";
 
@@ -28,6 +30,7 @@ const PlusIcon = () => <Icon name="plus" size={14} />;
 const KeyIcon = () => <Icon name="key" size={13} />;
 const EditIcon = () => <Icon name="edit" size={13} />;
 const TrashIcon = () => <Icon name="trash" size={13} />;
+const ContractIcon = () => <Icon name="clipboard" size={13} />;
 const CopyIcon = () => <Icon name="copy" size={13} />;
 const XIcon = () => <Icon name="x" size={16} />;
 const CheckIcon = () => <Icon name="check" size={14} />;
@@ -115,6 +118,7 @@ export default function CustomersPage() {
   const [creatingAccountFor, setCreatingAccountFor] = useState(null);
   // Why Create Login failed, shown under that customer's button: { id, message }
   const [accountError, setAccountError] = useState(null);
+  const [contractFor, setContractFor] = useState(null); // customer whose delivery contract is being made
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -375,7 +379,7 @@ export default function CustomersPage() {
           onPick={(i) => setTypeFilter(typeFilter === i.key ? "" : i.key)}
           active={typeFilter}
           empty="No customers yet."
-          footer={<ProgressRing value={share(withLogin)} label="Portal logins" caption={`${withLogin} of ${customers.length} customers can sign in to the portal`} />}
+          footer={<ProgressRing value={share(withLogin)} label="Portal logins" caption={`${withLogin} of ${plural(customers.length, "customer")} can sign in to the portal`} />}
         />
         <ActivityFeed title="Needs setup" subtitle="Missing a login, map pin or contact" items={attention} empty="Every customer has a login, a map pin and a contact." max={5} onPick={showCustomer} />
         <ActivityFeed title="Newest customers" items={newest} empty="Customers you add show up here." max={5} />
@@ -498,6 +502,14 @@ export default function CustomersPage() {
                       >
                         <EditIcon />
                       </button>
+                      <button
+                        onClick={() => setContractFor(c)}
+                        className="p-1.5 rounded-md border border-transparent bg-cyan-500 hover:bg-cyan-600 text-white"
+                        title="Contract"
+                        aria-label={`Delivery contract for ${c.name}`}
+                      >
+                        <ContractIcon />
+                      </button>
                       <button data-no-confirm
                         onClick={() => setDeactivateTarget(c)}
                         className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50"
@@ -554,8 +566,8 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label htmlFor="customers-page-customer-type" className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
-                  <select id="customers-page-customer-type" name="customer_type"
+                  <label htmlFor="customer-type" className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
+                  <select id="customer-type" name="customer_type"
                     value={form.customer_type || "dealer"}
                     onChange={(e) => setForm((f) => ({ ...f, customer_type: e.target.value }))}
                     className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
@@ -671,6 +683,16 @@ export default function CustomersPage() {
               </div>
           </form>
         </div>
+      )}
+
+      {/* Delivery contract for one store (same form as Deliveries > Contracts) */}
+      {contractFor && (
+        <ContractForm
+          stores={customers}
+          store={contractFor}
+          onClose={() => setContractFor(null)}
+          onSaved={() => setContractFor(null)}
+        />
       )}
 
       {/* Deactivate confirmation */}
@@ -831,8 +853,8 @@ function MapLinkField({ value, onChange, onPlace, onName }) {
 
   return (
     <div>
-      <label htmlFor="customers-page-map-link" className="text-[11px] text-slate-500 mb-1 block">Map Link</label>
-      <input id="customers-page-map-link" name="map_link"
+      <label htmlFor="customer-map-link" className="text-[11px] text-slate-500 mb-1 block">Map Link</label>
+      <input id="customer-map-link" name="map_link"
         type="text"
         value={value}
         onChange={(e) => typed(e.target.value)}

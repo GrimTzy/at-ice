@@ -79,6 +79,33 @@ export const DRIVER_STATUS = {
   off:         { dot: "bg-rose-500",    pill: PILL.danger, label: "Off" },
 };
 
+// Driver View order and status filter (owner, 2026-11-09): timed in first,
+// then in transit, not timed in, on leave (an approved leave, emergency leave
+// or rest day), then off (absent, timed out, no employee record). Inside a
+// group the Driver who finished their list first comes first (FIFO), then by
+// name. Only today has a status, except a leave, which is known ahead.
+export const DRIVER_GROUPS = [
+  { value: "timed_in", label: "Timed in" },
+  { value: "in_transit", label: "In transit" },
+  { value: "not_timed_in", label: "Not timed in" },
+  { value: "on_leave", label: "On leave" },
+  { value: "off", label: "Off" },
+];
+export function driverGroup(d) {
+  if (d.status === "available") return "timed_in";
+  if (d.status === "in_transit") return "in_transit";
+  if (/not timed in/i.test(d.reason || "")) return "not_timed_in";
+  if (d.status === "off" && /leave|rest day/i.test(d.reason || "")) return "on_leave";
+  if (d.status === "off" || d.status === "unavailable") return "off";
+  return null;
+}
+const GROUP_RANK = Object.fromEntries(DRIVER_GROUPS.map((g, i) => [g.value, i]));
+export function byDriverGroup(a, b) {
+  return (GROUP_RANK[driverGroup(a)] ?? 9) - (GROUP_RANK[driverGroup(b)] ?? 9)
+    || String(a.trip_completed_at || "~").localeCompare(String(b.trip_completed_at || "~"))
+    || String(a.name || "").localeCompare(String(b.name || ""));
+}
+
 export function storeName(c) {
   if (!c) return "—";
   return c.branch_code ? `${c.name} · ${c.branch_code}` : c.name;

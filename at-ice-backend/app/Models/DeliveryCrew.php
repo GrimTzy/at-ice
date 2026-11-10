@@ -9,7 +9,7 @@ class DeliveryCrew extends Model
 {
     protected $fillable = ['date', 'salesman_id', 'driver_id', 'chosen_by'];
 
-    protected $casts = ['date' => 'date'];
+    protected $casts = ['date' => 'date:Y-m-d'];
 
     public function salesman()
     {

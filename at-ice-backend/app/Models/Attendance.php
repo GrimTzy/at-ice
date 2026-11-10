@@ -29,7 +29,7 @@ class Attendance extends Model
     protected $hidden = ['open_key'];
 
     protected $casts = [
-        'date' => 'date',
+        'date' => 'date:Y-m-d',
         'hours_worked' => 'decimal:2',
         'ot_approved' => 'boolean',
     ];

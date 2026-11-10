@@ -165,13 +165,13 @@ export function DeliveriesPage() {
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => null);
-        console.error("Failed to start delivery:", res.status, errData);
+        toast.error(errData?.message || "Could not start this delivery. Please try again.");
         return;
       }
       await res.json();
       fetchDeliveries();
-    } catch (err) {
-      console.error("Network error starting delivery:", err);
+    } catch {
+      toast.error("Could not reach the server. Check your connection and try again.");
     } finally {
       setActionLoading(null);
     }

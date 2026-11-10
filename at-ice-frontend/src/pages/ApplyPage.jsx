@@ -338,7 +338,7 @@ export default function ApplyPage() {
                       <div className="grid grid-cols-1 gap-2">
                         {RESTRICTIONS.filter(([c]) => !/^\d$/.test(c)).map(([code, label]) => (
                           <label key={code} className="flex items-center gap-3 min-h-[44px] cursor-pointer">
-                            <input name="code" type="checkbox" checked={(form.license_restrictions || []).includes(code)} style={{ width: 22, height: 22 }}
+                            <input name="license_restriction" type="checkbox" checked={(form.license_restrictions || []).includes(code)} style={{ width: 22, height: 22 }}
                               onChange={(e) => setForm((f) => ({ ...f, license_restrictions: e.target.checked ? [...(f.license_restrictions || []), code] : (f.license_restrictions || []).filter((c) => c !== code) }))} />
                             <span className="text-[14px] text-slate-700"><b className="font-mono">{code}</b> · {label}</span>
                           </label>

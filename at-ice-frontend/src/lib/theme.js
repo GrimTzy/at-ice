@@ -169,7 +169,18 @@ function runThemeSwitch(update) {
     done();
     return;
   }
-  const fade = document.startViewTransition(() => flushSync(update));
+  // The swap runs inside the transition, which first waits for the page to draw
+  // a frame. A window nobody is looking at (behind another window, a test
+  // browser) draws none, so the swap would wait for it and a second click would
+  // flip it back. The timer makes sure it happens within a quarter second.
+  let applied = false;
+  const apply = () => {
+    if (applied) return;
+    applied = true;
+    flushSync(update);
+  };
+  const fade = document.startViewTransition(apply);
+  setTimeout(apply, 250);
   // ready rejects when a second click replaces this switch, and never settles
   // while the page draws no frames (tab sent to the back), hence the timer
   fade.ready.catch(() => {}).finally(done);

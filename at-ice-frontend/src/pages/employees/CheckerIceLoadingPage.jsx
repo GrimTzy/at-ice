@@ -10,6 +10,7 @@ import { useMaxQuantity } from "../../lib/limits";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import { formatDateTime } from "../../lib/time";
+import { plural } from "../../lib/plural";
 
 const token = () => localStorage.getItem("token") || "";
 const PRODUCT_TYPES = [
@@ -148,11 +149,11 @@ export default function CheckerIceLoadingPage() {
         <>
           <section aria-label="Deliveries to count" className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-[15px] font-semibold text-slate-900">Today's trucks</h2>
+              <h2 className="text-[15px] font-semibold text-slate-900">Trucks to count</h2>
               <StatusBadge tone={toCount ? "pending" : "done"}>{toCount ? `${toCount} to count` : "All counted"}</StatusBadge>
             </div>
             {shownDeliveries.length === 0 ? (
-              <EmptyCard icon="truck" title={query ? "No match" : "No trucks to count"}>{query ? "No truck or delivery matches your search." : "No pending or in-transit deliveries today."}</EmptyCard>
+              <EmptyCard icon="truck" title={query ? "No match" : "No trucks to count"}>{query ? "No truck or delivery matches your search." : "No pending or in-transit deliveries for today or earlier."}</EmptyCard>
             ) : (
               <div className="grid grid-cols-1 gap-3">
                 {shownDeliveries.map((d) => (
@@ -186,7 +187,7 @@ export default function CheckerIceLoadingPage() {
                     <h3 className="text-[15px] font-semibold text-slate-900 truncate">{g.delivery?.customer?.name || g.delivery?.delivery_no || `Delivery #${g.delivery_id}`}</h3>
                     <div className="text-[13px] text-slate-500">{g.delivery?.delivery_no || `#${g.delivery_id}`}</div>
                   </div>
-                  <StatusBadge tone="done">{g.total} sacks</StatusBadge>
+                  <StatusBadge tone="done">{plural(g.total, "sack")}</StatusBadge>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {g.items.filter((i) => i.quantity_loaded > 0).map((i) => (
@@ -206,7 +207,7 @@ export default function CheckerIceLoadingPage() {
         title={chosen ? `Count ${chosen.customer || chosen.delivery_no}` : "Count sacks"}
         footer={
           <LoadingButton type="submit" form="ice-count-form" loading={submitting} disabled={timedIn === false || !!chosen?.loaded}>
-            {submitting ? "Saving…" : `Save count · ${total} sacks`}
+            {submitting ? "Saving…" : `Save count · ${plural(total, "sack")}`}
           </LoadingButton>
         }
       >

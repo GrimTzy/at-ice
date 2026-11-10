@@ -10,6 +10,7 @@ import { formatTime } from "../../lib/time";
 import { KpiIcon } from "../../components/Kpi";
 import { TONES } from "../../lib/kpiTones";
 import { Icon } from "../../components/icons";
+import { plural } from "../../lib/plural";
 
 const DollarIcon = () => <Icon name="dollar" size={14} />;
 const AlertIcon = () => <Icon name="alert" size={14} />;
@@ -525,30 +526,30 @@ export default function Dashboard() {
                     <button key={k} onClick={() => { setChartPeriod(k); setChartValue(""); }} aria-pressed={chartPeriod === k} className={`px-2.5 py-1 text-[10px] font-medium rounded transition-colors border-0 cursor-pointer ${chartPeriod === k ? "bg-white text-slate-800 shadow-sm" : "text-slate-400 bg-transparent hover:text-slate-600"}`}>{label}</button>
                   ))}
                 </div>
+                {/* Fixed widths so the picker stays put when Day, Month or Year is picked */}
                 <label className="flex items-center gap-1.5 bg-slate-100/60 rounded-md p-0.5 pl-2 text-[10px] text-slate-500">
-                  {chartPeriod === "year" && <CalendarIconLocal />}
                   <span className="sr-only">Compare with</span>
                   {chartPeriod === "year" ? (
-                    <select name="picked_value"
+                    <select name="compare_with"
                       value={salesChart?.period === "year" ? salesChart.picked_value : ""}
                       onChange={(e) => setChartValue(e.target.value)}
                       aria-label="Year to compare with this year"
-                      className="px-2 py-1 rounded bg-white shadow-sm text-[10px] font-medium text-slate-800 outline-none cursor-pointer"
+                      className="w-[150px] px-2 py-1 rounded bg-white shadow-sm text-[10px] font-medium text-slate-800 outline-none cursor-pointer"
                     >
                       {Array.from({ length: Math.max(1, Number(salesChart?.max_value || new Date().getFullYear()) - Number(salesChart?.first_year || new Date().getFullYear() - 1)) }, (_, i) => Number(salesChart?.max_value || new Date().getFullYear()) - 1 - i)
                         .map((y) => <option key={y} value={y}>{y}</option>)}
                     </select>
                   ) : (
-                    <input name="picked_value"
+                    <input name="compare_with"
                       type={chartPeriod === "day" ? "date" : "month"}
                       value={salesChart?.period === chartPeriod ? salesChart.picked_value : ""}
                       max={salesChart?.period === chartPeriod ? salesChart.max_value : undefined}
                       onChange={(e) => e.target.value && setChartValue(e.target.value)}
                       aria-label={chartPeriod === "day" ? "Day to compare with today" : "Month to compare with this month"}
-                      className="px-2 py-1 rounded bg-white/70 text-[10px] font-medium text-slate-800 outline-none cursor-pointer"
+                      className="w-[150px] px-2 py-1 rounded bg-white/70 text-[10px] font-medium text-slate-800 outline-none cursor-pointer"
                     />
                   )}
-                  <span className="pr-2 whitespace-nowrap">vs {chartPeriod === "day" ? "today" : chartPeriod === "month" ? "this month" : "this year"}</span>
+                  <span className="w-[72px] pr-2 whitespace-nowrap">vs {chartPeriod === "day" ? "today" : chartPeriod === "month" ? "this month" : "this year"}</span>
                 </label>
               </div>
             </div>
@@ -947,7 +948,7 @@ export default function Dashboard() {
                 >
                   <div className="text-xs text-slate-800 font-medium truncate">{r.customer_name}</div>
                   <div className="text-xs text-slate-800 font-mono font-semibold">{fmt(r.total_amount)}</div>
-                  <div className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${r.days_overdue > 15 ? "bg-red-100 text-red-500" : "bg-amber-100 text-amber-600"}`}>{r.days_overdue} days</div>
+                  <div className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${r.days_overdue > 15 ? "bg-red-100 text-red-500" : "bg-amber-100 text-amber-600"}`}>{plural(r.days_overdue, "day")}</div>
                 </div>
               ))}
             </div>
@@ -983,5 +984,4 @@ const PEOPLE_MODULES = ["leave", "employees", "face", "applicants", "payroll", "
 const MessageIconLocal = () => <Icon name="message" size={14} />;
 const PeopleIconLocal = () => <Icon name="users" size={14} />;
 const BellIconLocal = () => <Icon name="bell" size={14} />;
-const CalendarIconLocal = () => <Icon name="calendar" size={12} />;
 const ClockIconLocal = () => <Icon name="clock" size={14} />;

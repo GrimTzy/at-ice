@@ -51,6 +51,10 @@ const FileIcon = () => (
   <Icon name="file" size={16} />
 );
 
+// Sent and not yet acknowledged (an announcement keeps status "sent" for
+// everyone; each person's acknowledgment is their own)
+const needsAck = (m) => m.status === "sent" && !m.acknowledged_at;
+
 function MemoCard({ memo, onAcknowledged }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -77,10 +81,10 @@ function MemoCard({ memo, onAcknowledged }) {
     <div className={`rounded-xl border p-3 space-y-2 ${isUrgentMemo(memo) ? "border-rose-300 bg-rose-50/60" : "border-slate-200 bg-white"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${level.cls}`}>{level.label}</span>
-        <StatusBadge tone={memo.status === "sent" ? "pending" : memo.status === "awaiting_physical" ? "urgent" : "done"}>{status.label}</StatusBadge>
+        <StatusBadge tone={needsAck(memo) ? "pending" : memo.status === "awaiting_physical" ? "urgent" : "done"}>{memo.kind === "announcement" ? (memo.acknowledged_at ? "Acknowledged" : "New announcement") : status.label}</StatusBadge>
       </div>
       <div className="text-[15px] font-semibold text-slate-900 break-words">{memo.subject}</div>
-      <div className="text-[12px] text-slate-500">{memo.memo_no} · incident {formatDateShort(memo.incident_date, { year: true })} · sent {formatDateTime(memo.issued_at, { year: false })}</div>
+      <div className="text-[12px] text-slate-500">{memo.memo_no}{memo.kind === "announcement" ? "" : ` · incident ${formatDateShort(memo.incident_date, { year: true })}`} · sent {formatDateTime(memo.issued_at, { year: false })}</div>
 
       {isUrgentMemo(memo) && (
         <div className="rounded-lg bg-rose-600 text-white px-3 py-2 text-[13px] font-semibold">URGENT: Report to the HR office for physical sign-off and the administrative hearing.</div>
@@ -103,7 +107,7 @@ function MemoCard({ memo, onAcknowledged }) {
         </ul>
       )}
 
-      {memo.status === "sent" && (
+      {needsAck(memo) && (
         <button type="button" disabled={busy} onClick={acknowledge} title="Confirm that you received and read this memo" className="w-full min-h-[44px] rounded-xl bg-cyan-600 text-white text-[15px] font-semibold disabled:opacity-60">
           {busy ? "Saving…" : "Acknowledge receipt"}
         </button>
@@ -118,7 +122,7 @@ function MemoCard({ memo, onAcknowledged }) {
 export function MyMemosButton({ compact = false, variant = "icon", onActivate }) {
   const { memos, loading, error, load, setMemos } = useMyMemos();
   const [open, setOpen] = useState(false);
-  const pending = memos.filter((m) => m.status === "sent" || m.status === "awaiting_physical").length;
+  const pending = memos.filter((m) => needsAck(m) || m.status === "awaiting_physical").length;
 
   return (
     <>
@@ -178,7 +182,7 @@ export function MyMemosButton({ compact = false, variant = "icon", onActivate })
 export function MemoAlert() {
   const { memos } = useMyMemos();
   const urgent = memos.filter(isUrgentMemo);
-  const unread = memos.filter((m) => m.status === "sent");
+  const unread = memos.filter(needsAck);
   if (!urgent.length && !unread.length) return null;
 
   return urgent.length ? (

@@ -15,8 +15,8 @@ class PerformanceReview extends Model
     ];
 
     protected $casts = [
-        'period_start' => 'date',
-        'period_end' => 'date',
+        'period_start' => 'date:Y-m-d',
+        'period_end' => 'date:Y-m-d',
         'final_rating' => 'float',
         'published_rating' => 'float',
         'snapshot' => 'array',

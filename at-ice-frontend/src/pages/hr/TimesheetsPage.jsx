@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import HrLayout from "../../components/HrLayout";
+import { plural } from "../../lib/plural";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
@@ -118,9 +119,9 @@ export default function TimesheetsPage() {
     <HrLayout pageTitle="Timesheets" breadcrumb="HRIS / Timesheets">
       <KpiGrid cols={5}>
         <KpiCard label="Employees" icon="users" tone="cyan" value={all.length} sub={period ? payPeriodLabel(period) : "This pay period"} onClick={() => setApproval("")} />
-        <KpiCard label="Approved" icon="check" tone="emerald" value={done} sub={`${statusOf("paid")} already paid by Admin`} bar={all.length ? done / all.length : 0} onClick={() => setApproval((a) => (a === "approved" ? "" : "approved"))} active={approval === "approved"} />
+        <KpiCard label="Approved" icon="check" tone="emerald" value={done} sub={`${statusOf("paid")} already paid`} bar={all.length ? done / all.length : 0} onClick={() => setApproval((a) => (a === "approved" ? "" : "approved"))} active={approval === "approved"} />
         <KpiCard label="Not approved" icon="clock" tone="amber" value={statusOf("not_approved")} sub={ended ? "Ready for your approval" : "Period has not ended yet"} bar={all.length ? statusOf("not_approved") / all.length : 0} live={ended && statusOf("not_approved") > 0} onClick={() => setApproval((a) => (a === "not_approved" ? "" : "not_approved"))} active={approval === "not_approved"} />
-        <KpiCard label="Absences" icon="x" tone="rose" value={absences} sub={`${lateMin} late minutes in all`} onClick={() => setApproval((a) => (a === "absent" ? "" : "absent"))} active={approval === "absent"} />
+        <KpiCard label="Absences" icon="x" tone="rose" value={absences} sub={`${plural(lateMin, "late minute")} in all`} onClick={() => setApproval((a) => (a === "absent" ? "" : "absent"))} active={approval === "absent"} />
         <KpiCard label="Overtime to approve" icon="alert" tone="violet" value={otToApprove} sub="Tick it with the timesheet to pay it" onClick={() => setApproval((a) => (a === "overtime" ? "" : "overtime"))} active={approval === "overtime"} />
       </KpiGrid>
 
@@ -159,7 +160,7 @@ export default function TimesheetsPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-slate-400 border-b border-black/[0.09]">
-                  <th className="px-[18px] py-2.5"><input name="all_on" type="checkbox" data-native aria-label="Select all" checked={allOn} disabled={!ended}
+                  <th className="px-[18px] py-2.5"><input name="select_all" type="checkbox" data-native aria-label="Select all" checked={allOn} disabled={!ended}
                     onChange={() => setSelected(allOn ? new Set() : new Set(selectable.map((r) => r.id)))} /></th>
                   <th className="px-3 py-2.5 font-medium">Employee ID</th>
                   <th className="px-3 py-2.5 font-medium">Name</th>
@@ -177,11 +178,11 @@ export default function TimesheetsPage() {
               <tbody>
                 {pager.pageItems.map((r) => (
                   <tr key={r.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
-                    <td className="px-[18px] py-2.5"><input name="id" type="checkbox" data-native aria-label={`Select ${r.employee_id}`} disabled={!ended || r.status === "paid"} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>
+                    <td className="px-[18px] py-2.5"><input name="select_timesheet" type="checkbox" data-native aria-label={`Select ${r.employee_id}`} disabled={!ended || r.status === "paid"} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>
                     <td className="px-3 py-2.5 font-mono text-slate-600">{r.employee_id}</td>
                     <td className="px-3 py-2.5 text-slate-800 font-medium whitespace-nowrap">
                       {r.name}
-                      {r.employment_status === "probationary" && <span className="ml-1.5 text-[9px] font-bold text-amber-600">PROBATIONARY</span>}
+                      {r.employment_status === "probationary" && <span className="cell-note text-[9px] font-bold text-amber-600">PROBATIONARY</span>}
                     </td>
                     <td className="px-3 py-2.5 font-mono">{num(r.days_present)}</td>
                     <td className={`px-3 py-2.5 font-mono ${r.absent_days ? "text-red-600" : ""}`}>{num(r.absent_days)}</td>
@@ -192,7 +193,7 @@ export default function TimesheetsPage() {
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       {r.ot_pending_minutes > 0 ? (
                         <label className="flex items-center gap-1.5 text-amber-700" title="Paid only if approved">
-                          <input name="id" type="checkbox" data-native disabled={!ended || r.status === "paid"} checked={otOk.has(r.id)}
+                          <input name="approve_overtime" type="checkbox" data-native disabled={!ended || r.status === "paid"} checked={otOk.has(r.id)}
                             onChange={() => setOtOk((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })} />
                           {num(r.ot_pending_minutes / 60)} h to approve
                         </label>

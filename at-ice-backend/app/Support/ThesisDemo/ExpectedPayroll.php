@@ -35,6 +35,7 @@ class ExpectedPayroll
             'negative' => (string) $get('payroll.negative_net_handling', 'CARRY_OVER'),
             'gov' => (string) $get('payroll.gov_deduction_strategy', 'SPLIT_FIRST_TWO'),
             'break' => (float) $get('attendance.break_hours', 1),
+            'night_share' => max(0.10, (float) $get('payroll.night_diff_rate', 0.10)),
             'work_days' => array_map('intval', explode(',', (string) $get('attendance.work_days', '1,2,3,4,5'))),
         ];
         foreach (DB::table('holidays')->get() as $h) {
@@ -75,6 +76,34 @@ class ExpectedPayroll
         }
 
         return $out;
+    }
+
+    // Night minutes of one record, counted minute by minute from the clock
+    // (10:00 PM to 6:00 AM), split into the regular part and the overtime part.
+    private function nightSplit(object $r, string $ymd, float $hpd): array
+    {
+        $toMin = fn ($t) => (int) substr($t, 0, 2) * 60 + (int) substr($t, 3, 2);
+        $in = $toMin($r->time_in);
+        $out = $toMin($r->time_out);
+        if ($out <= $in) {
+            $out += 1440;
+        }
+        $regEnd = max($in, $out - (int) $r->ot_minutes);
+        $isNight = fn ($m) => ($m % 1440) >= 1320 || ($m % 1440) < 360;
+        $reg = 0;
+        for ($m = $in; $m < $regEnd; $m++) {
+            $reg += $isNight($m) ? 1 : 0;
+        }
+        $ot = 0;
+        if ($r->ot_approved) {
+            for ($m = $regEnd; $m < $out; $m++) {
+                $ot += $isNight($m) ? 1 : 0;
+            }
+        }
+        $span = ($regEnd - $in) / 60;
+        $paid = $span > $hpd ? min($hpd, max(0, $span - $this->set['break'])) : $span;
+
+        return [min($reg / 60, $paid), $ot / 60];
     }
 
     private function d(string $ymd): CarbonImmutable
@@ -257,6 +286,31 @@ class ExpectedPayroll
             $steps[] = "ordinary OT {$otOrdinary} h x {$hourly} x {$otRate}";
         }
 
+        // Night differential: share x the rate of each night hour
+        $nightPay = 0.0;
+        $nightHours = 0.0;
+        foreach ($byDay as $ymd => $rows) {
+            $reg = 0.0;
+            $ot = 0.0;
+            foreach ($rows as $r) {
+                if ($r->time_in && $r->time_out) {
+                    [$a, $b] = $this->nightSplit($r, $ymd, $hpd);
+                    $reg += $a;
+                    $ot += $b;
+                }
+            }
+            if ($reg <= 0 && $ot <= 0) {
+                continue;
+            }
+            $h = $this->holidays[$ymd] ?? null;
+            $rest = ! in_array($this->d($ymd)->dayOfWeekIso, $s['work_days'], true);
+            $dayRate = $h ? $this->mult($h->is_double ? 'DOUBLE_HOLIDAY' : ($h->type === 'REGULAR' ? ($rest ? 'REGULAR_HOLIDAY_REST_DAY' : 'REGULAR_HOLIDAY_WORKED') : ($h->type === 'SPECIAL_WORKING' ? 'SPECIAL_WORKING_DAY_WORKED' : 'SPECIAL_HOLIDAY_WORKED')), $ymd) : 1.0;
+            $nOtRate = $this->mult($h ? (($h->type === 'REGULAR' || $h->is_double) ? 'OT_REGULAR_HOLIDAY' : 'OT_SPECIAL_HOLIDAY') : 'OT_ORDINARY', $ymd);
+            $nightPay += ($reg * $dayRate + $ot * $nOtRate) * $hourly * $s['night_share'];
+            $nightHours += $reg + $ot;
+            $steps[] = "night {$ymd}: ".round($reg, 2)." h x {$dayRate}".($ot ? ' + OT '.round($ot, 2)." h x {$nOtRate}" : '')." x {$hourly} x {$s['night_share']}";
+        }
+
         $adjTotal = 0.0;
         $adjNon = 0.0;
         foreach ($adjustments as [$label, $amount, $taxable]) {
@@ -264,7 +318,7 @@ class ExpectedPayroll
             $adjNon += $taxable ? 0 : $amount;
             $steps[] = "{$label} +{$amount}".($taxable ? ' (taxable)' : ' (non-taxable)');
         }
-        $gross = max(0, $basic + $leavePay + $holidayPay + $holidayOt + $otPay + $adjTotal - $lateDed - $absence - $leaveDed);
+        $gross = max(0, $basic + $leavePay + $holidayPay + $holidayOt + $otPay + $nightPay + $adjTotal - $lateDed - $absence - $leaveDed);
 
         $basis = $monthly ?? $daily * $s['divisor'];
         $share = $this->govShare($period['pay_day']);
@@ -312,6 +366,7 @@ class ExpectedPayroll
             'unpaid_leave_hours' => round($unpaidHours, 2),
             'holiday_hours' => round(array_sum(array_column($holidayWorked, 3)), 2),
             'ot_hours' => round($otOrdinary + array_sum(array_column($holidayWorked, 4)), 2),
+            'night_hours' => round($nightHours, 2),
             'daily_rate' => $daily,
             'hourly_rate' => $hourly,
             'gov_share' => $share,
@@ -321,6 +376,7 @@ class ExpectedPayroll
             'holiday_pay' => self::r2($holidayPay),
             'holiday_ot_pay' => self::r2($holidayOt),
             'overtime_pay' => self::r2($otPay),
+            'night_diff_pay' => self::r2($nightPay),
             'late_deduction' => self::r2($lateDed),
             'absence_deduction' => self::r2($absence),
             'leave_deduction' => self::r2($leaveDed),

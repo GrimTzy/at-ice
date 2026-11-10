@@ -13,6 +13,8 @@ use Carbon\Carbon;
 //   in_transit   has a delivery in transit (shown, not selectable)
 //   unavailable  not timed in yet today, timed out, or no active employee
 //                record (shown, not selectable)
+// Each row also has open_stops (today's stops not done yet) and, for an
+// available Driver with none left, trip_completed_at (see tripCompletedAt).
 // The rule applies to deliveries for today. A delivery for a later day can
 // go to any active Driver, since nobody has timed in for that day yet.
 class DriverAvailability
@@ -48,10 +50,19 @@ class DriverAvailability
             ->get(['id', 'driver_id', 'delivery_no'])
             ->groupBy('driver_id');
 
-        return $drivers->map(function ($u) use ($inTransit) {
+        // Today's list of each Driver: stops still open and the last one done
+        $todays = Delivery::whereIn('driver_id', $drivers->pluck('id'))
+            ->whereDate('scheduled_date', $today)
+            ->whereIn('status', ['pending', 'in_transit', 'delivered'])
+            ->get(['id', 'driver_id', 'status', 'delivered_at'])
+            ->groupBy('driver_id');
+
+        return $drivers->map(function ($u) use ($inTransit, $todays, $today) {
             $emp = $u->employee;
             $att = $emp?->attendances->first();
             $trip = $inTransit->get($u->id)?->first();
+            $list = $todays->get($u->id) ?? collect();
+            $openStops = $list->whereIn('status', ['pending', 'in_transit'])->count();
 
             if (! $emp || ! $emp->is_active) {
                 [$status, $reason] = ['unavailable', 'No active employee record'];
@@ -71,8 +82,26 @@ class DriverAvailability
                 'employee_id' => $emp?->employee_id,
                 'status' => $status,
                 'reason' => $reason,
+                'open_stops' => $openStops,
+                'trip_completed_at' => $status === 'available' && $openStops === 0
+                    ? self::tripCompletedAt($list, $today, (string) $att->time_in)
+                    : null,
             ];
         })->values()->all();
+    }
+
+    // When an available Driver finished today's list: the last stop delivered,
+    // or the time in when there was nothing to deliver. The trucks stay out
+    // (refrigerated, no trip back to the plant), so the dispatch queue goes by
+    // this time: the first one done gets the next urgent order (FIFO).
+    private static function tripCompletedAt($list, string $today, string $timeIn): string
+    {
+        $last = $list->where('status', 'delivered')->max('delivered_at');
+        $at = $last
+            ? Carbon::parse($last)->setTimezone(self::tz())
+            : Carbon::parse("{$today} {$timeIn}", self::tz());
+
+        return $at->format('Y-m-d H:i:s');
     }
 
     // Null when this Driver may take a delivery on $date, otherwise why not.

@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 // Attendance Station kiosk. Each kiosk computer sends its own random kiosk ID
 // (device_id). After kiosk.max_wrong_pins wrong HR PINs in a row that kiosk is
@@ -169,22 +170,25 @@ class KioskController extends Controller
         $device = KioskDevice::for($request->device_id, $ip);
         $setting = KioskSetting::current();
 
-        if (! $setting->hasAdminPin()) {
-            return response()->json(['message' => 'No Admin override PIN has been set. Admin sets it in Settings.'], 409);
+        // The Admin override PIN or HR's own override PIN (owner, 2026-11-10)
+        if (! $setting->hasAdminPin() && ! $setting->hasHrOverridePin()) {
+            return response()->json(['message' => 'No override PIN has been set. Admin sets one in Settings, HR in Kiosk PIN.'], 409);
         }
-        if (! $setting->checkAdminPin((string) $request->admin_pin)) {
+        $pin = (string) $request->admin_pin;
+        $by = $setting->checkAdminPin($pin) ? 'admin' : ($setting->checkHrOverridePin($pin) ? 'hr' : null);
+        if (! $by) {
             $device->log('override_wrong', $ip);
             Audit::log('kiosk.override_failed', $device, null, ['ip' => $ip]);
 
-            return response()->json(['message' => 'Wrong Admin PIN.'], 422);
+            return response()->json(['message' => 'Wrong override PIN.'], 422);
         }
 
         $before = ['locked_at' => $device->locked_at?->toDateTimeString(), 'failed_attempts' => $device->failed_attempts];
         $device->forceFill(['locked_at' => null, 'failed_attempts' => 0])->save();
         $device->log('override_ok', $ip);
-        Audit::log('kiosk.override', $device, $before, ['locked_at' => null, 'ip' => $ip]);
+        Audit::log('kiosk.override', $device, $before, ['locked_at' => null, 'ip' => $ip, 'by' => $by]);
 
-        return response()->json(['message' => 'Kiosk unlocked by Admin. Enter the HR PIN to start.']);
+        return response()->json(['message' => 'Kiosk unlocked by '.($by === 'admin' ? 'Admin' : 'HR').'. Enter the HR PIN to start.']);
     }
 
     // GET /api/kiosk/status (kiosk token required). The kiosk page uses it to
@@ -212,7 +216,33 @@ class KioskController extends Controller
                 ->map(fn ($d) => ['id' => $d->id, 'kiosk' => strtoupper(substr($d->device_id, 0, 8)), 'locked_at' => $d->locked_at, 'ip' => $d->last_ip]),
             'can_unlock' => request()->user()?->role === 'admin' || (bool) Settings::get('kiosk.hr_can_override'),
             'admin_pin_set' => $setting->hasAdminPin(),
+            'hr_override_pin_set' => $setting->hasHrOverridePin(),
+            'hr_override_pin_changed_at' => $setting->hr_override_pin_changed_at,
         ]);
+    }
+
+    // PUT /api/hr/kiosk-override-pin (HR). HR's own override PIN for a locked
+    // kiosk; the Admin override PIN stays. It must differ from the kiosk PIN,
+    // or the lock after wrong PINs would mean nothing. Needs HR's password.
+    public function setHrOverridePin(Request $request)
+    {
+        $data = $request->validate([
+            'current_password' => 'required|string',
+            'override_pin' => ['required', 'string', 'regex:/^\d{4}$/', 'confirmed'],
+        ], [
+            'override_pin.regex' => 'The HR override PIN must be exactly 4 digits.',
+        ]);
+
+        $this->assertPassword($request, $data['current_password']);
+
+        $setting = KioskSetting::current();
+        if ($setting->checkPin($data['override_pin'])) {
+            throw ValidationException::withMessages(['override_pin' => ['Use a PIN different from the kiosk PIN.']]);
+        }
+        $setting->setHrOverridePin($data['override_pin']);
+        Audit::log('kiosk.hr_override_pin_changed');
+
+        return response()->json(['message' => 'HR override PIN saved.']);
     }
 
     // PUT /api/hr/kiosk-pin. Sets the first PIN or changes it. Needs the account

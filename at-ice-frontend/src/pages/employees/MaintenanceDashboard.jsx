@@ -8,6 +8,7 @@ import { formatDateTime } from "../../lib/time";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { plural } from "../../lib/plural";
 
 const headers = () => ({ Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` });
 
@@ -77,7 +78,7 @@ export default function MaintenanceDashboard() {
           <KpiGrid cols={4}>
             <KpiCard label="Pending" icon="clock" tone="amber" value={count("pending")} sub="Waiting for Admin" to="/maintenance/stock-out-request?status=pending" />
             <KpiCard label="Approved" icon="check" tone="cyan" value={count("approved")} sub="Ready to be released" to="/maintenance/stock-out-request?status=approved" />
-            <KpiCard label="Released" icon="box" tone="emerald" value={count("released")} sub={`${requests.length} requests in all`} bar={requests.length ? count("released") / requests.length : 0} to="/maintenance/stock-out-request?status=released" />
+            <KpiCard label="Released" icon="box" tone="emerald" value={count("released")} sub={`${plural(requests.length, "request")} in all`} bar={requests.length ? count("released") / requests.length : 0} to="/maintenance/stock-out-request?status=released" />
             <KpiCard label="Open projects" icon="tool" tone="violet" value={projects.filter((p) => p.status !== "done").length} sub={`${projects.filter((p) => p.status === "done").length} done`} to="/maintenance/projects" />
           </KpiGrid>
 

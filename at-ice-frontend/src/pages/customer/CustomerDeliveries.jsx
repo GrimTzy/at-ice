@@ -87,7 +87,7 @@ export default function CustomerDeliveries() {
   const [selected, setSelected] = useState(null);
   const [topUp, setTopUp] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
-  // "may be delayed" notices: the delivery went to another driver
+  // Notices about their deliveries: may be delayed, moved to another driver, cancelled
   const [notices, setNotices] = useState([]);
 
   // reload when a live notice for this page arrives (lib/live.js)
@@ -187,7 +187,7 @@ export default function CustomerDeliveries() {
                       <tr key={d.id} className="hover:bg-slate-50">
                         <td className="px-5 py-3 font-medium text-slate-800">
                           {d.delivery_no}
-                          {d.is_top_up && <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold border bg-cyan-50 text-cyan-800 border-cyan-200">Top-up</span>}
+                          {d.is_top_up && <span className="cell-note px-1.5 py-0.5 rounded-full text-[10px] font-semibold border bg-cyan-50 text-cyan-800 border-cyan-200">Top-up</span>}
                         </td>
                         <td className="px-3 py-3 text-slate-600">{fmtDate(d.scheduled_date)}</td>
                         <td className="px-3 py-3 text-slate-600 hidden md:table-cell">{d.driver_name || "Not yet assigned"}</td>

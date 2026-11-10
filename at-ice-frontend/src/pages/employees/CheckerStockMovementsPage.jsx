@@ -26,6 +26,7 @@ function firstError(data, fallback) {
 export default function CheckerStockMovementsPage() {
   const timedIn = useTimedIn();
   const token = localStorage.getItem("token");
+  const myId = (() => { try { return JSON.parse(localStorage.getItem("user") || "{}")?.id ?? null; } catch { return null; } })();
   const [movements, setMovements] = useState([]);
   const [products, setProducts] = useState([]);
   const [status, setStatus] = useState("loading");
@@ -158,12 +159,20 @@ export default function CheckerStockMovementsPage() {
                 </div>
               </div>
               {m.status === "pending" && (
-                <div className="grid grid-cols-2 gap-2 mt-3">
-                  <LoadingButton loading={actingOn === `${m.id}:confirm`} disabled={!!actingOn || timedIn === false} onClick={() => act(m, "confirm")}>
-                    <Icon name="check" /> Confirm
-                  </LoadingButton>
-                  <LoadingButton data-no-confirm variant="secondary" disabled={!!actingOn || timedIn === false} onClick={() => setCancelTarget(m)}>Cancel</LoadingButton>
-                </div>
+                // Double entry: whoever logged it cannot confirm it
+                (m.entered_by?.id ?? m.entered_by) === myId ? (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-[13px] text-slate-500">You logged this, so another Checker confirms it.</p>
+                    <LoadingButton data-no-confirm variant="secondary" className="w-full" disabled={!!actingOn || timedIn === false} onClick={() => setCancelTarget(m)}>Cancel</LoadingButton>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    <LoadingButton loading={actingOn === `${m.id}:confirm`} disabled={!!actingOn || timedIn === false} onClick={() => act(m, "confirm")}>
+                      <Icon name="check" /> Confirm
+                    </LoadingButton>
+                    <LoadingButton data-no-confirm variant="secondary" disabled={!!actingOn || timedIn === false} onClick={() => setCancelTarget(m)}>Cancel</LoadingButton>
+                  </div>
+                )
               )}
               {m.status === "confirmed" && m.confirmed_by && <div className="text-[13px] text-emerald-700 mt-2">Confirmed by {m.confirmed_by.name}</div>}
             </article>
