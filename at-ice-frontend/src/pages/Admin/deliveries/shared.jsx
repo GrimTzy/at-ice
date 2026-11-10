@@ -2,8 +2,22 @@ import { useState } from "react";
 import { STATUS_STYLE, inputCls, storeName } from "./utils";
 import { Icon } from "../../../components/icons";
 import { CUSTOMER_TYPES } from "../../../lib/customerTypes";
+import { timingPill, deliverByTime } from "../../../lib/deliverBy";
 
 // Small pieces of UI shared by Admin > Deliveries (helpers are in utils.js).
+
+// A delivery's Deliver by time ("by 8:00 AM") and, under it, On time, Late or
+// Overdue (lib/deliverBy.js). "—" for a delivery with no Deliver by time.
+export function DeliverByCell({ delivery }) {
+  if (!delivery.due_at) return <span className="text-slate-300">—</span>;
+  const pill = timingPill(delivery.timing);
+  return (
+    <div className="whitespace-nowrap">
+      <div className="text-slate-600">by {deliverByTime(delivery.due_at)}</div>
+      {pill && <span className={`cell-note px-1.5 py-px rounded-full text-[10px] font-semibold ${pill.cls}`}>{pill.label}</span>}
+    </div>
+  );
+}
 
 export function StatusCell({ status }) {
   const s = STATUS_STYLE[status] || STATUS_STYLE.pending;

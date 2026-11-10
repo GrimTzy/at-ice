@@ -92,6 +92,10 @@ class CustomerPortalController extends Controller
                 'notes' => $delivery->notes,
                 'is_top_up' => (bool) $delivery->is_top_up,
                 'ordered_at' => $delivery->ordered_at,
+                // Deliver by: the latest time it reaches the store, and whether
+                // it made it (on_time, late, overdue, due)
+                'due_at' => $delivery->due_at,
+                'timing' => $delivery->timing,
                 // Plate number is folded into the display name on the server,
                 // for example "Rhalf Valencia (PN: V7824)".
                 'driver_name' => $plate ? "{$driverName} (PN: {$plate})" : $driverName,

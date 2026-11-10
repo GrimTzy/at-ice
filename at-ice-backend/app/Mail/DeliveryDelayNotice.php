@@ -24,7 +24,7 @@ class DeliveryDelayNotice extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "AT Ice: delivery {$this->deliveryNo} may be delayed");
+        return new Envelope(subject: "AT Ice: delivery {$this->deliveryNo} is running late");
     }
 
     public function content(): Content

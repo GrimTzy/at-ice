@@ -15,7 +15,9 @@ import AdjustmentRequests from "./deliveries/AdjustmentRequests";
 import RoutesTab from "./deliveries/RoutesTab";
 import DriverStoresTab from "./deliveries/DriverStoresTab";
 import { ReassignedTag } from "./deliveries/shared";
-import { STATUS_STYLE, DRIVER_GROUPS, driverGroup, timeOf } from "./deliveries/utils";
+import { STATUS_STYLE, DRIVER_GROUPS, driverGroup, timeOf, nowHm } from "./deliveries/utils";
+import Req from "../../components/Req";
+import { timingPill, deliverByTime } from "../../lib/deliverBy";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
@@ -82,7 +84,7 @@ const todayStr = () => {
 let blockSeq = 0;
 const emptyBlock = () => ({
   key: `${Date.now()}-${++blockSeq}`, error: "", // unique after a restored draft too
-  driver_id: "", customer_id: "", scheduled_date: todayStr(), notes: "",
+  driver_id: "", customer_id: "", scheduled_date: todayStr(), deliver_by: "", notes: "",
   items: [{ ...EMPTY_ITEM }],
 });
 
@@ -283,6 +285,9 @@ export default function DeliveriesPage() {
     if (enforced && drv && drv.status !== "available") return `${drv.name} is ${statusLabel(drv).toLowerCase()}. Pick an available driver.`;
     if (!b.customer_id) return "Please select a customer.";
     if (!b.scheduled_date || b.scheduled_date < todayStr()) return "Scheduled date cannot be in the past.";
+    // Deliver by is a deadline: the time the ice must reach the store, at the latest
+    if (!b.deliver_by) return "Pick the time it must reach the store (Deliver by).";
+    if (b.scheduled_date === todayStr() && b.deliver_by <= nowHm()) return "Pick a Deliver by time later than now.";
     const booked = bookedFor(b.customer_id, b.scheduled_date, bi);
     if (booked) return `This customer already has a delivery on this date (${booked}).`;
     if (b.items.some((it) => !it.product_type || !(Number(it.quantity_ordered) >= 1))) return "Pick a product and a quantity of at least 1 for every item.";
@@ -314,6 +319,7 @@ export default function DeliveriesPage() {
         customer_id: b.customer_id,
         delivery_type: "outbound",
         scheduled_date: b.scheduled_date,
+        deliver_by: b.deliver_by,
         notes: b.notes || null,
         items: b.items.map((it) => ({
           product_type: it.product_type,
@@ -576,6 +582,8 @@ export default function DeliveriesPage() {
                     </td>
                     <td className="px-[18px] py-2.5 text-slate-600">
                       {d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                      {d.due_at && <span className="cell-note text-[11px] text-slate-500">by {deliverByTime(d.due_at)}</span>}
+                      {timingPill(d.timing) && <span className={`cell-note px-1.5 py-px rounded-full text-[10px] font-semibold ${timingPill(d.timing).cls}`}>{timingPill(d.timing).label}</span>}
                     </td>
                     <td className="px-[18px] py-2.5">
                       <span className={`inline-flex items-center justify-center min-w-[84px] px-2.5 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
@@ -655,7 +663,7 @@ export default function DeliveriesPage() {
                       )}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <div className="text-[11px] text-slate-500 mb-1 block">Driver *</div>
+                          <div className="text-[11px] text-slate-500 mb-1 block">Driver<Req /></div>
                           <DriverPicker
                             drivers={availability.drivers}
                             loading={availLoading}
@@ -672,8 +680,8 @@ export default function DeliveriesPage() {
                           )}
                         </div>
                         <div>
-                          <label htmlFor={`delivery-${block.key}-customer`} className="text-[11px] text-slate-500 mb-1 block">Customer *</label>
-                          <select id={`delivery-${block.key}-customer`} name="customer_id"
+                          <label htmlFor={`delivery-${block.key}-customer`} className="text-[11px] text-slate-500 mb-1 block">Customer<Req /></label>
+                          <select id={`delivery-${block.key}-customer`} name="customer_id" required
                             value={block.customer_id}
                             onChange={(e) => updateBlock(bi, { customer_id: e.target.value })}
                             className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
@@ -690,15 +698,29 @@ export default function DeliveriesPage() {
                           </select>
                           <p className="text-[11px] text-slate-400 mt-1">Customers with a delivery on this date are greyed out.</p>
                         </div>
-                        <div>
-                          <label htmlFor={`delivery-${block.key}-date`} className="text-[11px] text-slate-500 mb-1 block">Scheduled Date *</label>
-                          <input id={`delivery-${block.key}-date`} name="scheduled_date"
-                            type="date"
-                            min={todayStr()}
-                            value={block.scheduled_date}
-                            onChange={(e) => updateBlock(bi, { scheduled_date: e.target.value })}
-                            className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                          />
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label htmlFor={`delivery-${block.key}-date`} className="text-[11px] text-slate-500 mb-1 block">Scheduled Date<Req /></label>
+                            <input id={`delivery-${block.key}-date`} name="scheduled_date" required
+                              type="date"
+                              min={todayStr()}
+                              value={block.scheduled_date}
+                              onChange={(e) => updateBlock(bi, { scheduled_date: e.target.value })}
+                              className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`delivery-${block.key}-deliver-by`} className="text-[11px] text-slate-500 mb-1 block">Deliver by<Req /></label>
+                            <input id={`delivery-${block.key}-deliver-by`} name="deliver_by" required
+                              type="time"
+                              min={block.scheduled_date === todayStr() ? nowHm() : undefined}
+                              value={block.deliver_by || ""}
+                              onChange={(e) => updateBlock(bi, { deliver_by: e.target.value })}
+                              aria-describedby={`delivery-${block.key}-deliver-by-hint`}
+                              className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                            />
+                          </div>
+                          <p id={`delivery-${block.key}-deliver-by-hint`} className="col-span-2 -mt-1.5 text-[11px] text-slate-400">The latest time the ice reaches the store. Later than this is late.</p>
                         </div>
                         <div>
                           <label htmlFor={`delivery-${block.key}-notes`} className="text-[11px] text-slate-500 mb-1 block">Notes</label>
@@ -712,7 +734,7 @@ export default function DeliveriesPage() {
                       </div>
 
                       <div>
-                        <div className="text-[11px] text-slate-500 mb-2 block">Items * <span className="text-slate-400">(up to {maxQty} each)</span></div>
+                        <div className="text-[11px] text-slate-500 mb-2 block">Items<Req /> <span className="text-slate-400">(up to {maxQty} each)</span></div>
                         <div className="flex flex-col gap-2">
                           {block.items.map((item, idx) => (
                             <div key={idx} className="grid grid-cols-[minmax(0,1fr)_84px_40px] sm:grid-cols-[1fr_120px_40px] gap-2 items-center">
@@ -802,6 +824,7 @@ export default function DeliveriesPage() {
               {viewing.contract && <Row label="Contract" value={`${viewing.contract.contract_no} · ${viewing.contract.name}`} />}
               {viewing.cancel_reason && <Row label="Cancel reason" value={viewing.cancel_reason} />}
               <Row label="Scheduled" value={viewing.scheduled_date ? new Date(viewing.scheduled_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—"} />
+              {viewing.due_at && <Row label="Deliver by" value={`${deliverByTime(viewing.due_at)}${timingPill(viewing.timing) ? ` · ${timingPill(viewing.timing).label}` : ""}`} />}
               <Row label="Status" value={<span className="capitalize">{viewing.status?.replace("_", " ")}</span>} />
               <Row label="Notes" value={viewing.notes || "—"} />
               </div>

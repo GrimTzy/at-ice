@@ -43,7 +43,7 @@ class DeliveryBookingTest extends TestCase
     {
         return $this->postJson('/api/deliveries', [
             'driver_id' => ($driver ?? $this->driver)->id, 'customer_id' => $this->customer->id,
-            'delivery_type' => 'outbound', 'scheduled_date' => $date,
+            'delivery_type' => 'outbound', 'deliver_by' => '23:59', 'scheduled_date' => $date,
             'items' => [['product_type' => 'bags', 'quantity_ordered' => 10]],
         ]);
     }
@@ -125,7 +125,7 @@ class DeliveryBookingTest extends TestCase
         Delivery::whereKey($first)->update(['status' => 'in_transit']);
         $this->postJson('/api/deliveries', [
             'driver_id' => $this->driver->id, 'customer_id' => $other->id,
-            'delivery_type' => 'outbound', 'scheduled_date' => $today,
+            'delivery_type' => 'outbound', 'deliver_by' => '23:59', 'scheduled_date' => $today,
             'items' => [['product_type' => 'bags', 'quantity_ordered' => 5]],
         ])->assertUnprocessable()->assertJsonValidationErrors('driver_id')
             ->assertJsonPath('message', fn ($m) => str_contains($m, 'in transit'));
@@ -134,14 +134,14 @@ class DeliveryBookingTest extends TestCase
         Attendance::whereDate('date', $today)->update(['time_out' => '17:00:00']);
         $this->postJson('/api/deliveries', [
             'driver_id' => $this->driver2->id, 'customer_id' => $other->id,
-            'delivery_type' => 'outbound', 'scheduled_date' => $today,
+            'delivery_type' => 'outbound', 'deliver_by' => '23:59', 'scheduled_date' => $today,
             'items' => [['product_type' => 'bags', 'quantity_ordered' => 5]],
         ])->assertUnprocessable()->assertJsonValidationErrors('driver_id');
 
         // A non-driver user is refused too
         $this->postJson('/api/deliveries', [
             'driver_id' => User::where('role', 'admin')->value('id'), 'customer_id' => $other->id,
-            'delivery_type' => 'outbound', 'scheduled_date' => $today,
+            'delivery_type' => 'outbound', 'deliver_by' => '23:59', 'scheduled_date' => $today,
             'items' => [['product_type' => 'bags', 'quantity_ordered' => 5]],
         ])->assertUnprocessable()->assertJsonValidationErrors('driver_id');
     }

@@ -19,6 +19,12 @@ export async function api(path, { method = "GET", body } = {}) {
   return data;
 }
 
+// The time now as HH:MM (24-hour), for "Deliver by" fields on today's date.
+export function nowHm() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 // Today as YYYY-MM-DD in the browser's local time (toISOString would be UTC).
 export const todayStr = () => ymd(new Date());
 export function ymd(d) {
