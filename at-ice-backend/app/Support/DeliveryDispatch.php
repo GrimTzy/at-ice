@@ -15,7 +15,6 @@ use App\Models\LeaveRequest;
 use App\Models\LiveEvent;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -30,10 +29,16 @@ use Throwable;
 //                     delivery.not_timed_in_minutes after their shift start, an
 //                     approved leave request, or an older driver_leaves mark;
 //                     Admin no longer marks anyone absent, owner 2026-10-20)
-//                     has their pending deliveries given at random
-//                     to an available Driver; when none is free they are queued
-//   assignQueued()    queued deliveries go LIFO (latest ordered_at first) to the
-//                     Driver who became available first
+//                     has their pending deliveries given to the available
+//                     Drivers; when none is free they are queued
+//   assignQueued()    queued deliveries go to the available Drivers
+// Both are FIFO (owner, 2026-11-09): the oldest order (ordered_at) goes first,
+// to the Driver who finished their list first (trip_completed_at in
+// DriverAvailability). The trucks are refrigerated and stay out, so nobody
+// queues at the plant: whoever is done first is next.
+//   sendTransitAlerts a delivery In transit too long tells Admin once
+// HR sets these in Rates and rules > Deliveries: auto_queue_on_trip_completion,
+// max_transit_hours_before_alert (and allow_rolling_stock_fifo, TruckStock).
 //   sendDelayNotices  a reassigned or queued delivery tells its store it may be
 //                     late, delivery.delay_notice_hours before it is due
 // Available = timed in today, not timed out, not in transit
@@ -49,10 +54,8 @@ class DeliveryDispatch
             $off[$l->driver_id] = DriverLeave::TYPES[$l->type] ?? $l->type;
         }
 
-        if ($date === DriverAvailability::today()) {
-            $off += self::notTimedIn();
-        }
-
+        // An approved leave comes before "Not timed in": a Driver on leave is
+        // not late, so they stay "On leave" all day.
         $employeeIds = LeaveRequest::where('status', 'approved')
             ->whereDate('start_date', '<=', $date)
             ->whereDate('end_date', '>=', $date)
@@ -61,6 +64,10 @@ class DeliveryDispatch
             foreach (Employee::whereIn('id', $employeeIds)->whereNotNull('user_id')->pluck('user_id') as $userId) {
                 $off[$userId] ??= 'On leave';
             }
+        }
+
+        if ($date === DriverAvailability::today()) {
+            $off += self::notTimedIn();
         }
 
         return $off;
@@ -96,33 +103,28 @@ class DeliveryDispatch
         return $out;
     }
 
-    // Driver ids who can take a delivery today, the one who became free first
-    // first (last delivery finished today, or time in).
+    // Driver ids who can take a delivery today, first done first:
+    //   1. done with today's list, by trip_completed_at (earliest first)
+    //   2. still with stops left, fewest stops first
+    // Ties go by name, so the order never changes between two runs.
     public static function availableDrivers(array $exclude = []): array
     {
-        $today = DriverAvailability::today();
-        $off = self::offDrivers($today);
-        $ids = collect(DriverAvailability::all())
+        $off = self::offDrivers(DriverAvailability::today());
+
+        return collect(DriverAvailability::all())
             ->where('status', 'available')
+            ->reject(fn ($row) => isset($off[$row['id']]) || in_array($row['id'], $exclude, false))
+            ->sort(fn ($a, $b) => [$a['trip_completed_at'] === null, $a['trip_completed_at'] ?? '', $a['open_stops'], $a['name']]
+                <=> [$b['trip_completed_at'] === null, $b['trip_completed_at'] ?? '', $b['open_stops'], $b['name']])
             ->pluck('id')
-            ->reject(fn ($id) => isset($off[$id]) || in_array($id, $exclude, false))
-            ->values();
-        if ($ids->isEmpty()) {
-            return [];
-        }
-
-        $freeSince = Delivery::whereIn('driver_id', $ids)
-            ->where('status', 'delivered')
-            ->whereDate('delivered_at', $today)
-            ->groupBy('driver_id')
-            ->pluck(DB::raw('MAX(delivered_at)'), 'driver_id');
-
-        return $ids->sortBy(fn ($id) => (string) ($freeSince[$id] ?? ''))->values()->all();
+            ->values()
+            ->all();
     }
 
-    // The pending deliveries today of a Driver who is off, latest first, go to a
-    // random available Driver, or to the queue when nobody is free. Only today:
-    // a leave on a later day is handled on that day, when attendance is known.
+    // The pending deliveries today of a Driver who is off, oldest order first,
+    // go to the available Drivers in first-done order (one each, then round
+    // again), or to the queue when nobody is free. Only today: a leave on a
+    // later day is handled on that day, when attendance is known.
     public static function reassign(int $driverId, string $date): int
     {
         if ($date !== DriverAvailability::today()) {
@@ -133,14 +135,14 @@ class DeliveryDispatch
             $pending = Delivery::where('driver_id', $driverId)
                 ->whereDate('scheduled_date', $date)
                 ->where('status', 'pending')
-                ->orderByDesc('ordered_at')->orderByDesc('id')
+                ->orderBy('ordered_at')->orderBy('id')
                 ->lockForUpdate()
                 ->get();
 
-            foreach ($pending as $d) {
-                $available = self::availableDrivers([$driverId]);
+            $available = self::availableDrivers([$driverId]);
+            foreach ($pending->values() as $i => $d) {
                 $d->update($available
-                    ? ['driver_id' => Arr::random($available), 'reassigned_from_driver_id' => $driverId]
+                    ? ['driver_id' => $available[$i % count($available)], 'reassigned_from_driver_id' => $driverId]
                     : ['driver_id' => null, 'status' => 'queued', 'reassigned_from_driver_id' => $driverId]);
             }
 
@@ -148,16 +150,21 @@ class DeliveryDispatch
         });
     }
 
-    // Queued deliveries today, LIFO (latest ordered_at first), to the
-    // available Drivers in the order they became free.
+    // Queued deliveries today, FIFO (oldest ordered_at first), to the
+    // available Drivers in first-done order.
+    // Off with delivery.auto_queue_on_trip_completion: Admin then picks a
+    // Driver for each queued delivery (Edit on the delivery).
     public static function assignQueued(): int
     {
+        if (! Settings::get('delivery.auto_queue_on_trip_completion')) {
+            return 0;
+        }
         $today = DriverAvailability::today();
 
         return DB::transaction(function () use ($today) {
             $queued = Delivery::where('status', 'queued')
                 ->whereDate('scheduled_date', $today)
-                ->orderByDesc('ordered_at')->orderByDesc('id')
+                ->orderBy('ordered_at')->orderBy('id')
                 ->lockForUpdate()
                 ->get();
             if ($queued->isEmpty()) {
@@ -195,6 +202,7 @@ class DeliveryDispatch
             }
             self::assignQueued();
             self::sendDelayNotices();
+            self::sendTransitAlerts();
         } catch (Throwable $e) {
             Log::warning('DeliveryDispatch: '.$e->getMessage());
         } finally {
@@ -202,6 +210,39 @@ class DeliveryDispatch
                 Auth::setUser($user);
             }
         }
+    }
+
+    // A delivery In transit longer than delivery.max_transit_hours_before_alert
+    // (0 = never) tells Admin once, so a truck stuck on the road is noticed.
+    public static function sendTransitAlerts(): int
+    {
+        $hours = (int) Settings::get('delivery.max_transit_hours_before_alert');
+        if ($hours <= 0) {
+            return 0;
+        }
+
+        $sent = 0;
+        $late = Delivery::with(['driver:id,name', 'customer:id,name'])
+            ->where('status', 'in_transit')
+            ->whereNotNull('dispatched_at')
+            ->where('dispatched_at', '<=', now()->subHours($hours))
+            ->get();
+        foreach ($late as $d) {
+            if (! Cache::add("transit-alert:{$d->id}", 1, now()->addDays(3))) {
+                continue; // told already
+            }
+            LiveEvent::create([
+                'module' => 'deliveries',
+                'action' => 'updated',
+                'message' => mb_substr("Delivery {$d->delivery_no} to ".($d->customer?->name ?? 'a store').' has been in transit for more than '.$hours.' '.($hours === 1 ? 'hour' : 'hours').($d->driver ? " (driver {$d->driver->name})" : '').'.', 0, 255),
+                'roles' => [], // Admin sees every event
+                'user_ids' => [],
+                'actor_id' => null,
+            ]);
+            $sent++;
+        }
+
+        return $sent;
     }
 
     // A reassigned or queued delivery today tells its store it may be late,
@@ -214,7 +255,7 @@ class DeliveryDispatch
             ->whereDate('scheduled_date', DriverAvailability::today())
             ->whereIn('status', ['pending', 'queued'])
             ->whereNotNull('reassigned_from_driver_id')
-            ->whereDoesntHave('notifications')
+            ->whereDoesntHave('notifications', fn ($q) => $q->where('kind', 'delay'))
             ->get();
 
         $sent = 0;
@@ -267,10 +308,46 @@ class DeliveryDispatch
 
         foreach ($channels ?: ['none'] as $channel) {
             DeliveryNotification::firstOrCreate(
-                ['delivery_id' => $d->id, 'channel' => $channel],
+                ['delivery_id' => $d->id, 'channel' => $channel, 'kind' => 'delay'],
                 ['customer_id' => $customer->id, 'message' => mb_substr($message, 0, 255), 'sent_at' => now()]
             );
         }
+    }
+
+    // A change the store should know about (driver changed or moved to another
+    // driver, cancelled): a notice on its portal, kept in its Deliveries page.
+    // Only the new driver's name is shared, nothing else about the driver.
+    public static function notifyChange(Delivery $d, string $kind, string $message): void
+    {
+        $customer = $d->customer;
+        if (! $customer) {
+            return;
+        }
+        $message = mb_substr($message, 0, 255);
+        if ($customer->user_id) {
+            LiveEvent::create([
+                'module' => 'deliveries',
+                'action' => 'updated',
+                'message' => $message,
+                'roles' => [],
+                'user_ids' => [$customer->user_id],
+                'actor_id' => null,
+            ]);
+        }
+        DeliveryNotification::create([
+            'customer_id' => $customer->id,
+            'delivery_id' => $d->id,
+            'channel' => $customer->user_id ? 'portal' : 'none',
+            'kind' => $kind,
+            'message' => $message,
+            'sent_at' => now(),
+        ]);
+    }
+
+    // "Nov 16" for a delivery date
+    public static function day(Delivery $d): string
+    {
+        return $d->scheduled_date ? $d->scheduled_date->format('M j') : 'its date';
     }
 
     // Stores in the contract that have no price for one of its products.
@@ -397,7 +474,9 @@ class DeliveryDispatch
     // A new store assignment applies to that store's pending deliveries from
     // its first day (today at the earliest) to its last. A delivery that was
     // reassigned because of a leave keeps its new Driver.
-    public static function applyAssignment(DriverStoreAssignment $a): int
+    // $changed gets the deliveries whose Driver is now different, so the store
+    // can be told once (DriverAssignmentController).
+    public static function applyAssignment(DriverStoreAssignment $a, ?array &$changed = null): int
     {
         $from = max($a->effective_from->toDateString(), DriverAvailability::today());
         $q = Delivery::where('customer_id', $a->store_id)
@@ -407,6 +486,7 @@ class DeliveryDispatch
         if ($a->effective_to) {
             $q->whereDate('scheduled_date', '<=', $a->effective_to->toDateString());
         }
+        $changed = (clone $q)->where(fn ($w) => $w->whereNull('driver_id')->orWhere('driver_id', '!=', $a->driver_id))->pluck('id')->all();
 
         // Query update: no notice per delivery (the controller sends one).
         return $q->update(['driver_id' => $a->driver_id, 'updated_at' => now()]);

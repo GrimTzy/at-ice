@@ -37,7 +37,7 @@ export default function TimeSelect({ id, value, onChange, step = 5, required, cl
         {HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
       </select>
       <span aria-hidden="true">:</span>
-      <select name="min" aria-label="Minute" required={required} value={cur ? cur.min : ""} onChange={(e) => emit({ min: +e.target.value })} className={selectClassName} {...native}>
+      <select name="minute" aria-label="Minute" required={required} value={cur ? cur.min : ""} onChange={(e) => emit({ min: +e.target.value })} className={selectClassName} {...native}>
         {!cur && <option value="" disabled>--</option>}
         {minutes.map((m) => <option key={m} value={m}>{pad(m)}</option>)}
       </select>

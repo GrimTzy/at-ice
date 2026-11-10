@@ -19,13 +19,13 @@ class Delivery extends Model
     ];
 
     // pending: waiting for its Driver to start it; queued: no Driver was free
-    // when its Driver went on leave, waits (LIFO: latest ordered_at first) for the first
-    // Driver who becomes available; in_transit; delivered; cancelled.
+    // when its Driver went on leave, waits (FIFO: oldest ordered_at first) for the
+    // Driver who finished their list first; in_transit; delivered; cancelled.
     public const STATUSES = ['pending', 'queued', 'in_transit', 'delivered', 'cancelled'];
 
     protected $casts = [
         'is_top_up' => 'boolean',
-        'scheduled_date' => 'date',
+        'scheduled_date' => 'date:Y-m-d',
         'ordered_at' => 'datetime',
         'dispatched_at' => 'datetime',
         'delivered_at' => 'datetime',

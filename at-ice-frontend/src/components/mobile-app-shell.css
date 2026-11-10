@@ -1,56 +1,86 @@
-/* MobileAppShell: phone (< 768px) is untouched, tablet and desktop get a frame.
-   The frame has `transform` and `contain`, which makes it the containing block
-   of every `position: fixed` child (bottom navs, the Maps button, modals), so
-   they anchor to the frame, not the monitor. The scroller sits inside the frame
-   and is the thing that scrolls, so those fixed children stay put while the
-   page moves (they would scroll away if the frame itself scrolled). */
-.mas-backdrop { --mas-bg: #e2e8f0; --mas-edge: rgba(15, 23, 42, 0.12); }
-.mas-backdrop[data-mas-dark="true"] { --mas-bg: #020617; --mas-edge: rgba(148, 163, 184, 0.18); }
+/* MobileAppShell: the four mobile modules (Driver, Checker, Salesman,
+   Maintenance) on any screen. No phone frame: the page fills the window like
+   it does on a phone (hybrid layout, these rules apply only inside
+   .mas-backdrop, never to Admin, HR or Customer).
+     responsive  everything stays fluid inside its column
+     adaptive    the column has a set width per screen size:
+                   up to 599px    the full width (a phone; at least 320px)
+                   600 - 899px    at most 640px  (large phone, small tablet)
+                   900 - 1279px   at most 880px  (tablet, small laptop)
+                   1280px and up  at most 1040px (desktop)
+   Full-width bars (the header, the bottom navigation, the action and pager
+   bars) keep their background edge to edge; only what is in them follows the
+   column, so nothing overlaps and the tabs do not spread across a monitor. */
+.mas-backdrop {
+  --mas-w: 100%;
+  min-width: 320px;
+}
+@media (min-width: 600px) { .mas-backdrop { --mas-w: 640px; } }
+@media (min-width: 900px) { .mas-backdrop { --mas-w: 880px; } }
+@media (min-width: 1280px) { .mas-backdrop { --mas-w: 1040px; } }
 
-@media (min-width: 768px) {
-  .mas-backdrop {
-    padding: 3dvh 16px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100dvh;
-    background-color: var(--mas-bg);
-    background-image: radial-gradient(60rem 40rem at 50% 0%, rgba(103, 232, 249, 0.12), transparent 70%);
-  }
-  .mas-frame {
-    position: relative;
-    width: 100%;
-    max-width: 640px;
-    height: 94dvh;
-    border-radius: 2rem;
-    overflow: hidden;
-    transform: translateZ(0);
-    contain: layout paint;
-    box-shadow: 0 0 0 1px var(--mas-edge), 0 24px 60px rgba(2, 6, 23, 0.25);
-  }
-  .mas-scroll {
-    position: absolute;
-    inset: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-  /* the pages size themselves to the screen; here the screen is the frame */
-  .mas-scroll :is(.min-h-screen, .min-h-\[100dvh\]) { min-height: 100%; }
-  /* the summary cards follow the frame, not the monitor: four across the wide
-     tablet frame, two across the narrow phone frame (the page classes use
-     viewport breakpoints, which would give 3 or 4 across a 430px frame) */
-  .mas-scroll .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* The page roots take the whole window (the 1120px desktop cap in
+   neumorphism.css is for the Admin and HR pages). */
+.mas-backdrop .ice-scope > :not(style) {
+  max-width: none !important;
+  width: 100%;
+  margin-inline: 0 !important;
 }
 
-@media (min-width: 1024px) {
-  .mas-backdrop { padding: 4dvh 24px; }
-  .mas-scroll .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mas-frame {
-    max-width: 430px;
-    height: 92dvh;
-    border-radius: 2.5rem;
-    box-shadow: 0 0 0 1px var(--mas-edge), 0 0 0 8px var(--mas-edge), 0 30px 80px rgba(2, 6, 23, 0.35);
+/* The column: header rows, the page body and each section of a page that has
+   no RoleShell (Driver). width 100% keeps a flex child from shrinking to its
+   content when its side margins are auto. */
+.mas-backdrop :is(
+  .mobile-header > *,
+  .role-shell > main,
+  .ice-scope > .min-h-screen > :not(header, .fixed, .maps-fab),
+  .gps-root > .relative.z-20 > *
+) {
+  width: 100%;
+  max-width: var(--mas-w) !important;
+  margin-inline: auto !important;
+}
+/* GPS: the map stays full width; the store card over it follows the column */
+.mas-backdrop .gps-root .absolute.bottom-0.left-0.right-0 {
+  max-width: var(--mas-w);
+  margin-inline: auto;
+}
+
+/* Fixed bars: background edge to edge, contents in the column */
+.mas-backdrop .role-nav {
+  padding-inline: max(0px, calc((100% - var(--mas-w)) / 2));
+}
+.mas-backdrop .role-actionbar > :is(div, nav) {
+  max-width: var(--mas-w) !important;
+  margin-inline: auto;
+}
+/* the page's main action button is never wider than a tablet column */
+.mas-backdrop .role-actionbar:not(.pager-dock) > div {
+  max-width: min(var(--mas-w), 640px) !important;
+}
+
+/* Summary cards: two across on a phone, all four in one row from 600px (the
+   page's viewport classes would leave 3 + 1 on a tablet) */
+@media (min-width: 600px) {
+  .mas-backdrop .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}
+
+/* Card lists: one column on a phone, two from 900px so a card keeps its phone
+   width instead of stretching. Forms (no card children) stay one column. */
+@media (min-width: 900px) {
+  .mas-backdrop main .grid.grid-cols-1:has(> :is(article, a, button)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  /* Driver deliveries: the delivery cards (.shadow-sm) pair up; the notices,
+     the empty state and the pager keep the full row */
+  .mas-backdrop .ice-scope > .min-h-screen > .flex-1.flex-col:has(> .rounded-2xl.shadow-sm) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .mas-backdrop .ice-scope > .min-h-screen > .flex-1.flex-col:has(> .rounded-2xl.shadow-sm) > :not(.rounded-2xl.shadow-sm) {
+    grid-column: 1 / -1;
   }
 }
 
@@ -95,27 +125,3 @@
 :is(#root, body) .mobile-header .mobile-subrow [role="timer"] > span.hidden { display: inline !important; }
 :is(#root, body) .mobile-header .mobile-subrow [role="timer"] { font-size: 11px; padding-inline: 10px; }
 
-/* The page roots size themselves with min-height: 100%, which has nothing to
-   resolve against inside the theme wrapper, so a short page would end halfway
-   down the frame. The wrapper becomes a column and the page grows to fill it,
-   as it fills a phone screen. */
-@media (min-width: 768px) {
-  .mas-scroll > .ice-scope { display: flex; flex-direction: column; }
-  .mas-scroll > .ice-scope > :is(.role-shell, .min-h-screen, [class*="min-h-["]) { flex: 1 0 auto; }
-}
-
-/* GPS Tracking: header on top, the map takes whatever is left, the Delivery
-   Stops panel under it. Inside the frame "the screen" is the frame (a phone
-   uses 100dvh as written on the page). */
-@media (min-width: 768px) {
-  .mas-scroll > .ice-scope:has(> .gps-root) { height: 100%; }
-  .mas-scroll > .ice-scope > .gps-root { flex: 1 1 0; min-height: 0; height: auto; }
-}
-
-/* A global desktop rule caps a page at 1120px and centers it with auto margins.
-   In the frame's flex column those auto margins shrink the page to its content
-   (GPS ended up 327px wide in a 430px frame). The frame is the screen, so the
-   page takes all of it. */
-@media (min-width: 768px) {
-  .mas-scroll > .ice-scope > :not(style, .ptr) { max-width: none; width: 100%; margin-inline: 0; }
-}

@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\Customer;
 use App\Models\Delivery;
 use App\Models\Employee;
+use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Support\DeliveryDispatch;
 use Carbon\Carbon;
@@ -60,6 +61,16 @@ class DriverNotTimedInTest extends TestCase
         $off = DeliveryDispatch::offDrivers('2026-10-20');
         $this->assertSame('Not timed in', $off[$this->late->id] ?? null);
         $this->assertArrayNotHasKey($this->working->id, $off);
+    }
+
+    public function test_a_driver_on_leave_stays_on_leave_after_the_wait_has_passed(): void
+    {
+        LeaveRequest::create(['employee_id' => $this->late->employee->id, 'leave_type' => 'sick', 'start_date' => '2026-10-20', 'end_date' => '2026-10-20', 'total_days' => 1, 'reason' => 'Fever', 'status' => 'approved']);
+
+        // 08:30 is past the 07:00 shift + 60 minutes, but the leave comes first
+        $this->assertSame('On leave', DeliveryDispatch::offDrivers('2026-10-20')[$this->late->id] ?? null);
+        $board = collect($this->getJson('/api/deliveries/board?date=2026-10-20')->assertOk()->json('drivers'))->firstWhere('id', $this->late->id);
+        $this->assertSame(['off', 'On leave'], [$board['status'], $board['reason']]);
     }
 
     public function test_their_pending_deliveries_go_to_a_driver_who_is_free(): void

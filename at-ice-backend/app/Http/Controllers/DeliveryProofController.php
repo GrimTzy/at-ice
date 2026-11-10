@@ -180,6 +180,9 @@ class DeliveryProofController extends Controller
                                 ->update(['quantity_delivered' => $item['quantity']]);
                         }
 
+                        // Taken from the truck, the oldest ice first (FIFO)
+                        \App\Support\TruckStock::draw($locked, $lineItems);
+
                         $locked->update([
                             'status' => 'delivered',
                             'delivered_at' => now(),

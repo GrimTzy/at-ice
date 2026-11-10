@@ -38,6 +38,63 @@ function Notice({ tone, children }) {
   return <div className={`px-3 py-2 rounded-lg border text-[12px] ${cls}`}>{children}</div>;
 }
 
+// HR's own override PIN (owner, 2026-11-10): typed on a locked kiosk to
+// unlock it, like the Admin override PIN, which stays. It cannot be the same
+// as the kiosk PIN.
+function HrOverridePinForm({ status, onSaved }) {
+  const empty = { current_password: "", override_pin: "", override_pin_confirmation: "" };
+  const [form, setForm] = useState(empty);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const digits = (v) => v.replace(/\D/g, "").slice(0, 4);
+  const mismatch = form.override_pin_confirmation.length > 0 && form.override_pin !== form.override_pin_confirmation;
+  const canSave = form.current_password && /^\d{4}$/.test(form.override_pin) && form.override_pin === form.override_pin_confirmation;
+
+  async function save(e) {
+    e.preventDefault();
+    setSaving(true);
+    setMsg(null);
+    try {
+      const data = await api("/api/hr/kiosk-override-pin", { method: "PUT", body: JSON.stringify(form) });
+      setMsg({ tone: "ok", text: data.message });
+      setForm(empty);
+      onSaved();
+    } catch (err) {
+      setMsg({ tone: "error", text: err.message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={save} className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-3">
+      <div>
+        <h2 className="text-[15px] font-semibold text-slate-800">{status?.hr_override_pin_set ? "Change HR override PIN" : "Set HR override PIN"}</h2>
+        <p className="text-[12px] text-slate-500 mt-0.5">
+          Type it on a kiosk locked after too many wrong PINs to unlock it. The Admin override PIN still works too. Use a PIN different from the kiosk PIN.
+        </p>
+      </div>
+      {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
+      <label className="flex flex-col gap-1">
+        <span className="text-[11px] text-slate-500">Your account password</span>
+        <PasswordInput autoComplete="current-password" value={form.current_password} onChange={(e) => setForm({ ...form, current_password: e.target.value })} className={inputCls} required />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-[11px] text-slate-500">HR override PIN (4 digits)</span>
+        <PasswordInput inputMode="numeric" autoComplete="off" maxLength={4} value={form.override_pin} onChange={(e) => setForm({ ...form, override_pin: digits(e.target.value) })} className={inputCls} required />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-[11px] text-slate-500">Confirm HR override PIN</span>
+        <PasswordInput inputMode="numeric" autoComplete="off" maxLength={4} value={form.override_pin_confirmation} onChange={(e) => setForm({ ...form, override_pin_confirmation: digits(e.target.value) })} className={inputCls} required />
+        {mismatch && <span className="text-[10px] text-red-500">The PINs do not match.</span>}
+      </label>
+      <button type="submit" disabled={!canSave || saving} className="self-start px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-50">
+        {saving ? "Saving…" : status?.hr_override_pin_set ? "Change override PIN" : "Set override PIN"}
+      </button>
+    </form>
+  );
+}
+
 export default function KioskPinPage() {
   const [status, setStatus] = useState(null);
   const [loadError, setLoadError] = useState("");
@@ -88,7 +145,7 @@ export default function KioskPinPage() {
           sub={!status ? "Loading" : status.pin_set && status.pin_changed_at ? `Changed ${fmtDateTime(status.pin_changed_at)}${status.pin_changed_by ? ` by ${status.pin_changed_by}` : ""}` : "Every kiosk is locked until it is set"} />
         <KpiCard label="Unlocked terminals" icon="check" tone="cyan" value={status ? Number(status.unlocked_kiosks || 0) : "…"} sub="Can record Time In and Time Out" live={Number(status?.unlocked_kiosks || 0) > 0} />
         <KpiCard label="Locked kiosks" icon="alert" tone={status?.locked_kiosks?.length ? "rose" : "emerald"} value={status ? (status.locked_kiosks?.length || 0) : "…"} sub={status?.locked_kiosks?.length ? "Need the Admin override PIN" : "None locked"} />
-        <KpiCard label="Who can unlock" icon="shield" tone="violet" value={status?.can_unlock ? "HR & Admin" : "Admin"} sub="A locked kiosk, after 5 wrong PINs" />
+        <KpiCard label="HR override PIN" icon="shield" tone={status?.hr_override_pin_set ? "violet" : "amber"} value={!status ? "…" : status.hr_override_pin_set ? "Set" : "Not set"} sub={status?.hr_override_pin_set ? "HR can unlock a locked kiosk" : "Only the Admin PIN unlocks a kiosk"} />
       </KpiGrid>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
@@ -151,12 +208,14 @@ export default function KioskPinPage() {
           </button>
         </form>
 
-        {/* Locked kiosks: only Admin can unlock them, on the kiosk itself */}
+        <HrOverridePinForm status={status} onSaved={loadStatus} />
+
+        {/* Locked kiosks: unlocked on the kiosk itself with an override PIN */}
         <div className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-3 self-start">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-800">Locked kiosks</h2>
             <p className="text-[12px] text-slate-500 mt-0.5">
-              After 5 wrong PINs in a row a kiosk stays locked until an Admin types the Admin override PIN on that kiosk{status?.can_unlock ? " or unlocks it here" : ". HR cannot unlock it"}. HR and Admin are notified when a kiosk locks.
+              After 5 wrong PINs in a row a kiosk stays locked until someone types the Admin or the HR override PIN on that kiosk{status?.can_unlock ? ", or unlocks it here" : ""}. HR and Admin are notified when a kiosk locks.
             </p>
           </div>
           {!status?.locked_kiosks?.length ? (

@@ -36,26 +36,109 @@ class EmployeeMemo extends Model
         'nte' => 'Notice to Explain',
     ];
 
-    public const STATUSES = ['draft', 'sent', 'acknowledged', 'awaiting_physical', 'archived', 'cancelled'];
+    // for_approval: a formal memo HR endorsed, waiting for Admin. approved: Admin
+    // approved it, HR releases it. A memo Admin returns goes back to draft.
+    public const STATUSES = ['draft', 'for_approval', 'approved', 'sent', 'acknowledged', 'awaiting_physical', 'archived', 'cancelled'];
 
-    // what the employee can see: everything HR has sent
+    // what the employee can see: everything HR has sent (never a draft, a memo
+    // waiting for approval, an approved one not yet released, or a returned one)
     public const VISIBLE_TO_EMPLOYEE = ['sent', 'acknowledged', 'awaiting_physical', 'archived'];
 
+    // Formal memos need Admin's approval before HR may release them.
+    public const FORMAL_LEVELS = ['final_written', 'nte'];
+
+    // Announcement groups (HR picks one) => what puts an employee in it
+    public const GROUPS = [
+        'all' => 'All employees',
+        'drivers' => 'Drivers',
+        'checkers' => 'Checkers',
+        'salesmen' => 'Salesmen',
+        'maintenance' => 'Maintenance',
+        'hr' => 'HR',
+    ];
+
     protected $fillable = [
+        'kind', 'audience',
         'memo_no', 'employee_id', 'violation', 'category', 'level', 'offense_no', 'status', 'source',
         'subject', 'body', 'incident_date', 'attendance_id', 'issued_by', 'issued_at', 'acknowledged_at',
         'signed_at', 'cancelled_by', 'cancelled_at', 'cancel_reason',
+        'endorsed_by', 'endorsed_at', 'approved_by', 'approved_at', 'returned_by', 'returned_at', 'return_reason',
     ];
 
     protected $casts = [
-        'incident_date' => 'date',
+        'incident_date' => 'date:Y-m-d',
         'issued_at' => 'datetime',
         'acknowledged_at' => 'datetime',
         'signed_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'endorsed_at' => 'datetime',
+        'approved_at' => 'datetime',
+        'returned_at' => 'datetime',
+        'audience' => 'array',
     ];
 
-    protected $appends = ['violation_label', 'level_label', 'needs_physical'];
+    public function isAnnouncement(): bool
+    {
+        return $this->kind === 'announcement';
+    }
+
+    public function recipients()
+    {
+        return $this->hasMany(MemoRecipient::class, 'memo_id');
+    }
+
+    // Active employees an announcement goes to, worked out now (at release), so
+    // someone hired later never receives an old notice.
+    public static function resolveAudience(array $audience): \Illuminate\Support\Collection
+    {
+        $q = Employee::query()->where('is_active', true)->whereNull('deactivated_at');
+        $mode = $audience['mode'] ?? 'all';
+
+        if ($mode === 'employees') {
+            $q->whereIn('id', array_map('intval', $audience['employee_ids'] ?? []));
+        } elseif ($mode === 'group') {
+            match ($audience['group'] ?? 'all') {
+                'drivers' => $q->where(fn ($w) => $w->where('position', 'Driver')->orWhereHas('user', fn ($u) => $u->where('role', 'driver'))),
+                'checkers' => $q->where('position', 'Checker'),
+                'salesmen' => $q->where('position', 'Salesman'),
+                'maintenance' => $q->where('position', 'Maintenance'),
+                'hr' => $q->whereHas('user', fn ($u) => $u->where('role', 'hr')),
+                default => null,
+            };
+        }
+
+        return $q->orderBy('employee_id')->get(['id', 'employee_id', 'first_name', 'middle_initial', 'last_name', 'suffix', 'position', 'user_id']);
+    }
+
+    // Final written warning, Notice to Explain, or any zero-tolerance offense
+    public function isFormal(): bool
+    {
+        return $this->kind !== 'announcement'
+            && (in_array($this->level, self::FORMAL_LEVELS, true) || $this->category === 'zero_tolerance');
+    }
+
+    protected $appends = ['violation_label', 'level_label', 'needs_physical', 'needs_approval'];
+
+    // Shown to HR: this memo goes to Admin before it can be released
+    public function getNeedsApprovalAttribute(): bool
+    {
+        return $this->isFormal();
+    }
+
+    public function endorser()
+    {
+        return $this->belongsTo(User::class, 'endorsed_by');
+    }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function returner()
+    {
+        return $this->belongsTo(User::class, 'returned_by');
+    }
 
     public static function categoryOf(string $violation): string
     {
@@ -133,6 +216,10 @@ class EmployeeMemo extends Model
     // with no account (Guards, Baggers) are closed by a wet-signed copy.
     public function getNeedsPhysicalAttribute(): bool
     {
+        if ($this->kind === 'announcement') {
+            return false; // staff without an account get a printed copy instead
+        }
+
         return in_array($this->level, ['final_written', 'nte'], true)
             || $this->category === 'zero_tolerance'
             || ($this->relationLoaded('employee') ? ! $this->employee?->user_id : ! Employee::whereKey($this->employee_id)->value('user_id'));
@@ -140,11 +227,19 @@ class EmployeeMemo extends Model
 
     public function getViolationLabelAttribute(): string
     {
+        if ($this->kind === 'announcement') {
+            return 'Announcement';
+        }
+
         return self::VIOLATIONS[$this->violation][0] ?? (string) $this->violation;
     }
 
     public function getLevelLabelAttribute(): string
     {
+        if ($this->kind === 'announcement') {
+            return 'Announcement';
+        }
+
         return self::LEVELS[$this->level] ?? (string) $this->level;
     }
 

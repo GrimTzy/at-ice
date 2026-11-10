@@ -9,6 +9,7 @@ import { useDraft } from "../../lib/useDraft";
 import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, StatusBreakdown, TipsWidget } from "../../components/Insight";
+import { plural } from "../../lib/plural";
 
 const STATUS_STYLES = {
   pending: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
@@ -188,7 +189,7 @@ export default function StockOutApprovalPage() {
       breadcrumb="Inventory / Stock-Out Approvals"
     >
       <KpiGrid cols={5}>
-        <KpiCard label="Waiting approval" icon="clock" tone="amber" value={countOf('pending')} sub={`${requests.length} requests in all`} bar={share(countOf('pending'))} onClick={() => setActiveTab('pending')} active={activeTab === 'pending'} />
+        <KpiCard label="Waiting approval" icon="clock" tone="amber" value={countOf('pending')} sub={`${plural(requests.length, "request")} in all`} bar={share(countOf('pending'))} onClick={() => setActiveTab('pending')} active={activeTab === 'pending'} />
         <KpiCard label="To release" icon="check" tone="cyan" value={countOf('approved')} sub="Approved, items not out yet" bar={open ? countOf('approved') / open : 0} onClick={() => setActiveTab('approved')} active={activeTab === 'approved'} />
         <KpiCard label="Released" icon="box" tone="emerald" value={countOf('released')} sub={`${releasedThisMonth} this month`} bar={share(countOf('released'))} onClick={() => setActiveTab('released')} active={activeTab === 'released'} />
         <KpiCard label="Declined" icon="x" tone="rose" value={countOf('rejected')} sub="With a reason for Maintenance" bar={share(countOf('rejected'))} onClick={() => setActiveTab('rejected')} active={activeTab === 'rejected'} />

@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
-// Rates and rules that Admin can change instead of being hardcoded
+// Rates and rules that HR can change instead of being hardcoded
 // (docs/REVIEW-DECISIONS.md). DEFAULTS is the full list with the agreed
 // values; a row in the settings table overrides one. Every change is written
 // to the audit log.
@@ -29,6 +29,9 @@ class Settings
         'payroll.monthly_unworked_holiday_deduct' => [false, 'bool', 'Deduct an unworked holiday from monthly-rated pay'],
         'payroll.negative_net_handling' => ['CARRY_OVER', 'enum:CARRY_OVER,EMPLOYER_SHOULDERED', 'When deductions are more than the pay: carry the shortfall to the next cut-off, or the employer pays it'],
         'payroll.gov_deduction_strategy' => ['SPLIT_FIRST_TWO', 'enum:FIRST_PAYROLL_OF_MONTH,SPLIT_FIRST_TWO', 'When SSS, PhilHealth and Pag-IBIG are deducted'],
+        // Night differential (Labor Code Art. 86): for every hour worked from
+        // 10:00 PM to 6:00 AM, at least 10% of the hourly rate of that hour.
+        'payroll.night_diff_rate' => [0.10, 'number', 'Night differential: extra pay for each hour worked from 10:00 PM to 6:00 AM, as a share of that hour\'s rate (0.10 = 10%, the legal minimum)'],
         // Attendance
         'attendance.shift_start' => ['09:00', 'time', 'Default shift start (HH:MM)'],
         'attendance.shift_end' => ['18:00', 'time', 'Default shift end (HH:MM)'],
@@ -53,6 +56,10 @@ class Settings
         'plant.longitude' => [121.0515, 'number', 'Plant location (longitude)'],
         'delivery.not_timed_in_minutes' => [60, 'int', 'Minutes after their shift starts that a Driver with no Time In counts as absent and their pending deliveries today are reassigned'],
         'delivery.max_top_ups_per_day' => [3, 'int', 'Most urgent top-ups one store can get after one delivery in a day'],
+        // FIFO and rolling stock (owner, 2026-11-10; DeliveryDispatch, TruckStock)
+        'delivery.allow_rolling_stock_fifo' => [true, 'bool', 'Keep the ice left on each truck as dated loads and deliver the oldest load first (FIFO). Off: loads and deliveries are not tracked per truck'],
+        'delivery.auto_queue_on_trip_completion' => [true, 'bool', 'Give queued deliveries on their own to the Driver who finished their list first. Off: Admin picks a Driver for each queued delivery'],
+        'delivery.max_transit_hours_before_alert' => [4, 'int', 'Hours a delivery may stay In transit before Admin is alerted (0 = no alert)'],
         // Support tickets (SupportMessageController)
         'support.overdue_hours' => [24, 'int', 'Hours an open support ticket may wait before it is marked Overdue'],
         'support.max_open_tickets' => [5, 'int', 'Most open or in-progress tickets a customer may have at once (Emergency Ice Shortage is never blocked)'],
@@ -91,7 +98,56 @@ class Settings
             : self::DEFAULTS[$key][0];
     }
 
-    // Every setting with its value, default, type and description (Admin page).
+    // Kept with Admin when Rates and rules moved to HR (owner, 2026-11-09):
+    // HR must not let itself unlock kiosks or turn on automatic deletion.
+    // Admin changes them on Settings > Admin PIN and Settings > Old records.
+    public const ADMIN_KEYS = ['kiosk.hr_can_override', 'archive.expiry_action'];
+
+    // HR > Rates and rules: one page per section (/hr/rates/{page}), each
+    // loading only its own keys (GET /api/settings/{page}). page => key prefixes
+    public const PAGES = [
+        'payroll' => ['payroll.'],
+        'attendance' => ['attendance.'],
+        'leave' => ['leave.'],
+        'kiosk' => ['kiosk.'],
+        'deliveries' => ['delivery.', 'plant.'],
+        'support' => ['support.'],
+        'memos' => ['memo.'],
+        'thirteenth' => ['thirteenth.'],
+        'records' => ['retention.'],
+    ];
+
+    // Pages that belong to Admin > Settings instead of HR (owner, 2026-11-10):
+    // deliveries and support tickets are Admin's staff work.
+    public const ADMIN_PAGES = ['deliveries', 'support'];
+
+    // Only Admin may change this key (an Admin-only key, or a key of an Admin page)
+    public static function isAdminKey(string $key): bool
+    {
+        if (in_array($key, self::ADMIN_KEYS, true)) {
+            return true;
+        }
+        foreach (self::ADMIN_PAGES as $page) {
+            foreach (self::PAGES[$page] as $prefix) {
+                if (str_starts_with($key, $prefix)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // The settings of one Rates and rules page, without the Admin-only ones
+    public static function page(string $page): array
+    {
+        $prefixes = self::PAGES[$page] ?? [];
+
+        return array_values(array_filter(self::all(), fn ($s) => ! in_array($s['key'], self::ADMIN_KEYS, true)
+            && collect($prefixes)->contains(fn ($p) => str_starts_with($s['key'], $p))));
+    }
+
+    // Every setting with its value, default, type and description (HR page).
     public static function all(): array
     {
         $stored = self::stored();
@@ -128,6 +184,7 @@ class Settings
         return match (true) {
             $type === null => 'Unknown setting.',
             $type === 'int' => is_int($value) || (is_string($value) && ctype_digit($value)) ? null : 'Enter a whole number.',
+            $key === 'payroll.night_diff_rate' => is_numeric($value) && $value >= 0.10 && $value <= 1 ? null : 'The night differential is at least 0.10 (10%) by law, and at most 1.',
             $type === 'number' => is_numeric($value) && $value >= 0 ? null : 'Enter a number (0 or more).',
             $type === 'date' => is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) && strtotime($value) ? null : 'Enter a date (YYYY-MM-DD).',
             $type === 'time' => is_string($value) && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $value) ? null : 'Enter a time (HH:MM, 24-hour).',

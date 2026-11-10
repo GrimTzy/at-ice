@@ -1,11 +1,10 @@
 import "./mobile-app-shell.css";
 import { useNightMode } from "../lib/theme";
 
-// Frames the four mobile modules (Driver, Checker, Maintenance, Salesman) so
-// they read as an app on a big screen. Under 768px it adds nothing (the page is
-// the phone). From 768px it is a centered tablet column, from 1024px a phone
-// frame. The frame is a containing block (see mobile-app-shell.css), so the
-// pages' own `fixed` bars and buttons stay inside it. Wrap NightScope with it:
+// Scope of the four mobile modules (Driver, Checker, Maintenance, Salesman).
+// There is no phone frame: the page fills the window, and its content follows
+// a column whose width is set per screen size (mobile-app-shell.css). Only
+// pages wrapped in it get these rules. Wrap NightScope with it:
 // <MobileAppShell><NightScope>...</NightScope></MobileAppShell>.
 export default function MobileAppShell({ children }) {
   const [dark] = useNightMode();

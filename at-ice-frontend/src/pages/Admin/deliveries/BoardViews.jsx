@@ -1,33 +1,63 @@
 import { useState } from "react";
 import { toast } from "../../../lib/toast";
-import { api, DRIVER_STATUS, storeName, timeOf, productLabel, PRODUCT_TYPES, inputCls, labelCls, btnPrimary, btnGhost } from "./utils";
+import { PILL } from "../../../lib/statusTones";
+import { api, DRIVER_STATUS, STATUS_STYLE, byDriverGroup, driverGroup, storeName, timeOf, productLabel, PRODUCT_TYPES, inputCls, labelCls, btnPrimary, btnGhost } from "./utils";
 import { ReassignedTag, StatusCell, Modal } from "./shared";
 import { useMaxQuantity } from "../../../lib/limits";
 import { QTY_INPUT_PROPS, cleanQty } from "../../../lib/quantity";
 
 const OPEN = ["pending", "queued", "in_transit"];
 
+const GROUP_PILL = {
+  timed_in: PILL.success,
+  in_transit: PILL.progress,
+  not_timed_in: PILL.warning,
+  on_leave: PILL.info,
+  off: PILL.danger,
+};
+
+// Status pill of a card in the Driver View
+function cardPill(g, isToday) {
+  if (g.key === "queued") return { cls: STATUS_STYLE.queued, label: "Queued" };
+  if (g.key === "none") return { cls: STATUS_STYLE.pending, label: "No driver" };
+  const st = DRIVER_STATUS[g.driver.status];
+  if (!st || !(isToday || g.driver.status === "off")) return null;
+  // "Timed out" or "No employee record" instead of a plain "Not timed in"
+  const reason = g.driver.reason || "";
+  const label = g.driver.status === "off" ? reason || "Off"
+    : g.driver.status === "unavailable" && reason && !/not timed in/i.test(reason) ? reason.replace(/^No active employee record$/i, "No employee record")
+      : st.label;
+  // One color per status group, the same order as the filter: timed in green,
+  // in transit cyan, not timed in amber, on leave blue, off (absent, timed
+  // out, no record) rose
+  return { pill: GROUP_PILL[driverGroup(g.driver)] || st.pill, label, title: reason };
+}
+
 // Driver View: a card per Driver; clicking one lists the stores they deliver
 // to that day. "Queued" and "No driver" cards hold what still needs a driver.
+// Cards go timed in, in transit, not timed in, off (byDriverGroup); the page's
+// Driver status filter narrows them.
 export function DriverView({ board, loading, onView, onEdit, onCancel }) {
   const [picked, setPicked] = useState(null); // driver id, "queued" or "none"
   const deliveries = board?.deliveries || [];
-  const drivers = board?.drivers || [];
+  const drivers = [...(board?.drivers || [])].sort(byDriverGroup);
   const isToday = board?.date === board?.today;
+  const filtered = board?.driverFilter && board.driverFilter !== "all";
 
   const byDriver = (id) => deliveries.filter((d) => String(d.driver_id) === String(id));
-  const queued = deliveries.filter((d) => d.status === "queued");
-  const noDriver = deliveries.filter((d) => !d.driver_id && d.status === "pending");
+  const queued = filtered ? [] : deliveries.filter((d) => d.status === "queued");
+  const noDriver = filtered ? [] : deliveries.filter((d) => !d.driver_id && d.status === "pending");
 
   const groups = [
     ...drivers.map((dr) => ({ key: String(dr.id), driver: dr, list: byDriver(dr.id) })),
-    ...(queued.length ? [{ key: "queued", title: "Queued", hint: "Waiting for a free driver (latest order first)", list: queued }] : []),
+    ...(queued.length ? [{ key: "queued", title: "Queued", hint: "Waiting for a free driver (oldest order first)", list: queued }] : []),
     ...(noDriver.length ? [{ key: "none", title: "No driver", hint: "The store has no assigned driver. Edit to pick one.", list: noDriver }] : []),
   ];
   const current = groups.find((g) => g.key === String(picked)) || null;
 
   if (loading && !board) return <div className="p-6 text-[13px] text-slate-400">Loading…</div>;
-  if (!drivers.length) return <div className="p-6 text-[13px] text-slate-400">No drivers yet. Add a Driver in HRIS &gt; Employees.</div>;
+  if (!(board?.drivers || []).length && !filtered) return <div className="p-6 text-[13px] text-slate-400">No drivers yet. Add a Driver in HRIS &gt; Employees.</div>;
+  if (!groups.length) return <div className="p-6 text-[13px] text-slate-400">No driver has this status.</div>;
 
   return (
     <div className="p-[18px] flex flex-col gap-4">
@@ -36,7 +66,7 @@ export function DriverView({ board, loading, onView, onEdit, onCancel }) {
           const done = g.list.filter((d) => d.status === "delivered").length;
           const open = g.list.filter((d) => OPEN.includes(d.status)).length;
           const reassigned = g.list.filter((d) => d.reassigned_from).length;
-          const st = g.driver ? DRIVER_STATUS[g.driver.status] : null;
+          const pill = cardPill(g, isToday);
           const active = String(picked) === g.key;
           return (
             <button
@@ -44,20 +74,20 @@ export function DriverView({ board, loading, onView, onEdit, onCancel }) {
               type="button"
               onClick={() => setPicked(active ? null : g.key)}
               aria-expanded={active}
-              className={`text-left rounded-xl border p-3 transition-colors bg-white ${active ? "border-cyan-500 ring-2 ring-cyan-500/40" : "border-black/[0.09] hover:border-black/20"}`}
+              className={`driver-card text-left rounded-xl border p-3 transition-colors bg-white ${active ? "border-cyan-500 ring-2 ring-cyan-500/40" : "border-black/[0.09] hover:border-black/20"}`}
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-[13px] font-semibold text-slate-800 truncate">{g.driver ? g.driver.name : g.title}</div>
-                  <div className="text-[11px] text-slate-400 truncate">
-                    {g.driver ? [g.driver.employee_id, g.driver.vehicle_plate && `PN ${g.driver.vehicle_plate}`].filter(Boolean).join(" · ") || "Driver" : g.hint}
-                  </div>
-                </div>
-                {st && (isToday || g.driver.status === "off") && (
-                  <span className={`flex-shrink-0 px-2 py-0.5 rounded-full border text-[10.5px] font-semibold ${st.pill}`} title={g.driver.reason || ""}>
-                    {g.driver.status === "off" ? g.driver.reason || "Off" : st.label}
+              {/* Status on top at the right, the name on its own line below, so a
+                  long name wraps instead of pushing the status (shared rule) */}
+              <div className="driver-card-status">
+                {pill ? (
+                  <span className={`px-2 py-0.5 rounded-full border text-[10.5px] font-semibold whitespace-nowrap ${pill.pill || `${pill.cls.bg} ${pill.cls.text}`}`} title={pill.title}>
+                    {pill.label}
                   </span>
-                )}
+                ) : <span aria-hidden="true" className="px-2 py-0.5 text-[10.5px] invisible">-</span>}
+              </div>
+              <div className="driver-card-name text-[13px] font-semibold text-slate-800">{g.driver ? g.driver.name : g.title}</div>
+              <div className="text-[11px] text-slate-400">
+                {g.driver ? [g.driver.employee_id, g.driver.vehicle_plate && `PN ${g.driver.vehicle_plate}`].filter(Boolean).join(" · ") || "Driver" : g.hint}
               </div>
               <div className="mt-2.5 flex items-center gap-3 text-[12px] text-slate-600">
                 <span><b className="tabular-nums text-slate-800">{g.list.length}</b> stops</span>
@@ -85,8 +115,28 @@ export function DriverView({ board, loading, onView, onEdit, onCancel }) {
               <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[11px] font-semibold">{current.driver.reason || "Off"}</span>
             )}
           </div>
+          {current.driver && <TruckStockLine batches={current.driver.truck_stock} />}
           <DeliveryRows list={current.list} showDriver={!current.driver} onView={onView} onEdit={onEdit} onCancel={onCancel} empty="No deliveries for this driver on this day." />
         </div>
+      )}
+    </div>
+  );
+}
+
+// Ice still on the Driver's truck, oldest batch first (FIFO): the trucks are
+// refrigerated and stay out, so what was not delivered goes out first next time.
+function TruckStockLine({ batches = [] }) {
+  const when = (v) => new Date(v).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return (
+    <div className="px-4 py-2.5 border-b border-black/[0.06] text-[12px]">
+      <span className="font-medium text-slate-700">Ice on the truck: </span>
+      {batches.length === 0 ? (
+        <span className="text-slate-400">none left from earlier loads</span>
+      ) : (
+        <span className="text-slate-600">
+          {batches.map((b) => `${b.quantity_left} × ${productLabel(b.product_type)} (loaded ${when(b.loaded_at)})`).join(" · ")}
+          <span className="block text-[11px] text-slate-400 mt-0.5">The oldest load is delivered first.</span>
+        </span>
       )}
     </div>
   );
@@ -216,8 +266,8 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
         {error && <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div className="text-[13px] text-slate-700">{storeName(delivery.customer)}</div>
         <div>
-          <label htmlFor="board-views-driver" className={labelCls}>Driver</label>
-          <select id="board-views-driver" name="driver_id" value={driverId} onChange={(e) => setDriverId(e.target.value)} className={inputCls}>
+          <label htmlFor="edit-delivery-driver" className={labelCls}>Driver</label>
+          <select id="edit-delivery-driver" name="driver_id" value={driverId} onChange={(e) => setDriverId(e.target.value)} className={inputCls}>
             <option value="">No driver yet</option>
             {drivers.map((dr) => {
               const blocked = isToday && dr.status !== "available" && String(dr.id) !== String(delivery.driver_id);
@@ -249,8 +299,8 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
           )}
         </div>
         <div>
-          <label htmlFor="board-views-notes" className={labelCls}>Notes</label>
-          <textarea id="board-views-notes" name="notes" rows={3} maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
+          <label htmlFor="edit-delivery-notes" className={labelCls}>Notes</label>
+          <textarea id="edit-delivery-notes" name="notes" maxLength={1000} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
           <button type="button" onClick={onClose} className={btnGhost}>Close</button>

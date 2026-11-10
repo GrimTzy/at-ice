@@ -123,9 +123,6 @@ function HolidayModal({ holiday, onClose, onSaved }) {
           <select name="type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={inputCls}>
             {TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select></label>
-        <label className="flex items-center gap-1.5 text-[12px] text-slate-600">
-          <input name="is_double" type="checkbox" data-native checked={form.is_double} onChange={(e) => setForm({ ...form, is_double: e.target.checked })} /> Two holidays on this date
-        </label>
         </div>
         </div>
         <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] flex justify-end gap-2">
@@ -260,7 +257,7 @@ export default function HolidaysPage({ admin = false }) {
               {pager.pageItems.map((h) => (
                 <tr key={h.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                   <td className="px-[18px] py-2.5 whitespace-nowrap text-slate-700">{fmt(h.date)}</td>
-                  <td className="px-3 py-2.5 text-slate-800 font-medium">{h.name}{h.is_double && <span className="ml-1.5 text-[9px] font-bold text-red-600">DOUBLE</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-800 font-medium">{h.name}{h.is_double && <span className="cell-note text-[9px] font-bold text-red-600">DOUBLE</span>}</td>
                   <td className="px-3 py-2.5"><span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-semibold ${typeOf(h.type)[2]}`}>{typeOf(h.type)[1]}</span></td>
                   <td className="px-3 py-2.5">
                     <div className="flex justify-end gap-1.5">

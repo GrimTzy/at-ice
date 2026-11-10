@@ -31,6 +31,11 @@ use Carbon\CarbonPeriod;
 //                   for a mid-period hire); absences and unpaid leave days are
 //                   deducted at the daily rate, unpaid EL hours at the hourly
 //   late            late minutes x per-minute rate (both)
+//   night diff      Labor Code Art. 86: every hour worked from 10:00 PM to
+//                   6:00 AM earns payroll.night_diff_rate (at least 10%) of
+//                   that hour's rate: the hourly rate on an ordinary day, the
+//                   holiday rate on a holiday, the overtime rate in overtime
+//                   (see nightDiff)
 //   adjustments     bonus, incentive, referral... (taxable or not)
 // Government (mandatory; employee shares from contribution_rates on the pay day)
 //   monthly amounts, deducted by payroll.gov_deduction_strategy:
@@ -76,6 +81,7 @@ class PayrollCalculator
 
         $hp = self::holidayPay($sheet, $hourly, $daily, $monthly !== null, $hpd);
         $absence += $hp['monthly_unworked_deduction'];
+        $nightPay = self::nightDiff($sheet, $hourly);
 
         $adjTotal = 0.0;
         $adjNonTaxable = 0.0;
@@ -86,7 +92,7 @@ class PayrollCalculator
             }
         }
 
-        $gross = max(0, $basic + $paidLeavePay + $hp['holiday_pay'] + $hp['holiday_ot_pay'] + $hp['overtime_pay'] + $adjTotal - $late - $absence - $leaveDeduction);
+        $gross = max(0, $basic + $paidLeavePay + $hp['holiday_pay'] + $hp['holiday_ot_pay'] + $hp['overtime_pay'] + $nightPay + $adjTotal - $late - $absence - $leaveDeduction);
 
         $gov = self::government($monthly ?? $daily * (float) Settings::get('payroll.monthly_to_daily_divisor'), $payDay);
         $taxable = max(0, $gross - $adjNonTaxable - $gov['sss'] - $gov['philhealth'] - $gov['pagibig']);
@@ -120,11 +126,13 @@ class PayrollCalculator
             'unpaid_leave_hours' => $sheet['unpaid_leave_hours'],
             'holiday_hours' => $sheet['holiday_hours'],
             'ot_hours' => $sheet['ot_hours'],
+            'night_hours' => $sheet['night_hours'],
             'basic_pay' => Money::round($basic),
             'paid_leave_pay' => Money::round($paidLeavePay),
             'holiday_pay' => Money::round($hp['holiday_pay']),
             'holiday_ot_pay' => Money::round($hp['holiday_ot_pay']),
             'overtime_pay' => Money::round($hp['overtime_pay']),
+            'night_diff_pay' => Money::round($nightPay),
             'late_deduction' => Money::round($late),
             'absence_deduction' => Money::round($absence),
             'leave_deduction' => Money::round($leaveDeduction),
@@ -159,13 +167,9 @@ class PayrollCalculator
         $out = ['holiday_pay' => 0.0, 'holiday_ot_pay' => 0.0, 'overtime_pay' => 0.0, 'monthly_unworked_deduction' => 0.0];
 
         foreach ($sheet['holiday_worked'] as [$ymd, $h, $rest, $hours, $ot]) {
-            $key = $h->is_double ? 'DOUBLE_HOLIDAY'
-                : ($h->type === 'REGULAR' ? ($rest ? 'REGULAR_HOLIDAY_REST_DAY' : 'REGULAR_HOLIDAY_WORKED')
-                : ($h->type === 'SPECIAL_WORKING' ? 'SPECIAL_WORKING_DAY_WORKED' : 'SPECIAL_HOLIDAY_WORKED'));
-            $rate = PayMultiplier::rate($key, $ymd);
+            $rate = PayMultiplier::rate(self::holidayKey($h, $rest), $ymd);
             $out['holiday_pay'] += $hours * $hourly * ($monthly ? max(0, $rate - 1) : $rate);
-            $otKey = ($h->type === 'REGULAR' || $h->is_double) ? 'OT_REGULAR_HOLIDAY' : 'OT_SPECIAL_HOLIDAY';
-            $out['holiday_ot_pay'] += $ot * $hourly * PayMultiplier::rate($otKey, $ymd);
+            $out['holiday_ot_pay'] += $ot * $hourly * PayMultiplier::rate(self::holidayOtKey($h), $ymd);
         }
 
         foreach ($sheet['holiday_unworked'] as [$ymd, $h, $rest]) {
@@ -186,6 +190,56 @@ class PayrollCalculator
         $out['overtime_pay'] = $sheet['ot_ordinary_hours'] * $hourly * PayMultiplier::rate('OT_ORDINARY', now(config('atice.timezone'))->toDateString());
 
         return $out;
+    }
+
+    // The pay_multipliers key for work on a holiday, and for overtime on it.
+    public static function holidayKey(Holiday $h, bool $rest): string
+    {
+        return $h->is_double ? 'DOUBLE_HOLIDAY'
+            : ($h->type === 'REGULAR' ? ($rest ? 'REGULAR_HOLIDAY_REST_DAY' : 'REGULAR_HOLIDAY_WORKED')
+            : ($h->type === 'SPECIAL_WORKING' ? 'SPECIAL_WORKING_DAY_WORKED' : 'SPECIAL_HOLIDAY_WORKED'));
+    }
+
+    public static function holidayOtKey(Holiday $h): string
+    {
+        return ($h->type === 'REGULAR' || $h->is_double) ? 'OT_REGULAR_HOLIDAY' : 'OT_SPECIAL_HOLIDAY';
+    }
+
+    // Night differential (Labor Code Art. 86, DOLE Handbook on Workers'
+    // Statutory Monetary Benefits): night_diff_rate (never under 10%) of the
+    // rate of each night hour.
+    //   ordinary day      night hours x hourly x rate
+    //   ordinary overtime night OT hours x (hourly x OT_ORDINARY) x rate
+    //   holiday           night hours x (hourly x holiday rate) x rate
+    //   holiday overtime  night OT hours x (hourly x holiday OT rate) x rate
+    // Only approved overtime earns it, like the overtime itself. A monthly-rated
+    // employee gets the same: it is a premium on top of the monthly basic.
+    public static function nightDiff(array $sheet, float $hourly): float
+    {
+        $share = max(0.10, (float) Settings::get('payroll.night_diff_rate'));
+        $pay = 0.0;
+        foreach ($sheet['night'] as $ymd => [$regular, $overtime, $holiday, $rest]) {
+            $dayRate = $holiday ? PayMultiplier::rate(self::holidayKey($holiday, $rest), $ymd) : 1.0;
+            $otRate = PayMultiplier::rate($holiday ? self::holidayOtKey($holiday) : 'OT_ORDINARY', $ymd);
+            $pay += ($regular * $dayRate + $overtime * $otRate) * $hourly * $share;
+        }
+
+        return $pay;
+    }
+
+    // Minutes of [from, to) that fall from 10:00 PM to 6:00 AM, on any night.
+    public static function nightMinutes(CarbonImmutable $from, CarbonImmutable $to): int
+    {
+        $total = 0;
+        for ($d = $from->startOfDay()->subDay(); $d->lte($to); $d = $d->addDay()) {
+            $start = $from->max($d->setTime(22, 0));
+            $end = $to->min($d->addDay()->setTime(6, 0));
+            if ($end->gt($start)) {
+                $total += (int) round($start->diffInSeconds($end, true) / 60);
+            }
+        }
+
+        return $total;
     }
 
     // Recomputes a saved payroll (after an adjustment or a new timesheet approval).
@@ -214,7 +268,7 @@ class PayrollCalculator
             ->whereNotNull('time_in')
             ->where(fn ($q) => $q->where('employee_id', $employee->id)
                 ->orWhereHas('faceData', fn ($f) => $f->where('employee_id', $employee->id)))
-            ->get(['date', 'time_out', 'hours_worked', 'late_minutes', 'ot_minutes', 'ot_approved'])
+            ->get(['date', 'time_in', 'time_out', 'hours_worked', 'late_minutes', 'ot_minutes', 'ot_approved'])
             ->groupBy(fn ($a) => $a->date->toDateString());
 
         $present = 0.0;
@@ -246,6 +300,38 @@ class PayrollCalculator
                 $otOrdinaryHours += $otApproved;
             }
         }
+        // Night hours (10:00 PM to 6:00 AM) of each closed record. The regular
+        // part ends where the overtime starts (ot_minutes are the last minutes,
+        // past the shift end) and counts at most the day's paid hours, so the
+        // unpaid break is never paid as a night hour. Overtime night hours
+        // count once HR approved the overtime. A night shift belongs to the day
+        // it started, like the rest of its pay.
+        $tz = config('atice.timezone');
+        $night = []; // Y-m-d => [regular hours, overtime hours, holiday or null, rest day?]
+        foreach ($records as $ymd => $day) {
+            foreach ($day as $a) {
+                if (! $a->time_in || ! $a->time_out) {
+                    continue;
+                }
+                $in = CarbonImmutable::parse($ymd.' '.$a->time_in, $tz);
+                $outAt = CarbonImmutable::parse($ymd.' '.$a->time_out, $tz);
+                if ($outAt->lte($in)) {
+                    $outAt = $outAt->addDay();
+                }
+                $regEnd = $outAt->subMinutes((int) $a->ot_minutes)->max($in);
+                $span = $in->diffInSeconds($regEnd, true) / 3600;
+                $paid = $span > $hpd ? min($hpd, max(0, $span - $break)) : $span;
+                $regular = min(self::nightMinutes($in, $regEnd) / 60, $paid);
+                $overtime = $a->ot_approved ? self::nightMinutes($regEnd, $outAt) / 60 : 0.0;
+                if ($regular <= 0 && $overtime <= 0) {
+                    continue;
+                }
+                $h = $holidays[$ymd] ?? null;
+                $rest = ! in_array(CarbonImmutable::parse($ymd)->dayOfWeekIso, $workDayNumbers, true);
+                $night[$ymd] = [($night[$ymd][0] ?? 0) + $regular, ($night[$ymd][1] ?? 0) + $overtime, $h, $rest];
+            }
+        }
+
         foreach ($holidays as $ymd => $h) {
             $d = CarbonImmutable::parse($ymd);
             if ($ymd >= $start->toDateString() && $ymd <= $end->toDateString() && ! $records->has($ymd) && ! $d->lt($hired) && $d->lte($today)) {
@@ -313,6 +399,8 @@ class PayrollCalculator
             'ot_hours' => round($otOrdinaryHours + array_sum(array_column($holidayWorked, 4)), 2),
             'ot_ordinary_hours' => $otOrdinaryHours,
             'ot_pending_minutes' => $otPending,
+            'night' => $night,
+            'night_hours' => round(array_sum(array_map(fn ($n) => $n[0] + $n[1], $night)), 2),
         ];
     }
 

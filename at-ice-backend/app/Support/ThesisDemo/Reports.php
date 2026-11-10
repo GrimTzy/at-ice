@@ -13,11 +13,11 @@ use Illuminate\Support\Facades\DB;
 // the moment the login is made; a rerun keeps the earlier values.
 class Reports
 {
-    public const MONEY = ['basic_pay', 'paid_leave_pay', 'holiday_pay', 'holiday_ot_pay', 'overtime_pay', 'late_deduction', 'absence_deduction',
+    public const MONEY = ['basic_pay', 'paid_leave_pay', 'holiday_pay', 'holiday_ot_pay', 'overtime_pay', 'night_diff_pay', 'late_deduction', 'absence_deduction',
         'leave_deduction', 'adjustments_total', 'gross_pay', 'sss_deduction', 'philhealth_deduction', 'pagibig_deduction', 'tax_deduction',
         'taxable_income', 'carry_over_in', 'net_pay', 'carry_over_out'];
 
-    public const COUNTS = ['days_present', 'absent_days', 'late_minutes', 'paid_leave_days', 'unpaid_leave_days', 'unpaid_leave_hours', 'holiday_hours', 'ot_hours'];
+    public const COUNTS = ['days_present', 'absent_days', 'late_minutes', 'paid_leave_days', 'unpaid_leave_days', 'unpaid_leave_hours', 'holiday_hours', 'ot_hours', 'night_hours'];
 
     public function __construct(private Context $c, private string $dir) {}
 

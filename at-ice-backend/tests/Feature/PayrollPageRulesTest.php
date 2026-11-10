@@ -126,7 +126,7 @@ class PayrollPageRulesTest extends TestCase
         // Admin is refused payroll but still passes the admin-only and HR pages that are not payroll.
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
         $this->getJson('/api/payroll-records?date=2026-10-14')->assertForbidden();
-        $this->getJson('/api/pay-multipliers')->assertOk();
+        $this->getJson('/api/pay-multipliers')->assertForbidden(); // Rates and rules are HR's now
         $this->getJson('/api/holidays')->assertOk();
     }
 }

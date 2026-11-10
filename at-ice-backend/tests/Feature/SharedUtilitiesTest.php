@@ -61,25 +61,80 @@ class SharedUtilitiesTest extends TestCase
         $this->assertSame('7,801.49', Money::format((96000 - 2382.12) / 12));
     }
 
-    public function test_settings_have_defaults_admin_can_change_them_and_it_is_audited(): void
+    public function test_settings_have_defaults_hr_can_change_them_and_it_is_audited(): void
     {
         $this->assertSame('SPLIT_FIRST_TWO', Settings::get('payroll.gov_deduction_strategy'));
         $this->assertSame(0, Settings::get('attendance.grace_minutes'));
 
-        $admin = User::factory()->create(['role' => 'admin']);
-        Sanctum::actingAs($admin);
+        $hr = User::factory()->create(['role' => 'hr']);
+        Sanctum::actingAs($hr);
         $this->putJson('/api/settings', ['key' => 'attendance.grace_minutes', 'value' => '5'])->assertOk()->assertJsonPath('value', 5);
         $this->assertSame(5, Settings::get('attendance.grace_minutes'));
 
         $log = DB::table('audit_logs')->where('action', 'setting.changed')->first();
-        $this->assertSame($admin->id, $log->user_id);
+        $this->assertSame($hr->id, $log->user_id);
         $this->assertSame(['key' => 'attendance.grace_minutes', 'value' => 0], json_decode($log->before, true));
 
         $this->putJson('/api/settings', ['key' => 'payroll.gov_deduction_strategy', 'value' => 'MONTHLY'])->assertStatus(422);
         $this->putJson('/api/settings', ['key' => 'attendance.shift_start', 'value' => '25:00'])->assertStatus(422);
 
-        Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
+        // Rates and rules moved from Admin to HR (owner, 2026-11-09)
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
         $this->putJson('/api/settings', ['key' => 'attendance.grace_minutes', 'value' => 9])->assertForbidden();
+        $this->getJson('/api/settings')->assertForbidden();
+    }
+
+    public function test_the_kiosk_unlock_and_record_expiry_settings_stay_with_admin(): void
+    {
+        // HR does not see or change them
+        Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
+        $keys = collect($this->getJson('/api/settings')->assertOk()->json())->pluck('key');
+        $this->assertNotContains('kiosk.hr_can_override', $keys);
+        $this->assertNotContains('archive.expiry_action', $keys);
+        $this->assertContains('attendance.grace_minutes', $keys);
+        $this->putJson('/api/settings', ['key' => 'kiosk.hr_can_override', 'value' => true])->assertForbidden();
+        $this->putJson('/api/settings', ['key' => 'archive.expiry_action', 'value' => 'PURGE'])->assertForbidden();
+        $this->getJson('/api/admin-settings')->assertForbidden();
+        $this->assertFalse(Settings::get('kiosk.hr_can_override'));
+
+        // Admin changes only these two
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+        $this->assertSame(['kiosk.hr_can_override', 'archive.expiry_action'], collect($this->getJson('/api/admin-settings')->assertOk()->json())->pluck('key')->all());
+        $this->putJson('/api/admin-settings', ['key' => 'kiosk.hr_can_override', 'value' => true])->assertOk();
+        $this->assertTrue(Settings::get('kiosk.hr_can_override'));
+        $this->putJson('/api/admin-settings', ['key' => 'attendance.grace_minutes', 'value' => 3])->assertForbidden();
+    }
+
+    public function test_each_rates_and_rules_page_loads_and_saves_only_its_own_settings(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
+
+        $keys = collect($this->getJson('/api/settings/attendance')->assertOk()->json())->pluck('key');
+        $this->assertContains('attendance.grace_minutes', $keys);
+        $this->assertNotContains('payroll.anchor', $keys);
+        $this->putJson('/api/settings/attendance', ['key' => 'attendance.grace_minutes', 'value' => 4])->assertOk();
+        $this->putJson('/api/settings/attendance', ['key' => 'payroll.cutoff_days', 'value' => 7])->assertUnprocessable();
+
+        // Records: the expiry action stays with Admin
+        $this->assertNotContains('archive.expiry_action', collect($this->getJson('/api/settings/records')->json())->pluck('key'));
+        $this->getJson('/api/settings/nope')->assertNotFound();
+
+        // Deliveries and Support tickets are Admin's (owner, 2026-11-10)
+        $this->getJson('/api/settings/deliveries')->assertNotFound();
+        $this->getJson('/api/settings/support')->assertNotFound();
+        $this->putJson('/api/settings', ['key' => 'delivery.max_transit_hours_before_alert', 'value' => 6])->assertForbidden();
+        $this->assertNotContains('support.overdue_hours', collect($this->getJson('/api/settings')->json())->pluck('key'));
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+        $this->getJson('/api/settings/attendance')->assertForbidden();
+        $keys = collect($this->getJson('/api/admin-settings/deliveries')->assertOk()->json())->pluck('key');
+        $this->assertContains('delivery.allow_rolling_stock_fifo', $keys);
+        $this->assertContains('delivery.auto_queue_on_trip_completion', $keys);
+        $this->assertContains('plant.latitude', $keys);
+        $this->assertContains('support.overdue_hours', collect($this->getJson('/api/admin-settings/support')->assertOk()->json())->pluck('key'));
+        $this->putJson('/api/admin-settings/deliveries', ['key' => 'delivery.max_transit_hours_before_alert', 'value' => 6])->assertOk();
+        $this->assertSame(6, Settings::get('delivery.max_transit_hours_before_alert'));
+        $this->getJson('/api/admin-settings/payroll')->assertNotFound();
     }
 
     public function test_the_cutoff_endpoint_and_seeded_contribution_rules(): void

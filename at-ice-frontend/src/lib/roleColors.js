@@ -36,3 +36,6 @@ const BADGE = {
 };
 
 export const roleBadge = (key) => BADGE[roleTone(key)];
+
+// "day" or "night" -> the shift's chip classes
+export const shiftBadge = (kind) => BADGE[SHIFT_TONE[kind]] || BADGE.slate;

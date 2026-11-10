@@ -7,25 +7,13 @@ import { useDraft } from "../lib/useDraft";
 import { downloadProtectedFile } from "../lib/openFile";
 import { confirmAction } from "../lib/confirm";
 
-// Admin > Settings: the rates and rules the system uses (GET/PUT /api/settings,
-// App\Support\Settings) with the holiday and overtime pay rates on the same
-// card, and the Admin override PIN that unlocks a locked Attendance Station
-// kiosk. Every change is written to the audit log.
+// HR > Rates and rules: one page per section (RatesSection, PayRates; the
+// pages are in pages/hr/RatesRulesPage.jsx), each loading only its own
+// settings (App\Support\Settings::PAGES). Admin > Settings: the Admin override
+// PIN that unlocks a locked Attendance Station kiosk, and old records. Every
+// change is written to the audit log.
 
-const GROUPS = [
-  ["payroll.", "Payroll"],
-  ["attendance.", "Attendance"],
-  ["leave.", "Leave"],
-  ["kiosk.", "Kiosk"],
-  ["delivery.", "Deliveries"],
-  ["support.", "Support tickets"],
-  ["memo.", "Disciplinary memos"],
-  ["thirteenth.", "13th month"],
-  ["retention.", "Records"],
-];
 const PAY_RATES_ID = "settings-rates-pay";
-const groupId = (prefix) => `settings-rates-${prefix.replace(/\W/g, "")}`;
-const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
 const inputCls = "w-full px-2.5 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20";
 
@@ -39,7 +27,7 @@ async function api(url, options = {}) {
   return data;
 }
 
-function SettingRow({ s, onSaved }) {
+export function SettingRow({ s, onSaved, endpoint = "/api/settings" }) {
   // An unsaved change survives a refresh (the row shows Save until it is saved).
   const draft = useDraft(`settings:${s.key}`, { value: String(s.value ?? "") });
   const { value } = draft.values;
@@ -51,7 +39,7 @@ function SettingRow({ s, onSaved }) {
   const save = async () => {
     setBusy(true);
     try {
-      await api("/api/settings", { method: "PUT", body: JSON.stringify({ key: s.key, value }) });
+      await api(endpoint, { method: "PUT", body: JSON.stringify({ key: s.key, value }) });
       toast.success(`${s.label} saved.`);
       draft.clear();
       onSaved();
@@ -203,7 +191,7 @@ const RATE_LABELS = {
   REGULAR_HOLIDAY_REST_DAY: "Regular holiday on a rest day",
   DOUBLE_HOLIDAY: "Double holiday",
 };
-function PayRates() {
+export function PayRates() {
   const [rows, setRows] = useState(null);
   // Typed rates (and the date they apply from) survive a refresh until saved.
   const ratesDraft = useDraft("settings:pay-rates", { draft: {}, from: new Date().toLocaleDateString("en-CA") });
@@ -222,9 +210,8 @@ function PayRates() {
     }
   };
   return (
-    <section id={PAY_RATES_ID} className="mt-4 scroll-mt-20">
-      <h3 className="text-[11px] font-semibold tracking-wider uppercase text-slate-400">Holiday and overtime pay rates</h3>
-      <p className="text-[12px] text-slate-500 mt-0.5">x the hourly rate. Client defaults; the DOLE rate is in each note. A change applies from the date below.</p>
+    <section id={PAY_RATES_ID} className="scroll-mt-20">
+      <p className="text-[12px] text-slate-500">x the hourly rate. Client defaults; the DOLE rate is in each note. A change applies from the date below.</p>
       <label className="mt-2 flex items-center gap-2 text-[12px] text-slate-600">New rates apply from
         <input name="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${inputCls} w-auto`} />
       </label>
@@ -234,7 +221,7 @@ function PayRates() {
             <span className="block text-[12px] text-slate-700">{RATE_LABELS[r.key] || r.key} <span className="font-mono text-slate-400">({r.value.toFixed(2)})</span></span>
             <span className="block text-[10px] text-slate-400">{r.history[r.history.length - 1]?.note}</span>
           </div>
-          <input name="draft" type="number" step="0.01" min="0" max="10" aria-label={RATE_LABELS[r.key]} value={draft[r.key] ?? r.value} onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))} className={inputCls} />
+          <input name="pay_rate" type="number" step="0.01" min="0" max="10" aria-label={RATE_LABELS[r.key]} value={draft[r.key] ?? r.value} onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))} className={inputCls} />
           <button type="button" onClick={() => save(r.key)} disabled={draft[r.key] === undefined || Number(draft[r.key]) === r.value}
             className="px-3 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-40">Save</button>
         </div>
@@ -308,48 +295,65 @@ function RetentionReview() {
   );
 }
 
-// One Settings page at a time (Admin > Settings > Rates and rules, Admin PIN,
-// Old records); "section" is the page.
-export default function SystemSettings({ section = "rates" }) {
-  if (section === "admin-pin") return <div className="max-w-4xl"><OverridePinForm /></div>;
-  if (section === "old-records") return <div className="max-w-4xl"><RetentionReview /></div>;
-  return <RatesAndRules />;
-}
-
-function RatesAndRules() {
+// The settings kept with Admin when Rates and rules moved to HR (owner,
+// 2026-11-09): whether HR may unlock a kiosk, and what happens to old records.
+// GET/PUT /api/admin-settings; Settings::ADMIN_KEYS on the backend.
+function AdminOnlySetting({ settingKey, title, text }) {
   const [settings, setSettings] = useState(null);
   const [error, setError] = useState("");
-
-  const load = useCallback(() => {
-    api("/api/settings").then(setSettings).catch((e) => setError(e.message));
-  }, []);
+  const load = useCallback(() => { api("/api/admin-settings").then(setSettings).catch((e) => setError(e.message)); }, []);
   useEffect(() => { load(); }, [load]);
-
+  const s = settings?.find((x) => x.key === settingKey);
   return (
-    <div className="flex flex-col gap-4 max-w-4xl">
-      <div id="settings-rates" className="bg-white border border-black/[0.09] rounded-xl p-[18px] scroll-mt-20">
-        <h2 className="text-[15px] font-semibold text-slate-800">Rates and rules</h2>
-        <p className="text-[12px] text-slate-500 mt-0.5">Used by attendance, leave and payroll, including holiday and overtime pay. Each change is recorded in the audit log.</p>
-        {settings && (
-          <nav aria-label="Rates and rules sections" className="mt-3 flex flex-wrap gap-1.5">
-            {[...GROUPS.filter(([prefix]) => settings.some((s) => s.key.startsWith(prefix))).map(([prefix, title]) => [groupId(prefix), title]), [PAY_RATES_ID, "Holiday and overtime pay"]].map(([id, title]) => (
-              <button key={id} type="button" onClick={() => scrollTo(id)} className="px-2.5 py-1 rounded-full border border-black/[0.09] bg-slate-50 text-[11px] text-slate-600 hover:bg-white hover:border-cyan-500/40 hover:text-cyan-700 cursor-pointer">{title}</button>
-            ))}
-          </nav>
-        )}
-        {error && <p role="alert" className="mt-3 text-[12px] text-red-600">{error}</p>}
-        {!settings && !error && <p className="mt-3 text-[12px] text-slate-400">Loading…</p>}
-        {settings && GROUPS.map(([prefix, title]) => {
-          const rows = settings.filter((s) => s.key.startsWith(prefix));
-          return rows.length ? (
-            <section key={prefix} id={groupId(prefix)} className="mt-4 scroll-mt-20">
-              <h3 className="text-[11px] font-semibold tracking-wider uppercase text-slate-400">{title}</h3>
-              {rows.map((s) => <SettingRow key={`${s.key}:${s.value}`} s={s} onSaved={load} />)}
-            </section>
-          ) : null;
-        })}
-        <PayRates />
-      </div>
+    <div className="bg-white border border-black/[0.09] rounded-xl p-[18px]">
+      <h2 className="text-[15px] font-semibold text-slate-800">{title}</h2>
+      <p className="text-[12px] text-slate-500 mt-0.5">{text}</p>
+      {error && <p role="alert" className="mt-3 text-[12px] text-red-600">{error}</p>}
+      {!settings && !error && <p className="mt-3 text-[12px] text-slate-400">Loading…</p>}
+      {s && <div className="mt-2"><SettingRow key={`${s.key}:${s.value}`} s={s} onSaved={load} endpoint="/api/admin-settings" /></div>}
     </div>
   );
+}
+
+// One Settings page at a time (HR > Rates and rules, Admin > Settings > Admin
+// PIN, Old records); "section" is the page.
+export default function SystemSettings({ section = "rates" }) {
+  if (section === "admin-pin") return (
+    <div className="max-w-4xl flex flex-col gap-4">
+      <OverridePinForm />
+      <AdminOnlySetting settingKey="kiosk.hr_can_override" title="HR kiosk unlock" text="Whether HR may unlock a locked kiosk from its Kiosk PIN page. Only Admin can change this." />
+    </div>
+  );
+  if (section === "old-records") return (
+    <div className="max-w-4xl flex flex-col gap-4">
+      <AdminOnlySetting settingKey="archive.expiry_action" title="When records pass the retention period" text="REVIEW keeps everything until Admin decides; ANONYMIZE or PURGE runs each day on its own. Only Admin can change this." />
+      <RetentionReview />
+    </div>
+  );
+  if (section === "deliveries" || section === "support") return (
+    <div className="max-w-4xl bg-white border border-black/[0.09] rounded-xl p-[18px]">
+      <RatesSection key={section} page={section} base="/api/admin-settings" />
+    </div>
+  );
+  return <RatesSection page={section} />;
+}
+
+// One settings page: loads and saves only that page's settings. HR > Rates
+// and rules uses GET/PUT /api/settings/{page}; Admin > Settings > Deliveries
+// and Support tickets use /api/admin-settings/{page}.
+export function RatesSection({ page, base = "/api/settings" }) {
+  const [settings, setSettings] = useState(null);
+  const [error, setError] = useState("");
+  const endpoint = `${base}/${page}`;
+
+  // The page passes key={page}, so a new page starts with fresh state
+  const load = useCallback(() => {
+    api(endpoint).then((d) => { setError(""); setSettings(d); }).catch((e) => setError(e.message));
+  }, [endpoint]);
+  useEffect(() => { load(); }, [load]);
+
+  if (error) return <p role="alert" className="text-[12px] text-red-600">{error}</p>;
+  if (!settings) return <p className="text-[12px] text-slate-400">Loading…</p>;
+  if (!settings.length) return <p className="text-[12px] text-slate-400">No settings on this page.</p>;
+  return settings.map((s) => <SettingRow key={`${s.key}:${s.value}`} s={s} onSaved={load} endpoint={endpoint} />);
 }

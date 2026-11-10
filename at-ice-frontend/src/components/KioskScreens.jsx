@@ -238,8 +238,8 @@ export function PinEntry({ onUnlocked }) {
 }
 
 // A kiosk locked after too many wrong HR PINs. It stays locked (no timer) until
-// an Admin types the 4-digit Admin override PIN here, on this kiosk. HR cannot
-// unlock it. Every try is logged on the server.
+// someone types an override PIN here, on this kiosk: the Admin override PIN or
+// HR's own override PIN (owner, 2026-11-10). Every try is logged on the server.
 function AdminOverride({ onUnlocked }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
@@ -261,7 +261,7 @@ function AdminOverride({ onUnlocked }) {
         onUnlocked();
         return;
       }
-      setError(res.status === 429 ? "Too many tries. Wait a minute and try again." : data?.message || "The Admin PIN could not be checked.");
+      setError(res.status === 429 ? "Too many tries. Wait a minute and try again." : data?.message || "The override PIN could not be checked.");
       setPin("");
     } catch {
       setError("Network error. Check the connection of this terminal and try again.");
@@ -273,9 +273,9 @@ function AdminOverride({ onUnlocked }) {
   return (
     <form onSubmit={submit} className="flex flex-col gap-3 text-center">
       <div role="alert" className="text-[13px] text-red-200 bg-red-500/10 border border-red-400/30 rounded-xl px-4 py-3">
-        This kiosk is locked after too many wrong PINs. Only an Admin can unlock it, here on this kiosk.
+        This kiosk is locked after too many wrong PINs. Admin or HR can unlock it here with their override PIN.
       </div>
-      <label htmlFor="kiosk-admin-pin" className="text-[12px] text-slate-300">Admin override PIN (4 digits)</label>
+      <label htmlFor="kiosk-admin-pin" className="text-[12px] text-slate-300">Admin or HR override PIN (4 digits)</label>
       <input
         id="kiosk-admin-pin"
         type="password"

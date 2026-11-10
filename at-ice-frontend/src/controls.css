@@ -674,7 +674,7 @@ html.front-sheet-open :is(.fixed.inset-0[class*="z-"], .guard-layer):not([data-f
 
 /* Pagination: Previous, the page counter, Next and the rows menu are the same
    44px as every other control */
-#root .pager :is(button, span[aria-current="page"], select) {
+#root .pager :is(button, span[aria-current="page"], span:has(> .pager-input), select) {
   min-height: var(--ctl-h) !important;
   height: var(--ctl-h);
 }
@@ -1536,3 +1536,45 @@ html #root :is(.kpi-card, .stat-card, button.breakdown-row) {
 /* sub-links are blocks: lay the label and the badge out on one line */
 .sidenav-link:has(> .nav-badge) { display: flex !important; align-items: center; gap: 8px; }
 /* the collapsed rail hides labels; the badge goes with them */
+
+/* ---- Side by side, one height (owner, 2026-11-10) -------------------------
+   Controls in the same row are the same height. A segmented toggle (Bar /
+   Line, Day / Month / Year) counts as one control: its gray well is the
+   control height and its buttons fill it, instead of 28px buttons in a 34px
+   well next to 40px fields. A field sitting in a gray well (the dashboard's
+   Compare with picker) is the same: the well is the control height. Phones
+   keep their 44px buttons (touch target), so this is for wider screens. */
+@media (min-width: 640px) {
+  :is(.ice-main, .ice-scope):not(.role-shell *) div:is(.bg-slate-50, .bg-slate-100):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl):has(> button) {
+    min-height: var(--ctl-h);
+    box-sizing: border-box;
+  }
+  :is(.ice-main, .ice-scope):not(.role-shell *) div:is(.bg-slate-50, .bg-slate-100):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl):has(> button) > button {
+    min-height: calc(var(--ctl-h) - 6px);
+  }
+}
+:is(.ice-main, .ice-scope) :is(div, label)[class*="bg-slate-100/"]:is(.rounded, .rounded-md, .rounded-lg):has(> :is(input, select)):not(.border) {
+  height: var(--ctl-h);
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  box-sizing: border-box;
+}
+:is(.ice-main, .ice-scope) :is(div, label)[class*="bg-slate-100/"]:is(.rounded, .rounded-md, .rounded-lg):has(> :is(input, select)):not(.border) > :is(input, select) {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+/* ---- Required fields (owner, 2026-11-10) ----------------------------------
+   A form is never sent with an empty or wrong required field (ActionGuard
+   stops the click and scrolls to the first one). After that first try the
+   fields still to fix get a red ring, light and night, and lose it as soon as
+   they are filled in. A required label ends with a red * (<Req />).
+   The :not(#…) only add weight, so this beats the field inset and focus
+   rules in neumorphism.css and above; those ids never exist. */
+form[data-tried] :is(input, select, textarea):invalid:not(#req-a):not(#req-b):not(#req-c) {
+  box-shadow: var(--neu-inset-sm, inset 1px 1px 3px rgba(0, 0, 0, 0.12)), 0 0 0 2px rgba(220, 38, 38, 0.75) !important;
+  border-color: transparent !important;
+}
+.cp-dark form[data-tried] :is(input, select, textarea):invalid:not(#req-a):not(#req-b):not(#req-c) {
+  box-shadow: var(--neu-inset-sm, inset 1px 1px 3px rgba(0, 0, 0, 0.4)), 0 0 0 2px rgba(248, 113, 113, 0.85) !important;
+}

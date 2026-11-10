@@ -13,16 +13,16 @@ class Payroll extends Model
     use HasFactory;
 
     public const MONEY = [
-        'daily_rate', 'monthly_rate', 'hourly_rate', 'basic_pay', 'paid_leave_pay', 'holiday_pay', 'holiday_ot_pay', 'overtime_pay', 'late_deduction', 'absence_deduction',
+        'daily_rate', 'monthly_rate', 'hourly_rate', 'basic_pay', 'paid_leave_pay', 'holiday_pay', 'holiday_ot_pay', 'overtime_pay', 'night_diff_pay', 'late_deduction', 'absence_deduction',
         'leave_deduction', 'adjustments_total', 'gross_pay', 'sss_deduction', 'philhealth_deduction', 'pagibig_deduction',
         'tax_deduction', 'other_deductions', 'taxable_income', 'net_pay', 'carry_over_in', 'carry_over_out', 'employer_shouldered',
     ];
 
     protected $fillable = [
         'employee_id', 'period_start', 'period_end', 'pay_day',
-        'days_worked', 'days_present', 'absent_days', 'late_minutes', 'paid_leave_days', 'unpaid_leave_days', 'unpaid_leave_hours', 'holiday_hours', 'ot_hours',
+        'days_worked', 'days_present', 'absent_days', 'late_minutes', 'paid_leave_days', 'unpaid_leave_days', 'unpaid_leave_hours', 'holiday_hours', 'ot_hours', 'night_hours',
         'daily_rate', 'pay_basis', 'monthly_rate', 'hourly_rate',
-        'basic_pay', 'paid_leave_pay', 'holiday_pay', 'holiday_ot_pay', 'overtime_pay', 'late_deduction', 'absence_deduction', 'leave_deduction', 'adjustments_total',
+        'basic_pay', 'paid_leave_pay', 'holiday_pay', 'holiday_ot_pay', 'overtime_pay', 'night_diff_pay', 'late_deduction', 'absence_deduction', 'leave_deduction', 'adjustments_total',
         'gross_pay', 'sss_deduction', 'philhealth_deduction', 'pagibig_deduction', 'tax_deduction', 'other_deductions',
         'taxable_income', 'net_pay', 'carry_over_in', 'carry_over_out', 'employer_shouldered',
         'status', 'prepared_by', 'timesheet_approved_by', 'timesheet_approved_at', 'paid_at', 'paid_by',
@@ -52,6 +52,8 @@ class Payroll extends Model
         'holiday_pay' => 'decimal:2',
         'holiday_ot_pay' => 'decimal:2',
         'overtime_pay' => 'decimal:2',
+        'night_diff_pay' => 'decimal:2',
+        'night_hours' => 'decimal:2',
         'holiday_hours' => 'decimal:2',
         'ot_hours' => 'decimal:2',
         'late_deduction' => 'decimal:2',

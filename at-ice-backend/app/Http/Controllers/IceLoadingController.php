@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Delivery;
 use App\Models\IceLoading;
+use App\Support\TruckStock;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -121,7 +122,7 @@ class IceLoadingController extends Controller
             $created = DB::transaction(function () use ($validated, $itemsToSave, $loadedAt) {
                 // Lock the delivery so two Checkers saving the same delivery
                 // at once are handled one after the other.
-                Delivery::whereKey($validated['delivery_id'])->lockForUpdate()->first();
+                $delivery = Delivery::whereKey($validated['delivery_id'])->lockForUpdate()->first();
 
                 $existing = IceLoading::with('checker:id,name')
                     ->where('delivery_id', $validated['delivery_id'])
@@ -140,6 +141,8 @@ class IceLoadingController extends Controller
                         'checker_id' => auth()->id(),
                     ]);
                 }
+                // The count goes on the Driver's truck as a dated batch (FIFO)
+                TruckStock::load($delivery, $rows);
 
                 return $rows;
             });

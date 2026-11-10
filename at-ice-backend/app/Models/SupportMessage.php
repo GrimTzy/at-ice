@@ -60,12 +60,22 @@ class SupportMessage extends Model
         'resolved_at',
         'resolution_note',
         'closed_at',
+        'escalated_at',
+        'escalated_by',
+        'escalation_reason',
     ];
 
     protected $casts = [
         'resolved_at' => 'datetime',
         'closed_at' => 'datetime',
+        'escalated_at' => 'datetime',
     ];
+
+    // Who escalated the ticket (Admin)
+    public function escalator()
+    {
+        return $this->belongsTo(User::class, 'escalated_by');
+    }
 
     protected $appends = ['topic_label'];
 

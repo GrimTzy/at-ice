@@ -28,6 +28,20 @@ class DeliveryContractController extends Controller
         ]));
     }
 
+    // The ID the next contract for these stores would get, shown in the form
+    // before saving. It is only taken on save, so it may move up by one if
+    // another contract for the same customer is saved first.
+    public function nextNumber(Request $request)
+    {
+        $data = $request->validate([
+            'chain' => 'nullable|string|max:100',
+            'store_ids' => 'required|array|min:1',
+            'store_ids.*' => 'integer|exists:customers,id',
+        ]);
+
+        return response()->json(['contract_no' => DeliveryContract::nextNumber($data['chain'] ?? null, $data['store_ids'])]);
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -52,10 +66,8 @@ class DeliveryContractController extends Controller
         ]);
 
         $contract = DB::transaction(function () use ($data, $request) {
-            $last = DeliveryContract::where('contract_no', 'like', 'C-%')->pluck('contract_no')
-                ->map(fn ($n) => (int) substr($n, 2))->max() ?? 0;
             $contract = DeliveryContract::create([
-                'contract_no' => 'C-'.str_pad((string) ($last + 1), 4, '0', STR_PAD_LEFT),
+                'contract_no' => DeliveryContract::nextNumber($data['chain'] ?? null, $data['store_ids']),
                 'name' => $data['name'],
                 'chain' => $data['chain'] ?? null,
                 'start_date' => $data['start_date'],

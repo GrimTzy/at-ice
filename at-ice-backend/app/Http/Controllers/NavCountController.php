@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Applicant;
+use App\Models\EmployeeMemo;
 use App\Models\LeaveRequest;
 use App\Models\StockOutRequest;
 use App\Models\SupportMessage;
@@ -17,7 +18,12 @@ class NavCountController extends Controller
     {
         return response()->json([
             '/admin/stock-out-approvals' => StockOutRequest::where('status', 'pending')->count(),
-            '/admin/support-inbox' => SupportMessage::where('status', 'open')->count(),
+            // Formal memos HR endorsed, waiting for approval
+            '/admin/memo-approvals' => EmployeeMemo::where('status', 'for_approval')->count(),
+            // New tickets, plus escalated ones still being worked on
+            '/admin/support-inbox' => SupportMessage::where('status', 'open')
+                ->orWhere(fn ($q) => $q->whereNotNull('escalated_at')->where('status', 'in_progress'))
+                ->count(),
         ]);
     }
 

@@ -97,7 +97,7 @@ class HolidayController extends Controller
             'type' => ['required', Rule::in(Holiday::TYPES)],
             'is_double' => 'nullable|boolean',
         ], [
-            'date.unique' => 'There is already a holiday on this date. Edit it instead (tick "Two holidays on this date" if it is a double holiday).',
+            'date.unique' => 'There is already a holiday on this date. Edit it instead.',
         ]);
 
         return $data + ['year' => (int) substr($data['date'], 0, 4), 'is_double' => (bool) ($data['is_double'] ?? false)];

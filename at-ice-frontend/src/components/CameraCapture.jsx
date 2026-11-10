@@ -13,6 +13,8 @@ export default function CameraCapture({ stamp = "", onCapture, disabled = false 
   const [state, setState] = useState("idle"); // idle | starting | live | taken | error
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(null);
+  // True once the video shows a frame; before that Take Photo would grab nothing
+  const [ready, setReady] = useState(false);
 
   const stop = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -28,6 +30,7 @@ export default function CameraCapture({ stamp = "", onCapture, disabled = false 
       return;
     }
     setState("starting");
+    setReady(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } },
@@ -141,8 +144,8 @@ export default function CameraCapture({ stamp = "", onCapture, disabled = false 
     return (
       <div className="flex flex-col gap-2">
         <div className="relative w-full h-56 rounded-xl overflow-hidden bg-black">
-          <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
-          {state === "starting" && (
+          <video ref={videoRef} playsInline muted onLoadedData={() => setReady(true)} className="w-full h-full object-cover" />
+          {(state === "starting" || !ready) && (
             <div className="absolute inset-0 flex items-center justify-center text-[12px] text-white/80">Opening the camera…</div>
           )}
         </div>
@@ -157,7 +160,7 @@ export default function CameraCapture({ stamp = "", onCapture, disabled = false 
           <button
             type="button"
             onClick={take}
-            disabled={state !== "live"}
+            disabled={state !== "live" || !ready}
             className="flex-[2] py-3 bg-cyan-500 active:bg-cyan-600 text-white text-[13px] font-semibold rounded-xl cursor-pointer disabled:opacity-50"
           >
             Take Photo

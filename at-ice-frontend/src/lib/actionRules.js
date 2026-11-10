@@ -46,7 +46,7 @@ const CONSEQUENCE = [
 const APPROVALS = [
   ["/admin/receipts", "Approve payment proof?", "The invoice is marked Paid and the customer sees the payment as received."],
   ["/admin/stock-out-approvals", "Approve parts request?", "It moves to To release. The parts leave stock only when they are released."],
-  ["/hr/timesheets", null, "The selected timesheets are approved for this pay period and wait for Admin to pay them."],
+  ["/hr/timesheets", null, "The selected timesheets are approved for this pay period. Pay them in HR > Payroll."],
 ];
 const approvalFor = (verb) => (/^approve/.test(verb) ? APPROVALS.find(([p]) => window.location.pathname.startsWith(p)) : null);
 

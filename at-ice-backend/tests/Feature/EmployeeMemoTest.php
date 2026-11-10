@@ -94,10 +94,15 @@ class EmployeeMemoTest extends TestCase
             'incident_date' => '2026-10-21',
             'subject' => 'Notice to Explain: Fuel Theft',
             'body' => 'GPS logs show the truck stopped at an unlisted station for 40 minutes.',
-            'send' => 1,
+            'endorse' => 1, // a formal memo goes to Admin before it is released
             'files' => [UploadedFile::fake()->create('gps-log.pdf', 50, 'application/pdf')],
         ], ['Accept' => 'application/json'])->assertCreated()
-            ->assertJsonPath('level', 'nte')->assertJsonPath('status', 'awaiting_physical')->json();
+            ->assertJsonPath('level', 'nte')->assertJsonPath('status', 'for_approval')->json();
+
+        Sanctum::actingAs(User::create(['name' => 'Admin', 'email' => 'admin@atice.cloud', 'password' => 'secret-password', 'role' => 'admin']));
+        $this->postJson("/api/memos/{$memo['id']}/approve")->assertOk()->assertJsonPath('status', 'approved');
+        Sanctum::actingAs($this->hr);
+        $memo = $this->postJson("/api/memos/{$memo['id']}/send")->assertOk()->assertJsonPath('status', 'awaiting_physical')->json();
 
         $this->assertSame('pending_investigation', $this->driver->fresh()->investigation_status);
 

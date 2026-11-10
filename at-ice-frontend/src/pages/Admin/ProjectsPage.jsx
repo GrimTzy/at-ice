@@ -3,6 +3,7 @@ import AdminLayout from "../../components/AdminLayout";
 import { BoardGroup, BoardRow, StatusCell } from "../../components/Board";
 import { SkeletonList } from "../../components/Skeleton";
 import { TONES } from "../../lib/boardTones";
+import { plural } from "../../lib/plural";
 import { useLiveTick } from "../../lib/live";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
@@ -87,9 +88,9 @@ function Timeline({ p }) {
         <div className="absolute inset-y-0 left-0" style={{ width: `${pct}%`, background: `color-mix(in srgb, ${color} 30%, transparent)` }} />
         <span className="relative z-10 flex items-center justify-center gap-1.5 h-full px-2 text-[11px] font-semibold text-slate-800 whitespace-nowrap">
           {day(p.start_date) || "?"} – {day(p.due_date) || "?"}
-          {p.overdue && <span className="text-[10px] font-bold uppercase tracking-wide text-rose-700">· Overdue</span>}
         </span>
       </div>
+      {p.overdue && <span className="cell-note text-[10px] font-bold uppercase tracking-wide text-rose-700">Overdue</span>}
     </div>
   );
 }
@@ -219,7 +220,7 @@ export default function ProjectsPage() {
         const share = (n) => (projects.length ? n / projects.length : 0);
         return (
           <KpiGrid cols={5}>
-            <KpiCard label="Open projects" icon="tool" tone="cyan" value={totals.open} sub={`${projects.length} projects in all`} bar={share(totals.open)} onClick={() => setFocus((f) => (f === "open" ? "" : "open"))} active={focus === "open"} />
+            <KpiCard label="Open projects" icon="tool" tone="cyan" value={totals.open} sub={`${plural(projects.length, "project")} in all`} bar={share(totals.open)} onClick={() => setFocus((f) => (f === "open" ? "" : "open"))} active={focus === "open"} />
             <KpiCard label="Done" icon="check" tone="emerald" value={done} sub={`${Math.round(share(done) * 100)}% completed`} bar={share(done)} onClick={() => setFocus((f) => (f === "done" ? "" : "done"))} active={focus === "done"} />
             <KpiCard label="Stuck" icon="alert" tone="rose" value={totals.stuck} sub="Need a decision to move on" bar={share(totals.stuck)} onClick={() => setFocus((f) => (f === "stuck" ? "" : "stuck"))} active={focus === "stuck"} />
             <KpiCard label="Overdue" icon="clock" tone="amber" value={totals.overdue} sub="Past their due date" bar={share(totals.overdue)} onClick={() => setFocus((f) => (f === "overdue" ? "" : "overdue"))} active={focus === "overdue"} />
@@ -275,11 +276,11 @@ export default function ProjectsPage() {
                       <Timeline key="t" p={p} />,
                       <span key="r" className="text-[11px]">
                         <b className="text-slate-800">{p.requests_released}</b> used
-                        {p.requests_waiting > 0 && <span className="text-[#9f1239]"> · {p.requests_waiting} waiting</span>}
+                        {p.requests_waiting > 0 && <span className="cell-note text-[#9f1239]">{p.requests_waiting} waiting</span>}
                       </span>,
                       <span key="c" className="text-[11px] font-mono">
                         <b className="text-slate-800">{peso(p.materials_cost)}</b>
-                        {p.budget != null && <span className={p.budget_left < 0 ? "text-[#b4233c]" : "text-slate-400"}> / {peso(p.budget)}</span>}
+                        {p.budget != null && <span className={`cell-note ${p.budget_left < 0 ? "text-[#b4233c]" : "text-slate-400"}`}>of {peso(p.budget)}</span>}
                       </span>,
                       <span key="a" className="flex items-center justify-center gap-1.5 flex-wrap">
                         <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="px-2 py-1 text-[11px] rounded border border-black/[0.09] text-slate-600 hover:border-cyan-400 cursor-pointer">Edit</button>

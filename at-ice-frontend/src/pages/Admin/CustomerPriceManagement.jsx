@@ -306,7 +306,7 @@ export default function CustomerPriceManagement() {
                           {isEditing ? (
                             <div className="flex items-center gap-1">
                               <span className="text-slate-400">₱</span>
-                              <input name="draft"
+                              <input name="customer_price"
                                 type="number"
                                 min="0"
                                 step="0.01"
@@ -481,7 +481,7 @@ function ReferencePrices({ onChanged }) {
                       {on ? (
                         <div className="flex items-center gap-1">
                           <span className="text-slate-400">₱</span>
-                          <input name="draft" type="number" min="0" step="0.01" value={draft[p] ?? ""} placeholder="—" aria-label={`${t.label} ${PRODUCT_LABELS[p]}`}
+                          <input name="reference_price" type="number" min="0" step="0.01" value={draft[p] ?? ""} placeholder="—" aria-label={`${t.label} ${PRODUCT_LABELS[p]}`}
                             onChange={(e) => setDraft({ ...draft, [p]: e.target.value })}
                             className="w-20 bg-slate-50 border border-black/[0.09] rounded-md px-2 py-1 text-[13px] font-mono outline-none focus:border-cyan-500" />
                         </div>

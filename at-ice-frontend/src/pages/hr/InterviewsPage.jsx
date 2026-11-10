@@ -17,7 +17,8 @@ import { useDraft } from "../../lib/useDraft";
 import { filledFrom } from "../../lib/scanDocument";
 import { fullName } from "../../lib/names";
 import { APPLICANT_POSITIONS, applyUrl, isLocalTesting } from "../../lib/positions";
-import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
+import { PRINT_BASE_CSS, PRINT_LOGO_URL, printDocument } from "../../lib/printDocument";
+import { COMPANY } from "../../lib/company";
 import QRCode from "qrcode";
 import { formatDateTime, formatTime } from "../../lib/time";
 import { CIVIL_STATUSES, EDUCATION_LEVELS, SEXES, labelOf } from "../../lib/biodata";
@@ -199,12 +200,14 @@ function ApplyQrModal({ onClose }) {
     .sheet { padding-top: 22mm; }
     h1 { font-size: 34px; margin: 0 0 6px; letter-spacing: 1px; }
     h2 { font-size: 18px; font-weight: normal; margin: 0 0 18px; color: #334155; }
-    img { width: 110mm; max-width: 80%; height: auto; }
+    .qr { width: 110mm; max-width: 80%; height: auto; }
+    .flyer-logo { height: 34mm; width: auto; display: block; margin: 0 auto 10mm; }
     .steps { font-size: 15px; margin: 16px auto 0; max-width: 140mm; line-height: 1.6; }
     .url { font-family: monospace; font-size: 14px; margin-top: 10px; color: #0e7490; }
   </style></head><body><div class="sheet">
-    <h1>WE'RE HIRING</h1><h2>Bella Erin · AT-ICE Purified Ice</h2>
-    <img src="${qr}" alt="QR code" />
+    <img class="flyer-logo" src="${PRINT_LOGO_URL}" alt="Bella Erin Tube Ice" />
+    <h1>WE'RE HIRING</h1><h2>${COMPANY.name}</h2>
+    <img class="qr" src="${qr}" alt="QR code" />
     <div class="steps">Scan with your phone camera, fill in the form and send.<br/>HR will contact you to set your interview.</div>
     <div class="url">${url}</div>
   </div></body></html>`);

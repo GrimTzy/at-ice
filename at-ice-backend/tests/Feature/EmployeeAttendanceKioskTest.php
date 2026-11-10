@@ -145,6 +145,32 @@ class EmployeeAttendanceKioskTest extends TestCase
         $this->assertTrue(KioskSetting::current()->checkAdminPin('9876'));
     }
 
+    public function test_hr_has_its_own_override_pin_and_the_admin_pin_still_works(): void
+    {
+        KioskSetting::current()->setPin('1234', null);
+        KioskSetting::current()->setAdminPin('9876');
+        $hr = User::factory()->create(['role' => 'hr', 'password' => 'Secret-123!']);
+        Sanctum::actingAs($hr);
+        $set = fn ($pin) => $this->putJson('/api/hr/kiosk-override-pin', ['current_password' => 'Secret-123!', 'override_pin' => $pin, 'override_pin_confirmation' => $pin]);
+
+        $set('1234')->assertUnprocessable()->assertJsonValidationErrors('override_pin'); // same as the kiosk PIN
+        $set('5555')->assertOk();
+        $this->getJson('/api/hr/kiosk-pin')->assertJsonPath('hr_override_pin_set', true);
+
+        $lock = function () {
+            KioskDevice::where('device_id', self::DEVICE)->update(['locked_at' => now(), 'failed_attempts' => 5]);
+        };
+        $this->postJson('/api/kiosk/unlock', ['device_id' => self::DEVICE, 'pin' => '0000']); // makes the device row
+        $lock();
+        $this->postJson('/api/kiosk/override', ['device_id' => self::DEVICE, 'admin_pin' => '5555'])->assertOk()->assertJsonPath('message', 'Kiosk unlocked by HR. Enter the HR PIN to start.');
+        $lock();
+        $this->postJson('/api/kiosk/override', ['device_id' => self::DEVICE, 'admin_pin' => '9876'])->assertOk()->assertJsonPath('message', 'Kiosk unlocked by Admin. Enter the HR PIN to start.');
+
+        // Admin cannot set HR's PIN
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'password' => 'Secret-123!']));
+        $set('7777')->assertForbidden();
+    }
+
     public function test_history_by_date_range_newest_first_and_csv_export(): void
     {
         Sanctum::actingAs(User::factory()->create(['role' => 'hr']));

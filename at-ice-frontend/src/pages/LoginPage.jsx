@@ -265,7 +265,7 @@ export default function LoginPage() {
                   />
                   <RevealButton revealed={showPassword} buttonProps={revealProps} className="w-11 h-11 !text-[var(--neu-faint)] hover:!text-slate-700" />
                 </div>
-                <Link to="/forgot-password" className="self-end text-[13px] font-medium text-[var(--neu-accent)] hover:underline">
+                <Link to="/forgot-password" className="self-end py-2.5 -my-2.5 text-[13px] font-medium text-[var(--neu-accent)] hover:underline">
                   Forgot password?
                 </Link>
               </div>

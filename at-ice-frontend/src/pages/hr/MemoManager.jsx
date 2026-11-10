@@ -15,8 +15,8 @@ import { formatDateShort, formatDateTime } from "../../lib/time";
 import { openProtectedFile } from "../../lib/openFile";
 import { fullName } from "../../lib/names";
 import { toast } from "../../lib/toast";
-import { MEMO_FILE_ACCEPT, MEMO_LEVEL, MEMO_STATUS } from "../../lib/memos";
-import { printMemo } from "../../lib/printMemo";
+import { MEMO_FILE_ACCEPT, MEMO_LEVEL, MEMO_STATUS, isFormalMemo } from "../../lib/memos";
+import { printAnnouncementCopies, printMemo } from "../../lib/printMemo";
 
 // HR > Memos: disciplinary memos. Missed Time Outs at the kiosk become drafts
 // on their own (App\Support\MemoEngine: 1st verbal warning, 2nd first written,
@@ -49,7 +49,205 @@ async function call(url, { method = "GET", body, form, onProgress } = {}) {
 
 const inputCls = "w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-[13px] text-slate-700 outline-none focus:border-cyan-500/60 disabled:opacity-60";
 const empLabel = (e) => `${e.employee_id} - ${fullName(e)}${e.position ? ` [${e.position}]` : ""}`;
-const CATEGORY_LABEL = { attendance: "Attendance", conduct: "Conduct", zero_tolerance: "Zero tolerance" };
+const CATEGORY_LABEL = { attendance: "Attendance", conduct: "Conduct", zero_tolerance: "Zero tolerance", announcement: "Announcements" };
+
+// "Drivers", "3 employees", "All employees"
+const audienceLabel = (m, groups = []) => {
+  const a = m.audience || {};
+  if (a.mode === "employees") return `${(a.employee_ids || []).length} picked employee${(a.employee_ids || []).length === 1 ? "" : "s"}`;
+  if (a.mode === "group") return groups.find((g) => g.key === a.group)?.label || a.group;
+  return "All employees";
+};
+
+// HR > Memos > New announcement: a policy notice to picked employees, a role
+// group or every active employee. A group becomes names when it is sent.
+function AnnouncementDialog({ employees, groups, onClose, onSaved }) {
+  const [form, setForm] = useState({ subject: "", body: "", mode: "group", group: "all" });
+  const [picked, setPicked] = useState([]);
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+
+  const set = (k) => (e) => { setError(""); setForm((f) => ({ ...f, [k]: e.target.value })); };
+  const toggle = (id) => setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  const term = q.trim().toLowerCase();
+  const matches = employees.filter((e) => !term || empLabel(e).toLowerCase().includes(term));
+
+  const save = async (send) => {
+    if (!form.subject.trim()) return setError("Write the subject.");
+    if (form.body.trim().length < 20) return setError("The announcement text is too short.");
+    if (form.mode === "employees" && picked.length === 0) return setError("Pick at least one employee.");
+    setBusy(send ? "send" : "draft");
+    try {
+      const memo = await call("/api/memos/announcements", {
+        method: "POST",
+        body: {
+          subject: form.subject.trim(),
+          body: form.body.trim(),
+          mode: form.mode,
+          ...(form.mode === "employees" ? { employee_ids: picked } : {}),
+          ...(form.mode === "group" ? { group: form.group } : {}),
+          send,
+        },
+      });
+      toast.success(send ? `Announcement ${memo.memo_no} sent.` : `Announcement ${memo.memo_no} saved as a draft.`);
+      onSaved(memo);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+    return undefined;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label="New announcement" onClick={(e) => e.stopPropagation()} className="modal-shell bg-white rounded-xl w-full max-w-2xl">
+        <div className="px-5 py-4 border-b border-black/[0.09] flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[15px] font-semibold text-slate-800">New announcement</div>
+            <p className="text-[11px] text-slate-500 mt-0.5">A policy notice for many employees. It is not a disciplinary memo and needs no approval.</p>
+          </div>
+          <button type="button" data-no-confirm onClick={onClose} aria-label="Close"><Icon name="x" size={16} /></button>
+        </div>
+        <div className="modal-body p-5 flex flex-col gap-3.5">
+          <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Send to</span>
+            <select name="mode" value={form.mode} onChange={set("mode")} className={inputCls}>
+              <option value="group">A group</option>
+              <option value="employees">Picked employees</option>
+              <option value="all">All active employees</option>
+            </select></label>
+          {form.mode === "group" && (
+            <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Group</span>
+              <select name="group" value={form.group} onChange={set("group")} className={inputCls}>
+                {groups.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+              </select>
+              <span className="text-[11px] text-slate-500">The group's active members at the time it is sent receive it.</span></label>
+          )}
+          {form.mode === "employees" && (
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] font-medium text-slate-600">Employees ({picked.length} picked)</span>
+              <input name="recipient_search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by employee ID or name" className={inputCls} />
+              <div className="max-h-48 overflow-y-auto rounded-md border border-slate-200 divide-y divide-slate-100">
+                {matches.length === 0 ? (
+                  <div className="px-3 py-2 text-[12px] text-slate-400">No employee matches.</div>
+                ) : matches.map((e) => (
+                  <label key={e.id} className="flex items-center gap-2 px-3 py-2 text-[12.5px] text-slate-700 cursor-pointer hover:bg-slate-50">
+                    <input type="checkbox" name="recipient" checked={picked.includes(e.id)} onChange={() => toggle(e.id)} />
+                    <span className="min-w-0 truncate">{empLabel(e)}</span>
+                    {!e.user_id && <span className="ml-auto text-[10.5px] text-amber-700 whitespace-nowrap">Printed copy</span>}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Subject</span>
+            <input name="subject" value={form.subject} maxLength={255} onChange={set("subject")} placeholder="e.g. New gate pass rule for trucks" className={inputCls} /></label>
+          <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Announcement text</span>
+            <textarea name="body" rows={8} value={form.body} maxLength={10000} onChange={set("body")} className={`${inputCls} resize-y`} /></label>
+          <p className="text-[11px] text-slate-500">Staff with no system account (Guards, Baggers) get a printed copy: print it from the announcement once it is sent.</p>
+          {error && <div className="text-[12px] text-red-600">{error}</div>}
+        </div>
+        <div className="px-5 py-3 border-t border-black/[0.09] flex flex-wrap justify-end gap-2">
+          <button type="button" data-no-confirm onClick={onClose} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-xs text-slate-600 hover:bg-slate-50 cursor-pointer">Cancel</button>
+          <button type="button" disabled={!!busy} onClick={() => save(false)} title="Keep it as a draft; nobody sees it yet" className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50">
+            {busy === "draft" ? "Saving…" : "Save draft"}
+          </button>
+          <button type="button" disabled={!!busy} onClick={() => save(true)} title="Send the announcement to every recipient's account now" className="px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-medium cursor-pointer disabled:opacity-50">
+            {busy === "send" ? "Sending…" : "Send announcement"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The picked announcement: the text, who receives it (or would, while a
+// draft), who acknowledged it, and printed copies for staff with no account.
+function AnnouncementPanel({ memo, groups, onChanged, onClose }) {
+  const [list, setList] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    setList(null);
+    call(`/api/memos/${memo.id}/recipients`)
+      .then((d) => { if (alive) setList(d); })
+      .catch((err) => { if (alive) setError(err.message); });
+    return () => { alive = false; };
+  }, [memo.id, memo.status]);
+
+  const send = async () => {
+    setBusy("send");
+    setError("");
+    try {
+      const data = await call(`/api/memos/${memo.id}/send`, { method: "POST" });
+      toast.success("Announcement sent.");
+      onChanged(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const people = list?.recipients || [];
+  const noAccount = people.filter((r) => !r.employee?.user_id).map((r) => r.employee);
+
+  return (
+    <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden xl:sticky xl:top-0">
+      <div className="px-5 py-3.5 border-b border-black/[0.09] flex flex-wrap items-center gap-2">
+        <span className="font-mono text-[12px] font-semibold text-slate-800">{memo.memo_no}</span>
+        <Pill map={MEMO_LEVEL} value="announcement" />
+        <Pill map={MEMO_STATUS} value={memo.status} />
+        <button type="button" data-no-confirm onClick={onClose} title="Close this panel" className="ml-auto px-2 py-1 rounded-md text-[12px] text-slate-500 hover:bg-slate-50 cursor-pointer">Close panel</button>
+      </div>
+      <div className="px-5 py-4 space-y-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
+          <div><div className="text-[11px] text-slate-400">Send to</div><div className="text-slate-800">{audienceLabel(memo, groups)}</div></div>
+          <div><div className="text-[11px] text-slate-400">Sent</div><div className="text-slate-800">{memo.issued_at ? formatDateTime(memo.issued_at, { year: false }) : "Not yet"}</div></div>
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-[13px] font-medium text-slate-800">{memo.subject}</div>
+          <div className="rounded-lg border border-black/[0.06] bg-slate-50 px-3 py-2 text-[12.5px] text-slate-700 whitespace-pre-wrap break-words shadow-inner max-h-60 overflow-y-auto">{memo.body}</div>
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+            {list?.preview ? "Would receive it now" : "Recipients"}{list ? ` · ${people.length}` : ""}
+          </div>
+          {!list ? (
+            <div className="text-[12px] text-slate-400">Loading…</div>
+          ) : people.length === 0 ? (
+            <div className="text-[12px] text-amber-700">Nobody active is in this group.</div>
+          ) : (
+            <ul className="max-h-48 overflow-y-auto divide-y divide-slate-100 rounded-md border border-slate-200">
+              {people.map((r) => (
+                <li key={r.employee?.id} className="flex items-center gap-2 px-3 py-1.5 text-[12px]">
+                  <span className="min-w-0 truncate text-slate-700">{empLabel(r.employee || {})}</span>
+                  <span className={`ml-auto whitespace-nowrap text-[10.5px] ${r.acknowledged_at ? "text-emerald-700" : !r.employee?.user_id ? "text-amber-700" : "text-slate-400"}`}>
+                    {r.acknowledged_at ? "Acknowledged" : !r.employee?.user_id ? "Printed copy" : list.preview ? "" : "Not yet"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {error && <div className="text-[12px] text-red-600">{error}</div>}
+        <div className="flex flex-wrap gap-2 pt-3 border-t border-black/[0.06]">
+          {memo.status !== "draft" && noAccount.length > 0 && (
+            <button type="button" data-no-confirm onClick={() => printAnnouncementCopies(memo, noAccount)} data-tip="One signed copy for each person with no system account" className="print-btn"><Icon name="print" size={14} /> Print {noAccount.length} cop{noAccount.length === 1 ? "y" : "ies"}</button>
+          )}
+          {memo.status === "draft" && (
+            <button type="button" disabled={busy === "send"} onClick={send} title="Send the announcement to every recipient's account now" className="ml-auto px-3 py-1.5 rounded-lg text-[12px] font-medium bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer disabled:opacity-50">
+              {busy === "send" ? "Sending…" : "Send announcement"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Pill({ map, value }) {
   const s = map[value] || { label: value, cls: "bg-slate-100 text-slate-600 border-slate-200" };
@@ -67,6 +265,8 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(null);
   const zero = violations.find((v) => v.key === form.violation)?.category === "zero_tolerance";
+  // formal memos go to Admin first: Endorse instead of Send
+  const formal = Boolean(form.violation) && isFormalMemo(zero ? "nte" : form.level, zero ? "zero_tolerance" : "");
 
   // the suggested level and letter follow the employee, violation, date and level
   useEffect(() => {
@@ -105,10 +305,10 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => v !== "" && fd.append(k, v));
-      fd.append("send", send ? "1" : "0");
+      fd.append(formal ? "endorse" : "send", send ? "1" : "0");
       files.forEach((f) => fd.append("files[]", f));
       const memo = await call("/api/memos", { method: "POST", form: fd, onProgress: setProgress });
-      toast.success(send ? `Memo ${memo.memo_no} sent to the employee.` : `Memo ${memo.memo_no} saved as a draft.`);
+      toast.success(!send ? `Memo ${memo.memo_no} saved as a draft.` : formal ? `Memo ${memo.memo_no} endorsed to Admin for approval.` : `Memo ${memo.memo_no} sent to the employee.`);
       onSaved(memo);
     } catch (err) {
       setError(err.message);
@@ -177,8 +377,8 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
           <button type="button" disabled={!!busy} onClick={() => save(false)} title="Keep it as a draft; the employee does not see it yet" className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50">
             {busy === "draft" ? "Saving…" : "Save draft"}
           </button>
-          <button type="button" disabled={!!busy} onClick={() => save(true)} title="Send the memo to the employee's account now" className="px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-medium cursor-pointer disabled:opacity-50">
-            {busy === "send" ? "Sending…" : "Send memo"}
+          <button type="button" disabled={!!busy} onClick={() => save(true)} title={formal ? "A formal memo goes to Admin for approval before it reaches the employee" : "Send the memo to the employee's account now"} className="px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-medium cursor-pointer disabled:opacity-50">
+            {busy === "send" ? (formal ? "Endorsing…" : "Sending…") : formal ? "Endorse to Admin" : "Send memo"}
           </button>
         </div>
       </div>
@@ -266,7 +466,20 @@ function MemoPanel({ memo, onChanged, onClose }) {
           <div><div className="text-[11px] text-slate-400">Sent</div><div className="text-slate-800">{memo.issued_at ? `${formatDateTime(memo.issued_at, { year: false })}${memo.issuer ? ` by ${memo.issuer.name}` : ""}` : "Not yet"}</div></div>
           {memo.acknowledged_at && <div className="col-span-2"><div className="text-[11px] text-slate-400">Acknowledged by the employee</div><div className="text-emerald-700">{formatDateTime(memo.acknowledged_at)}</div></div>}
           {memo.status === "cancelled" && <div className="col-span-2"><div className="text-[11px] text-slate-400">Cancelled</div><div className="text-slate-700">{memo.cancel_reason}</div></div>}
+          {memo.approved_at && <div className="col-span-2"><div className="text-[11px] text-slate-400">Approved by Admin</div><div className="text-emerald-700">{formatDateTime(memo.approved_at)}{memo.approver ? ` by ${memo.approver.name}` : ""}</div></div>}
         </div>
+
+        {draft && memo.return_reason && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+            <div className="text-[11px] text-amber-800 font-medium">Returned by Admin{memo.returner ? ` (${memo.returner.name})` : ""}{memo.returned_at ? ` · ${formatDateTime(memo.returned_at, { year: false })}` : ""}</div>
+            <div className="text-[12.5px] text-slate-800 whitespace-pre-wrap break-words">{memo.return_reason}</div>
+          </div>
+        )}
+        {memo.status === "for_approval" && (
+          <div className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2 text-[12px] text-violet-800">
+            Endorsed to Admin. It can be released once Admin approves it.
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Letter</div>
@@ -350,15 +563,20 @@ function MemoPanel({ memo, onChanged, onClose }) {
 
         <div className="flex flex-wrap gap-2 pt-3 border-t border-black/[0.06]">
           <button type="button" data-no-confirm onClick={() => printMemo(memo)} data-tip="Print the memo letter, or save it as a PDF" className="print-btn"><Icon name="print" size={14} /> Print / PDF</button>
-          {["draft", "sent", "awaiting_physical"].includes(memo.status) && !mode && (
+          {["draft", "for_approval", "approved", "sent", "awaiting_physical"].includes(memo.status) && !mode && (
             <button type="button" data-no-confirm onClick={() => setMode("cancel")} title="Cancel this memo with a reason" className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-black/[0.09] text-rose-700 hover:bg-rose-50 cursor-pointer">Cancel memo…</button>
           )}
           {emp.investigation_status && !mode && (memo.level === "nte" || memo.category === "zero_tolerance") && (
             <button type="button" data-no-confirm onClick={() => setMode("investigation")} title="Record the outcome of the hearing" className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-black/[0.09] text-slate-700 hover:bg-slate-50 cursor-pointer">Close investigation…</button>
           )}
-          {draft && (
+          {draft && isFormalMemo(memo) && (
+            <button type="button" disabled={busy === "endorse" || changed} onClick={() => run("endorse", `/api/memos/${memo.id}/endorse`, { method: "POST" }, "Memo endorsed to Admin for approval.")} title={changed ? "Save your changes first" : "A formal memo goes to Admin for approval before it reaches the employee"} className="ml-auto px-3 py-1.5 rounded-lg text-[12px] font-medium bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer disabled:opacity-50">
+              {busy === "endorse" ? "Endorsing…" : "Endorse to Admin"}
+            </button>
+          )}
+          {((draft && !isFormalMemo(memo)) || memo.status === "approved") && (
             <button type="button" disabled={busy === "send" || changed} onClick={() => run("send", `/api/memos/${memo.id}/send`, { method: "POST" }, memo.needs_physical ? "Memo sent. The employee is told to report to HR for sign-off." : "Memo sent to the employee.")} title={changed ? "Save your changes first" : "Send this memo to the employee's account"} className="ml-auto px-3 py-1.5 rounded-lg text-[12px] font-medium bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer disabled:opacity-50">
-              {busy === "send" ? "Sending…" : "Send memo"}
+              {busy === "send" ? "Sending…" : memo.status === "approved" ? "Release to employee" : "Send memo"}
             </button>
           )}
         </div>
@@ -377,6 +595,7 @@ export default function MemoManager() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [issuing, setIssuing] = useState(false);
+  const [announcing, setAnnouncing] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -400,8 +619,9 @@ export default function MemoManager() {
 
   const { memos, employees, violations, levels } = data;
   const counts = useMemo(() => {
-    const c = { draft: 0, sent: 0, awaiting_physical: 0, acknowledged: 0, archived: 0, cancelled: 0 };
-    memos.forEach((m) => { c[m.status] = (c[m.status] || 0) + 1; });
+    const c = { draft: 0, for_approval: 0, approved: 0, sent: 0, awaiting_physical: 0, acknowledged: 0, archived: 0, cancelled: 0 };
+    // a sent announcement waits on nobody in particular: not counted as awaiting
+    memos.forEach((m) => { if (!(m.kind === "announcement" && m.status === "sent")) c[m.status] = (c[m.status] || 0) + 1; });
     return c;
   }, [memos]);
   const investigations = employees.filter((e) => e.investigation_status);
@@ -410,7 +630,7 @@ export default function MemoManager() {
     const q = search.trim().toLowerCase();
     return memos
       .filter((m) => {
-        if (status === "open") return ["draft", "sent", "awaiting_physical"].includes(m.status);
+        if (status === "open") return m.kind === "announcement" ? m.status === "draft" : ["draft", "approved", "sent", "awaiting_physical"].includes(m.status);
         return status === "all" || m.status === status;
       })
       .filter((m) => employee === "all" || m.employee_id === employee)
@@ -434,8 +654,10 @@ export default function MemoManager() {
   };
 
   const STATUS_OPTIONS = [
-    { value: "open", label: "Needs action", count: counts.draft + counts.sent + counts.awaiting_physical },
+    { value: "open", label: "Needs action", count: counts.draft + counts.approved + counts.sent + counts.awaiting_physical },
     { value: "draft", label: "Drafts to review", count: counts.draft },
+    { value: "for_approval", label: "Waiting for Admin approval", count: counts.for_approval },
+    { value: "approved", label: "Approved, ready to release", count: counts.approved },
     { value: "sent", label: "Awaiting acknowledgment", count: counts.sent },
     { value: "awaiting_physical", label: "Awaiting physical sign-off", count: counts.awaiting_physical },
     { value: "acknowledged", label: "Acknowledged", count: counts.acknowledged },
@@ -468,6 +690,9 @@ export default function MemoManager() {
               <div className="text-[13px] font-semibold text-slate-800">Disciplinary memos</div>
               <div className="text-[11px] text-slate-400 mt-0.5">Missed Time Outs become drafts here. Nothing reaches an employee until HR sends it.</div>
             </div>
+            <button type="button" data-no-confirm onClick={() => setAnnouncing(true)} title="Send a notice to many employees at once" className="px-3 py-1.5 rounded-lg border border-black/[0.09] bg-white text-slate-700 hover:bg-slate-50 text-[12px] font-medium cursor-pointer">
+              New announcement
+            </button>
           </div>
           {/* one even grid of filters: label above each field, wraps 4 / 2 / 1 */}
           <div className="filter-grid px-5 py-3.5 border-b border-black/[0.06]">
@@ -513,17 +738,29 @@ export default function MemoManager() {
                         className={`border-t border-black/[0.06] align-middle cursor-pointer hover:bg-slate-50 ${selected === m.id ? "bg-cyan-50/60" : ""}`}
                       >
                         <td className="px-4 py-3 font-mono text-[12px] text-slate-700 whitespace-nowrap">{m.memo_no}</td>
-                        <td className="px-4 py-3 min-w-[160px]">
-                          <div className="text-slate-800 truncate">{fullName(m.employee || {})}</div>
-                          <div className="text-[11px] text-slate-400">{m.employee?.employee_id}{m.employee?.investigation_status ? " · Pending investigation" : ""}</div>
-                        </td>
-                        <td className="px-4 py-3 min-w-[180px] max-w-[260px]">
-                          <div className="text-slate-700 truncate">{m.violation_label}</div>
-                          <div className="text-[11px] text-slate-400">{m.source === "auto" ? "From missed Time Out" : CATEGORY_LABEL[m.category]}{m.offense_no ? ` · no. ${m.offense_no}` : ""}</div>
-                        </td>
+                        {m.kind === "announcement" ? (
+                          <>
+                            <td className="px-4 py-3 min-w-[160px]">
+                              <div className="text-slate-800 truncate">{audienceLabel(m, data.groups)}</div>
+                              <div className="text-[11px] text-slate-400">{m.status === "draft" ? "Not sent yet" : `${m.recipients_count} received · ${m.acknowledged_count} acknowledged`}</div>
+                            </td>
+                            <td className="px-4 py-3 min-w-[180px] max-w-[260px]"><div className="text-slate-700 truncate">{m.subject}</div></td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-4 py-3 min-w-[160px]">
+                              <div className="text-slate-800 truncate">{fullName(m.employee || {})}</div>
+                              <div className="text-[11px] text-slate-400">{m.employee?.employee_id}{m.employee?.investigation_status ? " · Pending investigation" : ""}</div>
+                            </td>
+                            <td className="px-4 py-3 min-w-[180px] max-w-[260px]">
+                              <div className="text-slate-700 truncate">{m.violation_label}</div>
+                              <div className="text-[11px] text-slate-400">{m.source === "auto" ? "From missed Time Out" : CATEGORY_LABEL[m.category]}{m.offense_no ? ` · no. ${m.offense_no}` : ""}</div>
+                            </td>
+                          </>
+                        )}
                         <td className="px-4 py-3"><Pill map={MEMO_LEVEL} value={m.level} /></td>
                         <td className="px-4 py-3"><Pill map={MEMO_STATUS} value={m.status} /></td>
-                        <td className="px-4 py-3 text-right text-slate-500 whitespace-nowrap">{formatDateShort(m.incident_date)}</td>
+                        <td className="px-4 py-3 text-right text-slate-500 whitespace-nowrap">{m.kind === "announcement" ? (m.issued_at ? formatDateShort(m.issued_at) : "—") : formatDateShort(m.incident_date)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -536,7 +773,9 @@ export default function MemoManager() {
 
         <aside className="xl:col-span-4 flex flex-col gap-4 min-w-0">
           {current ? (
-            <MemoPanel memo={current} onChanged={replace} onClose={() => setSelected(null)} />
+            current.kind === "announcement"
+              ? <AnnouncementPanel memo={current} groups={data.groups} onChanged={replace} onClose={() => setSelected(null)} />
+              : <MemoPanel memo={current} onChanged={replace} onClose={() => setSelected(null)} />
           ) : (
             <>
               <StatusBreakdown title="Memos by violation" items={byViolation} empty="No memos yet." />
@@ -544,7 +783,7 @@ export default function MemoManager() {
                 title="Latest memos"
                 items={memos.map((m) => ({
                   id: m.id,
-                  title: `${m.memo_no} · ${fullName(m.employee || {})}`,
+                  title: `${m.memo_no} · ${m.kind === "announcement" ? audienceLabel(m, data.groups) : fullName(m.employee || {})}`,
                   meta: `${MEMO_LEVEL[m.level]?.label || m.level} · ${MEMO_STATUS[m.status]?.label || m.status}`,
                   when: formatDateTime(m.created_at, { year: false }),
                   tone: m.status === "draft" ? "amber" : m.status === "awaiting_physical" ? "rose" : "emerald",
@@ -569,6 +808,14 @@ export default function MemoManager() {
           presetEmployee={employee !== "all" ? employee : ""}
           onClose={() => setIssuing(false)}
           onSaved={(memo) => { setIssuing(false); replace(memo); setSelected(memo.id); }}
+        />
+      )}
+      {announcing && (
+        <AnnouncementDialog
+          employees={employees}
+          groups={data.groups || []}
+          onClose={() => setAnnouncing(false)}
+          onSaved={(memo) => { setAnnouncing(false); replace(memo); setSelected(memo.id); }}
         />
       )}
     </HrLayout>

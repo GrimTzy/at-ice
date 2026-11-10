@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { STATUS_STYLE, inputCls, storeName } from "./utils";
 import { Icon } from "../../../components/icons";
+import { CUSTOMER_TYPES } from "../../../lib/customerTypes";
 
 // Small pieces of UI shared by Admin > Deliveries (helpers are in utils.js).
 
@@ -43,15 +44,22 @@ export function Modal({ title, onClose, children, wide = false }) {
   );
 }
 
-// Checklist of stores with a search box and a chain filter. `note(store)`
-// adds a small grey line (e.g. its current driver).
+// Checklist of stores with a search box and a customer type filter (Dealers,
+// SM Malls, Alfamart: the same types as the page toolbar). The chain is found
+// by the search box. `note(store)` adds a small grey line (e.g. its current driver).
+const typeOf = (s) => s?.customer_type || "dealer"; // no type = a dealer, as everywhere
 export function StorePicker({ stores, value, onChange, note }) {
   const [q, setQ] = useState("");
-  const [chain, setChain] = useState("");
-  const chains = [...new Set(stores.map((s) => s.chain).filter(Boolean))].sort();
+  const [type, setType] = useState("");
   const needle = q.trim().toLowerCase();
-  const list = stores.filter((s) => (!chain || s.chain === chain)
-    && (!needle || `${s.name} ${s.branch_code || ""} ${s.city || ""}`.toLowerCase().includes(needle)));
+  // Codes match with or without dashes and spaces: "TIN-SJDM-001", "tinsjdm001", "sjdm 001"
+  const bare = (t) => t.replace(/[^a-z0-9]/g, "");
+  const list = stores.filter((s) => {
+    if (type && typeOf(s) !== type) return false;
+    if (!needle) return true;
+    const text = `${s.name} ${s.branch_code || ""} ${s.customer_code || ""} ${s.city || ""} ${s.chain || ""}`.toLowerCase();
+    return text.includes(needle) || (bare(needle) !== "" && bare(text).includes(bare(needle)));
+  });
   const picked = new Set(value.map(String));
   const allPicked = list.length > 0 && list.every((s) => picked.has(String(s.id)));
 
@@ -67,16 +75,18 @@ export function StorePicker({ stores, value, onChange, note }) {
   }
 
   return (
-    <div className="rounded-lg border border-black/[0.09]">
-      <div className="p-2 flex flex-col sm:flex-row gap-2 border-b border-black/[0.07]">
-        <input name="q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search store, branch, city…" aria-label="Search stores" className={inputCls} />
-        <select name="chain" value={chain} onChange={(e) => setChain(e.target.value)} aria-label="Filter by chain" className={`${inputCls} sm:max-w-[150px]`}>
-          <option value="">All chains</option>
-          {chains.map((c) => <option key={c} value={c}>{c}</option>)}
+    <div className="flex flex-col gap-2">
+      {/* Search and filter sit outside the list box, so their edges line up with the fields above */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input name="q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search store, code, chain, city…" aria-label="Search stores" className={inputCls} />
+        <select name="customer_type" value={type} onChange={(e) => setType(e.target.value)} aria-label="Filter by customer type" className={`${inputCls} sm:max-w-[150px]`}>
+          <option value="">All types ({stores.length})</option>
+          {Object.entries(CUSTOMER_TYPES).map(([v, t]) => <option key={v} value={v}>{t.label} ({stores.filter((s) => typeOf(s) === v).length})</option>)}
         </select>
       </div>
+    <div className="rounded-lg border border-black/[0.09]">
       <label className="flex items-center gap-2 px-3 py-1.5 border-b border-black/[0.07] text-[12px] text-slate-600 cursor-pointer">
-        <input name="all_picked" type="checkbox" checked={allPicked} onChange={toggleAll} disabled={list.length === 0} />
+        <input name="select_all_stores" type="checkbox" checked={allPicked} onChange={toggleAll} disabled={list.length === 0} />
         Select all shown ({list.length}) · {value.length} picked
       </label>
       <ul className="max-h-56 overflow-y-auto py-1">
@@ -84,7 +94,7 @@ export function StorePicker({ stores, value, onChange, note }) {
         {list.map((s) => (
           <li key={s.id}>
             <label className="flex items-start gap-2 px-3 py-1.5 text-[13px] cursor-pointer hover:bg-slate-50">
-              <input name="id" type="checkbox" className="mt-0.5" checked={picked.has(String(s.id))} onChange={() => toggle(s.id)} />
+              <input name="select_store" type="checkbox" className="mt-0.5" checked={picked.has(String(s.id))} onChange={() => toggle(s.id)} />
               <span className="min-w-0">
                 <span className="block text-slate-800 truncate">{storeName(s)}</span>
                 <span className="block text-[11px] text-slate-400">{[s.chain, s.city, note?.(s)].filter(Boolean).join(" · ")}</span>
@@ -93,6 +103,7 @@ export function StorePicker({ stores, value, onChange, note }) {
           </li>
         ))}
       </ul>
+    </div>
     </div>
   );
 }

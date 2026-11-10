@@ -7,13 +7,29 @@ use Illuminate\Support\Facades\Hash;
 
 class KioskSetting extends Model
 {
-    protected $fillable = ['pin_hash', 'pin_version', 'pin_changed_at', 'pin_changed_by', 'admin_pin_hash', 'admin_pin_changed_at'];
+    protected $fillable = ['pin_hash', 'pin_version', 'pin_changed_at', 'pin_changed_by', 'admin_pin_hash', 'admin_pin_changed_at', 'hr_override_pin_hash', 'hr_override_pin_changed_at'];
 
-    protected $hidden = ['pin_hash', 'admin_pin_hash'];
+    protected $hidden = ['pin_hash', 'admin_pin_hash', 'hr_override_pin_hash'];
 
     protected function casts(): array
     {
-        return ['pin_changed_at' => 'datetime', 'admin_pin_changed_at' => 'datetime'];
+        return ['pin_changed_at' => 'datetime', 'admin_pin_changed_at' => 'datetime', 'hr_override_pin_changed_at' => 'datetime'];
+    }
+
+    // HR override PIN: HR's own, typed on a locked kiosk like the Admin one.
+    public function hasHrOverridePin(): bool
+    {
+        return $this->hr_override_pin_hash !== null;
+    }
+
+    public function checkHrOverridePin(string $pin): bool
+    {
+        return $this->hasHrOverridePin() && Hash::check($pin, $this->hr_override_pin_hash);
+    }
+
+    public function setHrOverridePin(string $pin): void
+    {
+        $this->update(['hr_override_pin_hash' => Hash::make($pin), 'hr_override_pin_changed_at' => now()]);
     }
 
     // Admin override PIN: typed on a locked kiosk to unlock it.

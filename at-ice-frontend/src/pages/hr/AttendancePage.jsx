@@ -19,7 +19,7 @@ import { SkeletonList } from "../../components/Skeleton";
 import { useLiveTick } from "../../lib/live";
 import { fullName } from "../../lib/names";
 import { payPeriodLabel } from "../../lib/payPeriod";
-import { PRINT_BASE_CSS, cutoffPart, docFileName, printDocument } from "../../lib/printDocument";
+import { PRINT_BASE_CSS, cutoffPart, docFileName, letterhead, printDocument } from "../../lib/printDocument";
 import { toast } from "../../lib/toast";
 import { TZ, formatDateTime, formatTime } from "../../lib/time";
 import Pagination from "../../components/Pagination";
@@ -188,11 +188,12 @@ export default function AttendancePage() {
     const rows = shown.map((a) => `<tr><td>${esc(workerCode(a))}</td><td>${esc(workerName(a))}</td><td>${esc(fmtDay(recordDay(a.date)))}</td><td>${esc(fmtTime(a.time_in))}</td><td>${esc(fmtTime(a.time_out))}</td><td>${esc(fmtHours(a.hours_worked))}</td><td>${esc(a.late_minutes || 0)}</td><td>${esc(STATUS_LABEL[a.status] || a.status)}</td><td>${esc(a.notes || "")}</td></tr>`).join("");
     printDocument(`<!doctype html><html><head><title>Attendance</title><style>${PRINT_BASE_CSS}
       body { font-family: Arial, sans-serif; font-size: 11px; color: #0f172a; }
-      h1 { font-size: 16px; margin: 0 0 2px; } .sub { color: #475569; margin-bottom: 10px; }
+      .head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0e7490; padding-bottom: 8px; margin-bottom: 10px; }
+      .title h1 { font-size: 16px; margin: 0; letter-spacing: 2px; color: #0e7490; } .sub { color: #475569; margin-bottom: 10px; }
       th, td { border-bottom: 1px solid #e2e8f0; padding: 5px 6px; text-align: left; } th { background: #f1f5f9; }
     </style></head><body><div class="sheet">
-      <h1>Attendance ${exactEmployee ? `· ${esc(exactEmployee.code)} ${esc(exactEmployee.name)}` : "· All employees"}</h1>
-      <div class="sub">${esc(payPeriodLabel(range))} · ${shown.length} record${shown.length === 1 ? "" : "s"} · ${esc(activeCard?.label || "")} · printed ${formatDateTime(new Date())}</div>
+      <div class="head">${letterhead({ compact: true })}<div class="title" style="text-align:right"><h1>ATTENDANCE REPORT</h1></div></div>
+      <div class="sub"><b>${exactEmployee ? `${esc(exactEmployee.code)} ${esc(exactEmployee.name)}` : "All employees"}</b> ·${esc(payPeriodLabel(range))} · ${shown.length} record${shown.length === 1 ? "" : "s"} · ${esc(activeCard?.label || "")} · printed ${formatDateTime(new Date())}</div>
       <table><thead><tr><th>Employee ID</th><th>Name</th><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours</th><th>Late (min)</th><th>Status</th><th>Notes</th></tr></thead><tbody>${rows || '<tr><td colspan="9">No records.</td></tr>'}</tbody></table>
     </div></body></html>`, exportName);
   };

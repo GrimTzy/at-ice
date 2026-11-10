@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Employee;
 use App\Models\EmployeeMemo;
 use App\Models\EmployeeMemoFile;
+use App\Models\LiveEvent;
+use App\Models\MemoRecipient;
 use App\Support\Audit;
 use App\Support\DriverAvailability;
 use App\Support\MemoEngine;
@@ -32,7 +34,10 @@ class EmployeeMemoController extends Controller
         MemoEngine::run(); // pick up missed Time Outs right away when HR opens the page
 
         return response()->json([
-            'memos' => EmployeeMemo::with([self::EMPLOYEE_COLUMNS, 'files', 'issuer:id,name'])->latest()->limit(1000)->get(),
+            'memos' => EmployeeMemo::with([self::EMPLOYEE_COLUMNS, 'files', 'issuer:id,name', 'approver:id,name', 'returner:id,name'])
+                ->withCount(['recipients', 'recipients as acknowledged_count' => fn ($q) => $q->whereNotNull('acknowledged_at')])
+                ->latest()->limit(1000)->get(),
+            'groups' => collect(EmployeeMemo::GROUPS)->map(fn ($label, $key) => ['key' => $key, 'label' => $label])->values(),
             'employees' => Employee::whereNull('deactivated_at')->orderBy('employee_id')
                 ->get(['id', 'employee_id', 'first_name', 'middle_initial', 'last_name', 'suffix', 'position', 'user_id', 'no_timeout_count', 'investigation_status', 'investigation_since']),
             'violations' => collect(EmployeeMemo::VIOLATIONS)->map(fn ($v, $k) => ['key' => $k, 'label' => $v[0], 'category' => $v[1]])->values(),
@@ -75,11 +80,21 @@ class EmployeeMemoController extends Controller
             'subject' => 'required|string|max:255',
             'body' => 'required|string|min:20|max:10000',
             'send' => 'boolean',
+            'endorse' => 'boolean',
             'files' => 'array|max:10',
             'files.*' => 'file|max:10240|mimes:'.EmployeeMemoFile::MIMES,
         ], ['files.*.mimes' => 'Files must be PDF, Word (.docx) or pictures (JPG, PNG, WebP).']);
 
         $offense = EmployeeMemo::nextOffenseNo($data['employee_id'], $data['violation']);
+        // A formal memo is never sent straight away: it goes to Admin first.
+        $formal = in_array($this->levelFor($data['violation'], $data['level'] ?? null, $offense), EmployeeMemo::FORMAL_LEVELS, true)
+            || EmployeeMemo::categoryOf($data['violation']) === 'zero_tolerance';
+        if ($formal && $request->boolean('send')) {
+            return response()->json([
+                'message' => self::NEEDS_APPROVAL,
+                'errors' => ['send' => [self::NEEDS_APPROVAL]],
+            ], 422);
+        }
         $stored = new StoredFiles('local');
         try {
             $memo = DB::transaction(function () use ($request, $data, $offense, $stored) {
@@ -108,9 +123,106 @@ class EmployeeMemoController extends Controller
 
         if ($request->boolean('send')) {
             $this->dispatch($request, $memo);
+        } elseif ($formal && $request->boolean('endorse')) {
+            $this->markEndorsed($request, $memo);
         }
 
         return response()->json($this->fresh($memo), 201);
+    }
+
+    private const NEEDS_APPROVAL = 'This is a formal memo (Final Written Warning, Notice to Explain or zero tolerance). Endorse it to Admin; it can be released once Admin approves it.';
+
+    // POST /api/memos/announcements (HR): a policy notice to picked employees, a
+    // role group or every active employee. Saved as a draft or released at once;
+    // a group is turned into names only when it is released.
+    public function storeAnnouncement(Request $request)
+    {
+        $data = $request->validate([
+            'subject' => 'required|string|max:255',
+            'body' => 'required|string|min:20|max:10000',
+            'mode' => ['required', Rule::in(['employees', 'group', 'all'])],
+            'employee_ids' => 'required_if:mode,employees|array|max:500',
+            'employee_ids.*' => ['integer', Rule::exists('employees', 'id')->where('is_active', true)->whereNull('deactivated_at')],
+            'group' => ['required_if:mode,group', 'nullable', Rule::in(array_keys(EmployeeMemo::GROUPS))],
+            'send' => 'boolean',
+        ], [
+            'employee_ids.required_if' => 'Pick at least one employee.',
+            'employee_ids.*.exists' => 'Only active employees can receive an announcement.',
+            'group.required_if' => 'Pick a group.',
+        ]);
+
+        $audience = ['mode' => $data['mode']]
+            + ($data['mode'] === 'employees' ? ['employee_ids' => array_values(array_unique(array_map('intval', $data['employee_ids'])))] : [])
+            + ($data['mode'] === 'group' ? ['group' => $data['group']] : []);
+
+        $memo = EmployeeMemo::create([
+            'kind' => 'announcement',
+            'audience' => $audience,
+            'memo_no' => EmployeeMemo::nextMemoNo(),
+            'employee_id' => null,
+            'violation' => 'announcement',
+            'category' => 'announcement',
+            'level' => 'announcement',
+            'status' => 'draft',
+            'source' => 'manual',
+            'subject' => trim($data['subject']),
+            'body' => trim($data['body']),
+            'incident_date' => now(config('atice.timezone'))->toDateString(),
+        ]);
+        Audit::log('memo.create', $memo, null, ['memo_no' => $memo->memo_no, 'kind' => 'announcement', 'audience' => $audience]);
+
+        if ($request->boolean('send')) {
+            $error = $this->releaseAnnouncement($request, $memo);
+            if ($error) {
+                return response()->json(['message' => $error, 'memo' => $this->fresh($memo)], 422);
+            }
+        }
+
+        return response()->json($this->fresh($memo), 201);
+    }
+
+    // GET /api/memos/{memo}/recipients (HR): who received an announcement, and
+    // who has no account (they get a printed copy)
+    public function recipients(EmployeeMemo $memo)
+    {
+        abort_unless($memo->isAnnouncement(), 404);
+        $list = $memo->status === 'draft'
+            ? EmployeeMemo::resolveAudience($memo->audience ?? [])->map(fn ($e) => ['employee' => $e, 'read_at' => null, 'acknowledged_at' => null])
+            : $memo->recipients()->with('employee:id,employee_id,first_name,middle_initial,last_name,suffix,position,user_id')->get()
+                ->map(fn ($r) => ['employee' => $r->employee, 'read_at' => $r->read_at, 'acknowledged_at' => $r->acknowledged_at]);
+
+        return response()->json(['preview' => $memo->status === 'draft', 'recipients' => $list->values()]);
+    }
+
+    // The group becomes names now; nobody is sent the notice twice.
+    private function releaseAnnouncement(Request $request, EmployeeMemo $memo): ?string
+    {
+        $people = EmployeeMemo::resolveAudience($memo->audience ?? []);
+        if ($people->isEmpty()) {
+            return 'Nobody active is in this group. Pick other recipients.';
+        }
+
+        DB::transaction(function () use ($request, $memo, $people) {
+            foreach ($people as $e) {
+                MemoRecipient::firstOrCreate(['memo_id' => $memo->id, 'employee_id' => $e->id]);
+            }
+            $memo->update(['status' => 'sent', 'issued_by' => $request->user()->id, 'issued_at' => now()]);
+        });
+        Audit::log('memo.announcement_sent', $memo, ['status' => 'draft'], ['status' => 'sent', 'recipients' => $people->count()]);
+
+        $userIds = $people->pluck('user_id')->filter()->values()->all();
+        if ($userIds) {
+            LiveEvent::create([
+                'module' => 'memos',
+                'action' => 'created',
+                'message' => mb_substr("New announcement from HR: {$memo->subject}", 0, 255),
+                'roles' => [],
+                'user_ids' => $userIds,
+                'actor_id' => $request->user()->id,
+            ]);
+        }
+
+        return null;
     }
 
     // PATCH /api/memos/{memo} (HR): edit a draft before sending
@@ -125,8 +237,8 @@ class EmployeeMemoController extends Controller
             'body' => 'sometimes|string|min:20|max:10000',
             'incident_date' => 'sometimes|date|before_or_equal:'.DriverAvailability::today(),
         ]);
-        if ($memo->category === 'zero_tolerance') {
-            unset($data['level']); // always a Notice to Explain
+        if ($memo->category === 'zero_tolerance' || $memo->isAnnouncement()) {
+            unset($data['level']); // always a Notice to Explain; an announcement has no level
         }
         $before = $memo->only(array_keys($data));
         $memo->update($data);
@@ -135,10 +247,28 @@ class EmployeeMemoController extends Controller
         return response()->json($this->fresh($memo));
     }
 
-    // POST /api/memos/{memo}/send (HR): the draft reaches the employee's account
+    // POST /api/memos/{memo}/send (HR): the draft reaches the employee's account.
+    // A formal memo is released only after Admin approved it.
     public function send(Request $request, EmployeeMemo $memo)
     {
-        if ($memo->status !== 'draft') {
+        if ($memo->isAnnouncement()) {
+            if ($memo->status !== 'draft') {
+                return response()->json(['message' => 'This announcement was already sent.'], 422);
+            }
+            if ($error = $this->releaseAnnouncement($request, $memo)) {
+                return response()->json(['message' => $error], 422);
+            }
+
+            return response()->json($this->fresh($memo));
+        }
+        if ($memo->isFormal()) {
+            if ($memo->status === 'draft' || $memo->status === 'for_approval') {
+                return response()->json(['message' => $memo->status === 'draft' ? self::NEEDS_APPROVAL : 'This memo is waiting for Admin approval.'], 422);
+            }
+            if ($memo->status !== 'approved') {
+                return response()->json(['message' => 'This memo was already sent.'], 422);
+            }
+        } elseif ($memo->status !== 'draft') {
             return response()->json(['message' => 'This memo was already sent.'], 422);
         }
         $this->dispatch($request, $memo);
@@ -146,12 +276,80 @@ class EmployeeMemoController extends Controller
         return response()->json($this->fresh($memo));
     }
 
+    // POST /api/memos/{memo}/endorse (HR): a formal draft goes to Admin for approval
+    public function endorse(Request $request, EmployeeMemo $memo)
+    {
+        if (! $memo->isFormal()) {
+            return response()->json(['message' => 'Only a formal memo goes to Admin. Send this warning directly.'], 422);
+        }
+        if ($memo->status !== 'draft') {
+            return response()->json(['message' => 'Only a draft can be endorsed.'], 422);
+        }
+        $this->markEndorsed($request, $memo);
+
+        return response()->json($this->fresh($memo));
+    }
+
+    // GET /api/memo-approvals (Admin): formal memos waiting for approval, newest first
+    public function approvals()
+    {
+        return response()->json([
+            'memos' => EmployeeMemo::with([self::EMPLOYEE_COLUMNS, 'files', 'endorser:id,name'])
+                ->where('status', 'for_approval')
+                ->orderBy('endorsed_at')
+                ->get(),
+            'recent' => EmployeeMemo::with([self::EMPLOYEE_COLUMNS, 'approver:id,name', 'returner:id,name'])
+                ->where(fn ($q) => $q->whereNotNull('approved_at')->orWhereNotNull('returned_at'))
+                ->latest('updated_at')->limit(10)
+                ->get(),
+        ]);
+    }
+
+    // POST /api/memos/{memo}/approve (Admin): HR may now release it
+    public function approve(Request $request, EmployeeMemo $memo)
+    {
+        if ($memo->status !== 'for_approval') {
+            return response()->json(['message' => 'This memo is not waiting for approval.'], 422);
+        }
+        $memo->update(['status' => 'approved', 'approved_by' => $request->user()->id, 'approved_at' => now(), 'return_reason' => null]);
+        Audit::log('memo.approved', $memo, ['status' => 'for_approval'], ['status' => 'approved']);
+
+        return response()->json($this->fresh($memo));
+    }
+
+    // POST /api/memos/{memo}/return (Admin): back to HR as a draft, with the reason
+    public function returnToHr(Request $request, EmployeeMemo $memo)
+    {
+        $data = $request->validate(
+            ['reason' => 'required|string|min:5|max:1000'],
+            ['reason.required' => 'Write why the memo goes back to HR.', 'reason.min' => 'Write why the memo goes back to HR (at least 5 characters).']
+        );
+        if ($memo->status !== 'for_approval') {
+            return response()->json(['message' => 'This memo is not waiting for approval.'], 422);
+        }
+        $memo->update([
+            'status' => 'draft',
+            'returned_by' => $request->user()->id,
+            'returned_at' => now(),
+            'return_reason' => trim($data['reason']),
+        ]);
+        Audit::log('memo.returned', $memo, ['status' => 'for_approval'], ['status' => 'draft', 'reason' => trim($data['reason'])]);
+
+        return response()->json($this->fresh($memo));
+    }
+
+    private function markEndorsed(Request $request, EmployeeMemo $memo): void
+    {
+        $memo->update(['status' => 'for_approval', 'endorsed_by' => $request->user()->id, 'endorsed_at' => now()]);
+        Audit::log('memo.endorsed', $memo, ['status' => 'draft'], ['status' => 'for_approval']);
+    }
+
     // POST /api/memos/{memo}/cancel (HR): a draft or a sent memo that should not
     // stand (kiosk down, wrong person); it no longer counts as an offense
     public function cancel(Request $request, EmployeeMemo $memo)
     {
         $data = $request->validate(['reason' => 'required|string|min:5|max:1000']);
-        if (! in_array($memo->status, ['draft', 'sent', 'awaiting_physical'], true)) {
+        if (! in_array($memo->status, ['draft', 'for_approval', 'approved', 'sent', 'awaiting_physical'], true)) {
             return response()->json(['message' => 'An acknowledged or archived memo cannot be cancelled.'], 422);
         }
         $before = $memo->only(['status']);
@@ -229,7 +427,8 @@ class EmployeeMemoController extends Controller
         return response()->json($this->fresh($memo));
     }
 
-    // GET /api/my-memos (any employee with an account): memos HR has sent
+    // GET /api/my-memos (any employee with an account): memos HR has sent to
+    // them, and the announcements they received
     public function myIndex(Request $request)
     {
         $employee = Employee::where('user_id', $request->user()->id)->first();
@@ -237,19 +436,39 @@ class EmployeeMemoController extends Controller
             return response()->json([]);
         }
 
-        return response()->json(
-            EmployeeMemo::where('employee_id', $employee->id)
-                ->whereIn('status', EmployeeMemo::VISIBLE_TO_EMPLOYEE)
-                ->with('files:id,employee_memo_id,kind,original_name,mime,size,created_at')
-                ->latest('issued_at')->get()
-                ->map(fn ($m) => $m->only(['id', 'memo_no', 'subject', 'body', 'violation_label', 'level', 'level_label', 'status', 'needs_physical', 'incident_date', 'issued_at', 'acknowledged_at', 'signed_at', 'files']))
-        );
+        $fields = ['id', 'kind', 'memo_no', 'subject', 'body', 'violation_label', 'level', 'level_label', 'status', 'needs_physical', 'incident_date', 'issued_at', 'acknowledged_at', 'signed_at', 'files'];
+        $own = EmployeeMemo::where('employee_id', $employee->id)
+            ->whereIn('status', EmployeeMemo::VISIBLE_TO_EMPLOYEE)
+            ->with('files:id,employee_memo_id,kind,original_name,mime,size,created_at')
+            ->get()
+            ->map(fn ($m) => $m->only($fields));
+
+        $received = MemoRecipient::where('employee_id', $employee->id)->pluck('acknowledged_at', 'memo_id');
+        $announcements = $received->isEmpty() ? collect() : EmployeeMemo::whereIn('id', $received->keys())
+            ->where('kind', 'announcement')
+            ->whereIn('status', EmployeeMemo::VISIBLE_TO_EMPLOYEE)
+            ->with('files:id,employee_memo_id,kind,original_name,mime,size,created_at')
+            ->get()
+            ->map(fn ($m) => ['acknowledged_at' => $received[$m->id]] + $m->only($fields));
+
+        return response()->json($own->concat($announcements)->sortByDesc('issued_at')->values());
     }
 
-    // POST /api/my-memos/{memo}/acknowledge: a verbal or first written warning
+    // POST /api/my-memos/{memo}/acknowledge: a verbal or first written warning,
+    // or an announcement they received
     public function acknowledge(Request $request, EmployeeMemo $memo)
     {
         $this->ownMemo($request, $memo);
+        if ($memo->isAnnouncement()) {
+            $employeeId = Employee::where('user_id', $request->user()->id)->value('id');
+            $row = MemoRecipient::where('memo_id', $memo->id)->where('employee_id', $employeeId)->firstOrFail();
+            if ($row->acknowledged_at) {
+                return response()->json(['message' => 'This announcement was already acknowledged.'], 422);
+            }
+            $row->update(['acknowledged_at' => now(), 'read_at' => $row->read_at ?? now()]);
+
+            return response()->json(['status' => 'acknowledged', 'acknowledged_at' => $row->acknowledged_at]);
+        }
         if ($memo->status !== 'sent') {
             return response()->json(['message' => $memo->status === 'awaiting_physical'
                 ? 'This memo is signed in person. Please report to the HR office.'
@@ -272,7 +491,10 @@ class EmployeeMemoController extends Controller
     private function ownMemo(Request $request, EmployeeMemo $memo): void
     {
         $employeeId = Employee::where('user_id', $request->user()->id)->value('id');
-        abort_unless($employeeId && $memo->employee_id === $employeeId && in_array($memo->status, EmployeeMemo::VISIBLE_TO_EMPLOYEE, true), 404);
+        $mine = $memo->isAnnouncement()
+            ? $employeeId && MemoRecipient::where('memo_id', $memo->id)->where('employee_id', $employeeId)->exists()
+            : $employeeId && $memo->employee_id === $employeeId;
+        abort_unless($mine && in_array($memo->status, EmployeeMemo::VISIBLE_TO_EMPLOYEE, true), 404);
     }
 
     private function streamFile(EmployeeMemo $memo, EmployeeMemoFile $file)
@@ -301,6 +523,7 @@ class EmployeeMemoController extends Controller
     private function dispatch(Request $request, EmployeeMemo $memo): void
     {
         $memo->loadMissing('employee');
+        $was = $memo->status;
         $status = $memo->needs_physical ? 'awaiting_physical' : 'sent';
         $memo->update(['status' => $status, 'issued_by' => $request->user()->id, 'issued_at' => now()]);
 
@@ -308,7 +531,7 @@ class EmployeeMemoController extends Controller
         if (($memo->level === 'nte' || $memo->category === 'zero_tolerance') && $memo->employee && ! $memo->employee->investigation_status) {
             $memo->employee->update(['investigation_status' => 'pending_investigation', 'investigation_since' => now()]);
         }
-        Audit::log('memo.send', $memo, ['status' => 'draft'], ['status' => $status, 'level' => $memo->level]);
+        Audit::log('memo.send', $memo, ['status' => $was], ['status' => $status, 'level' => $memo->level]);
     }
 
     private function storeFiles(Request $request, EmployeeMemo $memo, string $kind, StoredFiles $stored): array
@@ -332,6 +555,6 @@ class EmployeeMemoController extends Controller
 
     private function fresh(EmployeeMemo $memo): EmployeeMemo
     {
-        return $memo->fresh([self::EMPLOYEE_COLUMNS, 'files', 'issuer:id,name']);
+        return $memo->fresh([self::EMPLOYEE_COLUMNS, 'files', 'issuer:id,name', 'endorser:id,name', 'approver:id,name', 'returner:id,name']);
     }
 }

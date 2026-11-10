@@ -79,6 +79,83 @@ function Modal({ title, onClose, children }) {
   );
 }
 
+// Leave balance of every active employee this year: credits earned, used by
+// type (approved leave) and left. Credits are one pool (LeaveCredits).
+function LeaveBalances({ live }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [q, setQ] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/leave-balances", { headers: { Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` } })
+      .then((r) => { if (!r.ok) throw new Error(`Could not load leave balances (${r.status})`); return r.json(); })
+      .then((d) => { if (alive) { setData(d); setError(""); } })
+      .catch((e) => { if (alive) setError(e.message); });
+    return () => { alive = false; };
+  }, [live]);
+
+  const rows = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return (data?.employees || []).filter((e) => !term || `${e.employee_id} ${e.name}`.toLowerCase().includes(term));
+  }, [data, q]);
+  const pager = usePagination(rows);
+  const types = Object.entries(data?.types || {});
+
+  return (
+    <div className="mt-4 bg-white border border-black/[0.09] rounded-xl overflow-hidden">
+      <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
+        <div>
+          <div className="text-[13px] font-semibold text-slate-800">Leave Balances{data ? ` · ${data.year}` : ""}</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">Credits are one pool for all leave types. Used counts approved leave only.</div>
+        </div>
+        <div className="flex-1" />
+        <div className="flex items-center gap-2 px-2.5 py-1.5 border border-black/[0.09] rounded-md text-slate-400 w-full sm:w-64">
+          <SearchIcon />
+          <input name="balance_search" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Employee ID or name"
+            aria-label="Search leave balances by employee ID or name" className="flex-1 min-w-0 text-xs text-slate-700 bg-transparent focus:outline-none" />
+        </div>
+      </div>
+      {error ? (
+        <div className="px-[18px] py-8 text-center text-[12px] text-red-600">{error}</div>
+      ) : !data ? (
+        <SkeletonList />
+      ) : rows.length === 0 ? (
+        <div className="px-[18px] py-8 text-center text-[12px] text-slate-400">No employee matches.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-slate-400 border-b border-black/[0.09]">
+                <th className="px-[18px] py-2.5 font-medium">Employee ID</th>
+                <th className="px-[18px] py-2.5 font-medium">Name</th>
+                <th className="px-[18px] py-2.5 font-medium">Earned</th>
+                {types.map(([key, label]) => <th key={key} className="px-[18px] py-2.5 font-medium whitespace-nowrap">{label.replace(/ leave.*$/i, "")} used</th>)}
+                <th className="px-[18px] py-2.5 font-medium">Remaining</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pager.pageItems.map((e) => (
+                <tr key={e.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
+                  <td className="px-[18px] py-2.5 font-mono text-slate-600">{e.employee_id}</td>
+                  <td className="px-[18px] py-2.5 text-slate-800 font-medium whitespace-nowrap">
+                    {e.name}
+                    {e.probationary && <div className="text-[10px] text-slate-400 font-normal">Probationary: no credits yet</div>}
+                  </td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.earned)}</td>
+                  {types.map(([key]) => <td key={key} className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.used_by_type[key] || 0)}</td>)}
+                  <td className="px-[18px] py-2.5 text-slate-800 font-mono font-semibold">{num(e.available)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination pager={pager} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LeaveRequestsPage() {
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -248,7 +325,7 @@ export default function LeaveRequestsPage() {
                       <td className="px-[18px] py-2.5 text-slate-800 font-medium whitespace-nowrap">{empName(l.employee)}</td>
                       <td className="px-[18px] py-2.5 text-slate-600 whitespace-nowrap">
                         {typeLabel(l.leave_type)}
-                        {l.attachment_path && <span className="ml-1.5 px-1.5 py-px rounded bg-violet-50 border border-violet-200 text-[9px] font-bold text-violet-700">{l.leave_type === "sick" ? "MED CERT" : "FILE"}</span>}
+                        {l.attachment_path && <span className="cell-note px-1.5 py-px rounded bg-violet-50 border border-violet-200 text-[9px] font-bold text-violet-700">{l.leave_type === "sick" ? "MED CERT" : "FILE"}</span>}
                       </td>
                       <td className="px-[18px] py-2.5 text-slate-600 whitespace-nowrap">{dates(l)}</td>
                       <td className="px-[18px] py-2.5 text-slate-600 font-mono whitespace-nowrap">{length(l)}</td>
@@ -279,6 +356,7 @@ export default function LeaveRequestsPage() {
           )}
         </div>
       </div>
+      <LeaveBalances live={live} />
       </div>
       <aside className="xl:col-span-4 flex flex-col gap-4 min-w-0">
         <StatusBreakdown title="Requests by type" items={byType} empty="No leave requests yet." />

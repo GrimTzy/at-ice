@@ -228,6 +228,43 @@ class LeaveRequestController extends Controller
         ]);
     }
 
+    // GET /api/leave-balances (HR): every active employee's credits this year,
+    // the same numbers as their own my-leave-credits (LeaveCredits), with the
+    // credits used split by leave type. Credits stay one pool.
+    public function balances()
+    {
+        $year = now(config('atice.timezone'))->year;
+        $usedByType = LeaveRequest::where('status', 'approved')
+            ->whereYear('start_date', $year)
+            ->selectRaw('employee_id, leave_type, SUM(paid_days) as days')
+            ->groupBy('employee_id', 'leave_type')
+            ->get()
+            ->groupBy('employee_id');
+
+        $rows = Employee::where('is_active', true)
+            ->orderBy('last_name')->orderBy('first_name')
+            ->get()
+            ->map(function (Employee $e) use ($usedByType) {
+                $credits = LeaveCredits::for($e);
+                $types = $usedByType->get($e->id, collect())->pluck('days', 'leave_type');
+
+                return [
+                    'id' => $e->id,
+                    'employee_id' => $e->employee_id,
+                    'name' => $e->full_name,
+                    'position' => $e->position,
+                    'probationary' => $e->employment_status !== 'regular',
+                    'earned' => $credits['earned'],
+                    'used' => $credits['used'],
+                    'available' => $credits['available'],
+                    'used_by_type' => collect(array_keys(LeaveRequest::TYPE_LABELS))
+                        ->mapWithKeys(fn ($t) => [$t => round((float) ($types[$t] ?? 0), 2)])->all(),
+                ];
+            });
+
+        return response()->json(['year' => $year, 'types' => LeaveRequest::TYPE_LABELS, 'employees' => $rows]);
+    }
+
     // POST /api/my-leave-requests (multipart/form-data; the med cert is "attachment")
     public function myStore(Request $request)
     {

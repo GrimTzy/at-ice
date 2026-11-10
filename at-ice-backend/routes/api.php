@@ -128,14 +128,23 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         // Performance appraisals: draft ratings from the records, Admin overrides and publishes
         Route::get('performance', [PerformanceController::class, 'index']);
         Route::put('performance/{employee}', [PerformanceController::class, 'update']);
+        // Read-only history of one employee (published ratings by quarter, attendance, goals, feedback)
+        Route::get('performance/{employee}/history', [PerformanceController::class, 'history']);
+        Route::get('performance/{employee}/photo', [PerformanceController::class, 'photo']);
 
-        // Rates and rules (AppSupportSettings) and the audit log
-        Route::get('settings', [SettingsController::class, 'index']);
-        Route::put('settings', [SettingsController::class, 'update']);
+        // Memo Approvals: formal memos HR endorsed; Admin approves or returns them
+        Route::get('memo-approvals', [EmployeeMemoController::class, 'approvals']);
+        Route::post('memos/{memo}/approve', [EmployeeMemoController::class, 'approve']);
+        Route::post('memos/{memo}/return', [EmployeeMemoController::class, 'returnToHr']);
+
+        // The audit log (Rates and rules moved to HR, owner 2026-11-09)
         Route::get('audit-logs', [SettingsController::class, 'auditLogs']);
-        // Holiday and overtime pay rates (dated)
-        Route::get('pay-multipliers', [SettingsController::class, 'multipliers']);
-        Route::post('pay-multipliers', [SettingsController::class, 'setMultiplier']);
+        // The two settings kept with Admin: HR kiosk unlock and old-record expiry
+        Route::get('admin-settings', [SettingsController::class, 'adminIndex']);
+        Route::put('admin-settings', [SettingsController::class, 'adminUpdate']);
+        // Settings > Deliveries and Settings > Support tickets (moved from HR, owner 2026-11-10)
+        Route::get('admin-settings/{page}', [SettingsController::class, 'adminPage']);
+        Route::put('admin-settings/{page}', [SettingsController::class, 'adminUpdatePage']);
 
         // Records past the retention period: Admin keeps or deletes each (never automatic)
         Route::get('retention-review', [RetentionController::class, 'index']);
@@ -177,11 +186,12 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
 
         // Delivery contracts: Admin approves, the daily deliveries are generated
         Route::get('delivery-contracts', [DeliveryContractController::class, 'index']);
+        Route::get('delivery-contracts/next-number', [DeliveryContractController::class, 'nextNumber']);
         Route::post('delivery-contracts', [DeliveryContractController::class, 'store']);
         Route::post('delivery-contracts/{id}/approve', [DeliveryContractController::class, 'approve']);
         Route::post('delivery-contracts/{id}/cancel', [DeliveryContractController::class, 'cancel']);
 
-        // Which Driver handles which stores, and Drivers who are off (reassigned at random)
+        // Which Driver handles which stores, and Drivers who are off (stops go first-done first)
         Route::get('driver-store-assignments', [DriverAssignmentController::class, 'index']);
         Route::post('driver-store-assignments', [DriverAssignmentController::class, 'store']);
         Route::delete('driver-store-assignments/{id}', [DriverAssignmentController::class, 'destroy']);
@@ -223,6 +233,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         Route::patch('support-messages/{supportMessage}/resolve', [SupportMessageController::class, 'resolve']);
         Route::patch('support-messages/{supportMessage}/close', [SupportMessageController::class, 'close']);
         Route::patch('support-messages/{supportMessage}/reopen', [SupportMessageController::class, 'reopen']);
+        Route::patch('support-messages/{supportMessage}/escalate', [SupportMessageController::class, 'escalate']);
+        Route::patch('support-messages/{supportMessage}/de-escalate', [SupportMessageController::class, 'deEscalate']);
 
         // Customer Pricing (Admin sets per-customer unit prices for Bags/Small Sack/Big Sack)
         Route::get('customer-prices', [CustomerPriceController::class, 'index']);
@@ -279,23 +291,33 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         Route::get('memos', [EmployeeMemoController::class, 'index']);
         Route::get('memos/draft-text', [EmployeeMemoController::class, 'draftText']);
         Route::post('memos', [EmployeeMemoController::class, 'store']);
+        // Announcements to many employees (picked, a role group, or everyone)
+        Route::post('memos/announcements', [EmployeeMemoController::class, 'storeAnnouncement']);
+        Route::get('memos/{memo}/recipients', [EmployeeMemoController::class, 'recipients']);
         Route::patch('memos/{memo}', [EmployeeMemoController::class, 'update']);
         Route::post('memos/{memo}/send', [EmployeeMemoController::class, 'send']);
+        // Formal memos go to Admin for approval before they are released
+        Route::post('memos/{memo}/endorse', [EmployeeMemoController::class, 'endorse']);
         Route::post('memos/{memo}/cancel', [EmployeeMemoController::class, 'cancel']);
         Route::post('memos/{memo}/files', [EmployeeMemoController::class, 'upload']);
         Route::get('memos/{memo}/files/{file}', [EmployeeMemoController::class, 'file']);
         Route::post('memos/{memo}/close-investigation', [EmployeeMemoController::class, 'closeInvestigation']);
 
-        // Attendance Station kiosk PIN: HR sets or changes it (only Admin can unlock a locked kiosk).
+        // Attendance Station kiosk PIN: HR sets or changes it (a locked kiosk takes the Admin or the HR override PIN).
         // Both changes need the HR user's own account password.
         Route::get('hr/kiosk-pin', [KioskController::class, 'show']);
         Route::post('kiosk-devices/{id}/unlock', [KioskController::class, 'remoteUnlock']);
         Route::put('hr/kiosk-pin', [KioskController::class, 'update'])->middleware('throttle:5,1,kiosk-pin-change');
+        // HR's own override PIN for a locked kiosk (the Admin one stays)
+        Route::put('hr/kiosk-override-pin', [KioskController::class, 'setHrOverridePin'])
+            ->middleware([\App\Http\Middleware\EnsureHrOnly::class, 'throttle:5,1,kiosk-pin-change']);
 
         // Employee Management: full CRUD (create, edit, deactivate)
         Route::apiResource('employees', EmployeeController::class);
         // A deactivated employee back for a rehire (same employee ID, history kept)
         Route::post('employees/{id}/reactivate', [EmployeeController::class, 'reactivate']);
+        // Agreed schedule, current schedule and every change
+        Route::get('employees/{id}/shift-changes', [EmployeeController::class, 'shiftChanges']);
         // Biodata documents (private disk)
         Route::get('employees/{employee}/documents', [EmployeeDocumentController::class, 'index']);
         Route::post('employees/{employee}/documents', [EmployeeDocumentController::class, 'store']);
@@ -324,6 +346,17 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
             Route::delete('payroll-adjustments/{id}', [PayrollController::class, 'removeAdjustment']);
             Route::post('payrolls/mark-paid', [PayrollController::class, 'markPaid']);
             Route::get('thirteenth-month', [PayrollController::class, 'thirteenthMonth']);
+
+            // Rates and rules (App\Support\Settings) with the dated holiday and
+            // overtime pay rates: HR only (moved from Admin, owner 2026-11-09)
+            Route::get('settings', [SettingsController::class, 'index']);
+            Route::put('settings', [SettingsController::class, 'update']);
+            // One page per section: /hr/rates/{page} loads only that page's keys
+            // (an unknown page is a 404 from the controller, after the role check)
+            Route::get('settings/{page}', [SettingsController::class, 'page']);
+            Route::put('settings/{page}', [SettingsController::class, 'updatePage']);
+            Route::get('pay-multipliers', [SettingsController::class, 'multipliers']);
+            Route::post('pay-multipliers', [SettingsController::class, 'setMultiplier']);
         });
 
         // Holiday calendar (HR and Admin)
@@ -340,6 +373,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         Route::get('attendances/employee/{employee_id}', [AttendanceController::class, 'getByEmployee']);
 
         Route::get('leave-requests', [LeaveRequestController::class, 'index']);
+        // Credits per employee this year, used split by type (one pool)
+        Route::get('leave-balances', [LeaveRequestController::class, 'balances']);
         Route::get('leave-requests/{id}', [LeaveRequestController::class, 'show']);
         Route::get('leave-requests/{id}/attachment', [LeaveRequestController::class, 'attachment']);
         Route::put('leave-requests/{id}/status', [LeaveRequestController::class, 'updateStatus']);

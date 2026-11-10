@@ -48,7 +48,7 @@ class PayrollPeriodGuardTest extends TestCase
 
     private function setting(string $key, mixed $value)
     {
-        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
+        Sanctum::actingAs(User::factory()->create(['role' => 'hr', 'is_active' => true]));
 
         return $this->putJson('/api/settings', ['key' => $key, 'value' => $value]);
     }

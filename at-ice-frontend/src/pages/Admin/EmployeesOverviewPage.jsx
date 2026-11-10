@@ -6,7 +6,7 @@ import { useLiveTick } from "../../lib/live";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
-import { roleBadge, roleTone, SHIFT_TONE } from "../../lib/roleColors";
+import { roleBadge, roleTone, shiftBadge, SHIFT_TONE } from "../../lib/roleColors";
 import { StatusBreakdown } from "../../components/Insight";
 import { Icon } from "../../components/icons";
 
@@ -26,13 +26,19 @@ function displayRole(emp) {
 
 const ROLE_LABEL = (r) => (r ? r.charAt(0).toUpperCase() + r.slice(1) : "No role");
 
-// "day" or "night" like App\Support\Lateness::label: night when the shift ends the next day.
+// "day" or "night" like App\Support\Lateness::isNight: night when the shift ends
+// the next day or is the night hours in Settings (the server sends is_night).
 function shiftKind(emp) {
+  if (typeof emp?.is_night === "boolean") return emp.is_night ? "night" : "day";
   const start = String(emp?.shift_start || "").slice(0, 5);
   const end = String(emp?.shift_end || "").slice(0, 5);
   if (start && end) return end <= start ? "night" : "day";
   return emp?.shift === "night" ? "night" : emp?.shift ? "day" : "";
 }
+
+const NightBadge = () => (
+  <span className={`cell-note px-2 py-0.5 rounded-full text-[10.5px] font-medium font-sans ${shiftBadge("night")}`}>Night</span>
+);
 
 const NO_FILTER = { q: "", position: "", role: "", shift: "" };
 const selectCls = "px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700 outline-none focus:border-cyan-500/60";
@@ -205,7 +211,10 @@ export default function EmployeesOverviewPage() {
                         <span className="text-slate-300">—</span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-slate-600 whitespace-nowrap font-mono text-[12px]">{shiftLabel(emp)}</td>
+                    <td className="px-5 py-3 text-slate-600 whitespace-nowrap font-mono text-[12px]">
+                      {shiftLabel(emp)}
+                      {shiftKind(emp) === "night" && <NightBadge />}
+                    </td>
                   </tr>
                 ))
               )}
