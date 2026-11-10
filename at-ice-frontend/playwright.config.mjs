@@ -2,9 +2,7 @@ import { defineConfig } from '@playwright/test';
 import os from 'node:os';
 import path from 'node:path';
 
-const root = process.env.ATICE_TEST_ROOT || (process.platform === 'win32'
-  ? 'E:/CHATGPT/ATICE-System-Hardening-20261111/atice-browser-test'
-  : path.join(os.tmpdir(), 'atice-browser-test'));
+const root = process.env.ATICE_TEST_ROOT || path.join(os.tmpdir(), 'atice-browser-test');
 process.env.ATICE_TEST_ROOT = root;
 
 export default defineConfig({
