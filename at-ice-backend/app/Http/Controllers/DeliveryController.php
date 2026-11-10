@@ -76,6 +76,7 @@ class DeliveryController extends Controller
                 'name' => $u->employee?->full_name ?: $u->name,
                 'employee_id' => $u->employee?->employee_id,
                 'vehicle_plate' => $u->employee?->vehicle_plate,
+                'is_reserve' => (bool) $u->is_reserve_driver,
                 'status' => isset($off[$u->id]) ? 'off' : ($status[$u->id]['status'] ?? null),
                 'reason' => $off[$u->id] ?? ($status[$u->id]['reason'] ?? null),
                 'trip_completed_at' => isset($off[$u->id]) ? null : ($status[$u->id]['trip_completed_at'] ?? null),
@@ -186,7 +187,7 @@ class DeliveryController extends Controller
             'delivery_type' => 'required|in:outbound,inbound',
             'supplier_id' => 'nullable|exists:suppliers,id',
             'scheduled_date' => 'required|date|after_or_equal:'.DriverAvailability::today(),
-            'notes' => 'nullable|string',
+            'notes' => 'nullable|string|max:1000',
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|in:bags,small_sack,big_sack',
             'items.*.quantity_ordered' => 'required|integer|min:1|max:'.config('atice.max_product_quantity'),
@@ -343,6 +344,7 @@ class DeliveryController extends Controller
     // the reason written down (audited).
     public function cancel(Request $request, $id)
     {
+        $request->validate(['reason' => 'nullable|string|max:255'], ['reason.max' => 'The reason can be at most 255 characters.']);
         $reason = trim((string) $request->input('reason', ''));
 
         // Locked so a cancel cannot cross a Salesman confirmation in progress

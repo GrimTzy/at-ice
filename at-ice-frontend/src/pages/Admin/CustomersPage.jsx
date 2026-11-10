@@ -21,6 +21,7 @@ import { Icon } from "../../components/icons";
 import { focusRecord } from "../../lib/destination";
 import { plural } from "../../lib/plural";
 import { ContractForm } from "./deliveries/ContractsTab";
+import { todayStr, daysLabel } from "./deliveries/utils";
 
 const API_BASE = "/api";
 
@@ -136,9 +137,33 @@ export default function CustomersPage() {
     }
   }, []);
 
+  // Delivery days per store, from its running or pending contracts (Days column)
+  const [daysByStore, setDaysByStore] = useState({});
+  const [contractByStore, setContractByStore] = useState({}); // the store's one running contract (Contract button edits it)
+  const fetchContractDays = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/delivery-contracts`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const list = await res.json();
+      const today = todayStr();
+      const map = {};
+      const byStore = {};
+      (Array.isArray(list) ? list : []).filter((k) => k.status !== "cancelled" && k.end_date >= today).forEach((k) => {
+        (k.stores || []).forEach((s) => {
+          map[s.id] = [...new Set([...(map[s.id] || []), ...(k.delivery_days || [])])];
+          byStore[s.id] = k;
+        });
+      });
+      setDaysByStore(map);
+      setContractByStore(byStore);
+    } catch (err) {
+      console.error("fetchContractDays error:", err);
+    }
+  }, []);
+
   // reload when a live notice for this page arrives (lib/live.js)
   const live = useLiveTick(["customers"]);
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers, live]);
+  useEffect(() => { fetchCustomers(); fetchContractDays(); }, [fetchCustomers, fetchContractDays, live]);
 
   function openAddForm() {
     setEditingId(null);
@@ -432,15 +457,16 @@ export default function CustomersPage() {
                 <th className="px-[18px] py-2.5 font-medium">Contact</th>
                 <th className="px-[18px] py-2.5 font-medium">Type</th>
                 <th className="px-[18px] py-2.5 font-medium text-center">Portal Login</th>
+                <th className="px-[18px] py-2.5 font-medium">Days</th>
                 <th className="px-[18px] py-2.5 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <SkeletonTableRows cols={6} />
+                <SkeletonTableRows cols={7} />
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
+                <tr><td colSpan={7} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
                   {filtering ? "No customers match your search or filters." : "No customers found."}
                 </td></tr>
               )}
@@ -493,6 +519,12 @@ export default function CustomersPage() {
                       );
                     })()}
                   </td>
+                  <td className="px-[18px] py-2.5 text-slate-600 whitespace-nowrap">
+                    {daysByStore[c.id]?.length ? daysLabel(daysByStore[c.id]) : <span className="text-slate-300">—</span>}
+                    {contractByStore[c.id] && !c.store_route_id && (
+                      <div className="text-[11px] text-amber-600" title="Add this store to a route (Deliveries > Routes) so its deliveries get a driver">No route</div>
+                    )}
+                  </td>
                   <td className="px-[18px] py-2.5">
                     <div className="flex items-center gap-1.5 justify-end">
                       <button
@@ -505,8 +537,8 @@ export default function CustomersPage() {
                       <button
                         onClick={() => setContractFor(c)}
                         className="p-1.5 rounded-md border border-transparent bg-cyan-500 hover:bg-cyan-600 text-white"
-                        title="Contract"
-                        aria-label={`Delivery contract for ${c.name}`}
+                        title={contractByStore[c.id] ? "Edit contract" : "Contract"}
+                        aria-label={`${contractByStore[c.id] ? "Edit delivery contract" : "Delivery contract"} for ${c.name}`}
                       >
                         <ContractIcon />
                       </button>
@@ -690,8 +722,9 @@ export default function CustomersPage() {
         <ContractForm
           stores={customers}
           store={contractFor}
+          contract={contractByStore[contractFor.id] || null}
           onClose={() => setContractFor(null)}
-          onSaved={() => setContractFor(null)}
+          onSaved={() => { setContractFor(null); fetchContractDays(); }}
         />
       )}
 

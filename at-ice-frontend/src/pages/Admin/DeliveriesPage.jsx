@@ -12,7 +12,7 @@ import DraftHint from "../../components/DraftHint";
 import { DriverView, StoreView, EditDeliveryModal } from "./deliveries/BoardViews";
 import SameDayChanges from "./deliveries/SameDayChanges";
 import AdjustmentRequests from "./deliveries/AdjustmentRequests";
-import ContractsTab from "./deliveries/ContractsTab";
+import RoutesTab from "./deliveries/RoutesTab";
 import DriverStoresTab from "./deliveries/DriverStoresTab";
 import { ReassignedTag } from "./deliveries/shared";
 import { STATUS_STYLE, DRIVER_GROUPS, driverGroup, timeOf } from "./deliveries/utils";
@@ -43,12 +43,6 @@ const STATUS_FILTERS = [
   { value: "queued", label: "Queued" },
   { value: "in_transit", label: "In Transit" },
   { value: "delivered", label: "Delivered" },
-  { value: "cancelled", label: "Cancelled" },
-];
-const CONTRACT_STATUS_FILTERS = [
-  { value: "all", label: "All" },
-  { value: "pending", label: "Pending" },
-  { value: "approved", label: "Approved" },
   { value: "cancelled", label: "Cancelled" },
 ];
 // A customer without a type is a dealer (same default as Customer Prices).
@@ -111,7 +105,7 @@ function statusLabel(d) {
 const TABS = [
   { value: "drivers", label: "Driver View" },
   { value: "stores", label: "Store View" },
-  { value: "contracts", label: "Contracts" },
+  { value: "routes", label: "Routes" },
   { value: "assign", label: "Driver Stores" },
   { value: "list", label: "All Deliveries" },
 ];
@@ -133,9 +127,8 @@ export default function DeliveriesPage() {
   // One toolbar for every tab: search, customer type and (where the tab has
   // one) a status filter.
   const [typeFilter, setTypeFilter] = useState("");
-  const [subStatus, setSubStatus] = useState("all"); // Store View and Contracts
+  const [subStatus, setSubStatus] = useState("all"); // Store View
   const [driverFilter, setDriverFilter] = useState("all"); // Driver View: driver status
-  const [contractList, setContractList] = useState([]);
 
   const maxQty = useMaxQuantity(); // same limit as Ice Loading and the Salesman confirmation
   // New Delivery modal: kept as a draft while open, so a refresh reopens it as it was.
@@ -423,7 +416,6 @@ export default function DeliveriesPage() {
   const statusFilterFor = {
     list: { value: statusFilter, set: setStatusFilter, options: STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: counts[f.value] ?? 0 })) },
     stores: { value: subStatus, set: setSubStatus, options: STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: f.value === "all" ? boardForType.length : boardForType.filter((d) => d.status === f.value).length })) },
-    contracts: { value: subStatus, set: setSubStatus, options: CONTRACT_STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: f.value === "all" ? contractList.length : contractList.filter((c) => c.status === f.value).length })) },
   }[tab];
 
   // Today at a glance for the KPI cards
@@ -492,7 +484,7 @@ export default function DeliveriesPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={tab === "list" ? "Search delivery, customer, invoice…" : tab === "contracts" ? "Search contract or store…" : "Search store, chain or driver…"}
+                placeholder={tab === "list" ? "Search delivery, customer, invoice…" : tab === "routes" ? "Search store…" : "Search store, chain or driver…"}
                 aria-label="Search"
                 className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
               />
@@ -543,9 +535,9 @@ export default function DeliveriesPage() {
         {tab === "stores" && (
           <StoreView board={viewBoard} loading={boardLoading} filtered={!!(needle || typeFilter || subStatus !== "all")} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
         )}
-        {tab === "contracts" && <ContractsTab stores={activeStores} live={live} onChanged={refreshAll} search={needle} type={typeFilter} status={subStatus} onLoaded={setContractList} />}
+        {tab === "routes" && <RoutesTab stores={activeStores} live={live} search={needle} type={typeFilter} />}
         {tab === "assign" && (
-          <DriverStoresTab stores={activeStores} drivers={board?.drivers || []} live={live} onChanged={refreshAll} search={needle} type={typeFilter} />
+          <DriverStoresTab drivers={board?.drivers || []} live={live} onChanged={refreshAll} search={needle} type={typeFilter} />
         )}
 
         {tab === "list" && (<>

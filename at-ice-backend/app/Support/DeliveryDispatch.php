@@ -103,7 +103,8 @@ class DeliveryDispatch
         return $out;
     }
 
-    // Driver ids who can take a delivery today, first done first:
+    // Driver ids who can take a delivery today. Reserve drivers (covering for a
+    // driver who is off) come first, then the rest, each group first done first:
     //   1. done with today's list, by trip_completed_at (earliest first)
     //   2. still with stops left, fewest stops first
     // Ties go by name, so the order never changes between two runs.
@@ -114,8 +115,8 @@ class DeliveryDispatch
         return collect(DriverAvailability::all())
             ->where('status', 'available')
             ->reject(fn ($row) => isset($off[$row['id']]) || in_array($row['id'], $exclude, false))
-            ->sort(fn ($a, $b) => [$a['trip_completed_at'] === null, $a['trip_completed_at'] ?? '', $a['open_stops'], $a['name']]
-                <=> [$b['trip_completed_at'] === null, $b['trip_completed_at'] ?? '', $b['open_stops'], $b['name']])
+            ->sort(fn ($a, $b) => [! $a['is_reserve'], $a['trip_completed_at'] === null, $a['trip_completed_at'] ?? '', $a['open_stops'], $a['name']]
+                <=> [! $b['is_reserve'], $b['trip_completed_at'] === null, $b['trip_completed_at'] ?? '', $b['open_stops'], $b['name']])
             ->pluck('id')
             ->values()
             ->all();
