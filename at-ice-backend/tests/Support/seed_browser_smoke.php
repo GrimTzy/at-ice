@@ -24,5 +24,14 @@ Illuminate\Database\Eloquent\Model::withoutEvents(function () {
             App\Models\Attendance::create(['employee_id' => $employee->id, 'date' => now('Asia/Manila')->toDateString(), 'time_in' => '00:00:00', 'status' => 'present']);
         }
     }
+    $store = App\Models\Customer::create(['name' => 'Deadline branch', 'customer_code' => 'CUST-TZ-001', 'branch_code' => 'TZ-001', 'is_active' => true]);
+    App\Models\CustomerPrice::create(['customer_id' => $store->id, 'product_type' => 'bags', 'unit_price' => 50]);
+    $tomorrow = now('Asia/Manila')->addDay()->startOfDay();
+    $delivery = App\Models\Delivery::create([
+        'delivery_no' => 'DEL-0001', 'customer_id' => $store->id, 'delivery_type' => 'outbound', 'status' => 'pending',
+        'scheduled_date' => $tomorrow->toDateString(), 'ordered_at' => now(), 'due_at' => $tomorrow->copy()->setTime(8, 0),
+        'prepared_by' => App\Models\User::where('role', 'admin')->firstOrFail()->id,
+    ]);
+    $delivery->items()->create(['product_type' => 'bags', 'quantity_ordered' => 5, 'unit_price' => 50]);
 });
 echo "Isolated browser fixtures ready.\n";

@@ -1,6 +1,8 @@
 // Helpers for Admin > Deliveries (Driver View, Store View, Contracts,
 // Driver Stores): API calls, dates and labels. Components are in shared.jsx.
 import { PILL } from "../../../lib/statusTones";
+import { deliverByValue } from "../../../lib/deliverBy";
+import { todayManila } from "../../../lib/time";
 
 export const API_BASE = "/api";
 
@@ -21,19 +23,18 @@ export async function api(path, { method = "GET", body } = {}) {
 
 // The time now as HH:MM (24-hour), for "Deliver by" fields on today's date.
 export function nowHm() {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return deliverByValue(new Date());
 }
 
-// Today as YYYY-MM-DD in the browser's local time (toISOString would be UTC).
-export const todayStr = () => ymd(new Date());
+// Dates and validation follow the business calendar, regardless of device timezone.
+export const todayStr = () => todayManila();
 export function ymd(d) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 // The next Monday (or today when today is Monday): the usual start of a new assignment.
 export function nextMonday() {
-  const d = new Date();
+  const d = new Date(`${todayStr()}T12:00:00`);
   d.setDate(d.getDate() + ((8 - d.getDay()) % 7));
   return ymd(d);
 }
