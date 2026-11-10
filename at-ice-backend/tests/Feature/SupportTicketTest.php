@@ -39,7 +39,7 @@ class SupportTicketTest extends TestCase
     {
         $first = $this->file('staff_conduct');
         $second = $this->file('price_inquiry');
-        $day = now()->format('Ymd');
+        $day = now(config('atice.timezone'))->format('Ymd'); // ticket numbers use the business day
 
         $this->assertDatabaseHas('support_messages', ['id' => $first, 'ticket_no' => "TKT-{$day}-001", 'priority' => 'high']);
         $this->assertDatabaseHas('support_messages', ['id' => $second, 'ticket_no' => "TKT-{$day}-002", 'priority' => 'low']);

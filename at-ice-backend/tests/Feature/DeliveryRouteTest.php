@@ -47,7 +47,7 @@ class DeliveryRouteTest extends TestCase
 
     public function test_driver_and_salesman_see_the_same_route_nearest_the_plant_first(): void
     {
-        // plant at 14.8031, 121.0515 (Settings defaults)
+        // plant at 14.7502926, 121.0739105 (Settings defaults); these stores are on no route
         $far = $this->stop($this->ana, 'Far store', 14.8500, 121.0900);
         $near = $this->stop($this->ana, 'Near store', 14.8040, 121.0520);
         $middle = $this->stop($this->ana, 'Middle store', 14.8200, 121.0600);

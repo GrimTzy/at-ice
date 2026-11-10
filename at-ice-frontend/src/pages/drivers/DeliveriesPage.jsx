@@ -4,8 +4,7 @@ import { MemoAlert } from "../../components/MyMemos";
 import MobileHeader from "../../components/MobileHeader";
 import { SearchBar } from "../../components/MobileUi";
 import { matchesQuery } from "../../lib/mobileUi";
-import Echo from "laravel-echo";
-import Pusher from "pusher-js";
+import echo from "../../echo";
 import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
@@ -20,15 +19,6 @@ import { pressArrived } from "../../lib/route";
 import { toast } from "../../lib/toast";
 import FilterSelect from "../../components/FilterSelect";
 import { Icon } from "../../components/icons";
-
-// Pusher/Echo setup, created once at module load
-window.Pusher = Pusher;
-const echo = new Echo({
-  broadcaster: "pusher",
-  key: import.meta.env.VITE_PUSHER_APP_KEY,
-  cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
-  forceTLS: true,
-});
 
 // Haversine formula, gives straight line distance in km between two lat/lng points
 function haversineDistanceKm(lat1, lon1, lat2, lon2) {

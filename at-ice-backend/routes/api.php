@@ -24,8 +24,8 @@ use App\Http\Controllers\IceLoadingController;
 use App\Http\Controllers\InventoryAlertController;
 use App\Http\Controllers\KioskController;
 use App\Http\Controllers\LeaveRequestController;
-use App\Http\Controllers\NavCountController;
 use App\Http\Controllers\LiveFeedController;
+use App\Http\Controllers\NavCountController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PaymentProofController;
 use App\Http\Controllers\PayrollController;
@@ -37,6 +37,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PublicApplicationController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\RetentionController;
+use App\Http\Controllers\RouteController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\StockOutRequestController;
@@ -172,6 +173,10 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         Route::get('deliveries/driver-availability', [DeliveryController::class, 'driverAvailability']);
         // Driver View / Store View for one day (?date=)
         Route::get('deliveries/board', [DeliveryController::class, 'board']);
+        // Waiting deliveries (no driver) and Reschedule to the next delivery day (RouteController)
+        Route::get('deliveries/waiting', [RouteController::class, 'waiting']);
+        Route::post('deliveries/reschedule', [RouteController::class, 'rescheduleMany']);
+        Route::post('deliveries/{id}/reschedule', [RouteController::class, 'reschedule']);
         Route::post('deliveries', [DeliveryController::class, 'store']);
         // Same-day changes (App\Support\DeliveryAdjust): top-up, add/reduce sacks on one delivery
         // Stores' requests to change the sacks on one delivery: Admin applies or declines
@@ -188,13 +193,26 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         Route::get('delivery-contracts', [DeliveryContractController::class, 'index']);
         Route::get('delivery-contracts/next-number', [DeliveryContractController::class, 'nextNumber']);
         Route::post('delivery-contracts', [DeliveryContractController::class, 'store']);
+        Route::put('delivery-contracts/{id}', [DeliveryContractController::class, 'update']);
+        Route::get('delivery-contracts/{id}/capacity-check', [DeliveryContractController::class, 'capacityCheck']);
         Route::post('delivery-contracts/{id}/approve', [DeliveryContractController::class, 'approve']);
         Route::post('delivery-contracts/{id}/cancel', [DeliveryContractController::class, 'cancel']);
+
+        // Routes A to D: regular Driver, stores in stop order, truck load per day
+        Route::get('routes', [RouteController::class, 'index']);
+        Route::get('routes/capacity', [RouteController::class, 'capacity']);
+        Route::post('routes', [RouteController::class, 'store']);
+        Route::get('routes/{id}', [RouteController::class, 'show'])->whereNumber('id');
+        Route::put('routes/{id}', [RouteController::class, 'update'])->whereNumber('id');
+        Route::delete('routes/{id}', [RouteController::class, 'destroy'])->whereNumber('id');
+        Route::put('routes/{id}/stops', [RouteController::class, 'updateStops'])->whereNumber('id');
 
         // Which Driver handles which stores, and Drivers who are off (stops go first-done first)
         Route::get('driver-store-assignments', [DriverAssignmentController::class, 'index']);
         Route::post('driver-store-assignments', [DriverAssignmentController::class, 'store']);
         Route::delete('driver-store-assignments/{id}', [DriverAssignmentController::class, 'destroy']);
+        // A reserve driver (a Driver account) has no route and covers an absent Driver's route
+        Route::put('drivers/{id}/reserve', [DriverAssignmentController::class, 'setReserve']);
 
         Route::get('products-summary', [ProductController::class, 'index']);
 

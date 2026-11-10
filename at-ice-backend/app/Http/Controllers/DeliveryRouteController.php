@@ -139,8 +139,8 @@ class DeliveryRouteController extends Controller
         })->values()->all();
     }
 
-    // GET /api/driver/deliveries (Driver): today's route nearest the plant
-    // first, then upcoming stops (7 days) and the last 30 days delivered.
+    // GET /api/driver/deliveries (Driver or reserve driver): today's route in
+    // stop order (stores off a route nearest the plant first), then upcoming stops (7 days) and the last 30 days delivered.
     public function driverDeliveries(Request $request)
     {
         $driverId = $request->user()->id;

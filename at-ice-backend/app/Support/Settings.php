@@ -52,14 +52,21 @@ class Settings
         // Deliveries (App\Support\DeliveryDispatch)
         'delivery.delay_notice_hours' => [2, 'int', 'Hours before a reassigned or queued delivery that the store is told it may be late'],
         'delivery.arrival_radius_m' => [150, 'int', 'How close (meters) the Driver and the Salesman must be to the store pin to press Arrived; a delivery is confirmed only after both have arrived'],
-        'plant.latitude' => [14.8031, 'number', 'Plant location (latitude): each route lists the stores nearest to the plant first'],
-        'plant.longitude' => [121.0515, 'number', 'Plant location (longitude)'],
+        'plant.latitude' => [14.7502926, 'number', 'Plant location (latitude): stores that are not on a route are listed nearest to the plant first'],
+        'plant.longitude' => [121.0739105, 'number', 'Plant location (longitude)'],
         'delivery.not_timed_in_minutes' => [60, 'int', 'Minutes after their shift starts that a Driver with no Time In counts as absent and their pending deliveries today are reassigned'],
         'delivery.max_top_ups_per_day' => [3, 'int', 'Most urgent top-ups one store can get after one delivery in a day'],
         // FIFO and rolling stock (owner, 2026-11-10; DeliveryDispatch, TruckStock)
-        'delivery.allow_rolling_stock_fifo' => [true, 'bool', 'Keep the ice left on each truck as dated loads and deliver the oldest load first (FIFO). Off: loads and deliveries are not tracked per truck'],
+        // Off since 2026-11-10: trucks are loaded full every trip and sold out (hidden from the Settings page)
+        'delivery.allow_rolling_stock_fifo' => [false, 'bool', 'Keep the ice left on each truck as dated loads and deliver the oldest load first (FIFO). Off: loads and deliveries are not tracked per truck'],
         'delivery.auto_queue_on_trip_completion' => [true, 'bool', 'Give queued deliveries on their own to the Driver who finished their list first. Off: Admin picks a Driver for each queued delivery'],
         'delivery.max_transit_hours_before_alert' => [4, 'int', 'Hours a delivery may stay In transit before Admin is alerted (0 = no alert)'],
+        // Truck load and stops per Driver per day (client, 2026-11-10; App\Support\RouteCapacity)
+        'delivery.truck_big_sacks' => [150, 'int', 'Big sacks one truck carries on its one trip a day'],
+        'delivery.truck_small_sacks' => [350, 'int', 'Small sacks one truck carries on its one trip a day'],
+        'delivery.truck_bags' => [500, 'int', 'Bags one truck carries on its one trip a day'],
+        'delivery.max_stores_per_driver_day' => [80, 'int', 'Most stores (customers; each mall tenant counts) one Driver delivers to in a day'],
+        'delivery.email_delay_notices' => [false, 'bool', 'Also email the store when its delivery is moved or may be late (off: customer portal only). Addresses ending in .invalid never get email'],
         // Support tickets (SupportMessageController)
         'support.overdue_hours' => [24, 'int', 'Hours an open support ticket may wait before it is marked Overdue'],
         'support.max_open_tickets' => [5, 'int', 'Most open or in-progress tickets a customer may have at once (Emergency Ice Shortage is never blocked)'],
@@ -103,6 +110,10 @@ class Settings
     // Admin changes them on Settings > Admin PIN and Settings > Old records.
     public const ADMIN_KEYS = ['kiosk.hr_can_override', 'archive.expiry_action'];
 
+    // Kept and read by the code but not shown on any page (client, 2026-11-10:
+    // rolling truck stock is off and hidden).
+    public const HIDDEN_KEYS = ['delivery.allow_rolling_stock_fifo'];
+
     // HR > Rates and rules: one page per section (/hr/rates/{page}), each
     // loading only its own keys (GET /api/settings/{page}). page => key prefixes
     public const PAGES = [
@@ -144,6 +155,7 @@ class Settings
         $prefixes = self::PAGES[$page] ?? [];
 
         return array_values(array_filter(self::all(), fn ($s) => ! in_array($s['key'], self::ADMIN_KEYS, true)
+            && ! in_array($s['key'], self::HIDDEN_KEYS, true)
             && collect($prefixes)->contains(fn ($p) => str_starts_with($s['key'], $p))));
     }
 

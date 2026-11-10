@@ -50,7 +50,7 @@ class RemainingWriteRoutesTest extends TestCase
         $this->assertSoftDeleted('suppliers', ['id' => $id]);
     }
 
-    public function test_admin_creates_approves_and_cancels_a_delivery_contract(): void
+    public function test_admin_creates_and_cancels_a_delivery_contract(): void
     {
         $start = DriverAvailability::today();
         $contractId = $this->postJson('/api/delivery-contracts', [
@@ -63,10 +63,9 @@ class RemainingWriteRoutesTest extends TestCase
             'items' => [['product_type' => 'bags', 'quantity' => 10]],
         ])->assertCreated()->json('id');
         $contract = DeliveryContract::findOrFail($contractId);
-        $this->assertSame('pending', $contract->status);
-
-        $this->postJson("/api/delivery-contracts/{$contractId}/approve")->assertOk();
-        $this->assertSame('approved', $contract->fresh()->status);
+        // Admin makes the contract, so it is approved when saved
+        $this->assertSame('approved', $contract->status);
+        $this->postJson("/api/delivery-contracts/{$contractId}/approve")->assertUnprocessable();
 
         $this->postJson("/api/delivery-contracts/{$contractId}/cancel")->assertOk();
         $this->assertSame('cancelled', $contract->fresh()->status);

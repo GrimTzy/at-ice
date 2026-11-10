@@ -20,6 +20,7 @@ class User extends Authenticatable
         'must_change_password', // new customer accounts: change the one-time password on first login
         'is_active', // false: login refused (deactivated employee, removed customer)
     ];
+    // is_reserve_driver (Drivers only) is set by Admin, DriverAssignmentController@setReserve
 
     protected $hidden = [
         'password',
@@ -33,6 +34,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'must_change_password' => 'boolean',
             'is_active' => 'boolean',
+            'is_reserve_driver' => 'boolean',
         ];
     }
 
@@ -55,6 +57,14 @@ class User extends Authenticatable
     public function isDriver(): bool
     {
         return $this->role === 'driver';
+    }
+
+    // A reserve driver (owner, 2026-11-11): a Driver account with no route who
+    // takes an absent Driver's whole route when it fits the truck limits
+    // (App\Support\DeliveryDispatch).
+    public function isReserveDriver(): bool
+    {
+        return $this->role === 'driver' && (bool) $this->is_reserve_driver;
     }
 
     public function isCustomer(): bool

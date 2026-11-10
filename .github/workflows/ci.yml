@@ -2,8 +2,9 @@
 #   build       - both production images build (Dockerfiles, frontend bundle)
 #   backend-tests - every feature test passes (php artisan test, in-memory SQLite)
 #   frontend    - lint and production build of the SPA
+#   browser     - optional realtime, role routing, route assignment, kiosk and face models
 #   migrations  - every migration runs cleanly on a fresh MySQL 8.4, the same
-#                 engine as production (SQLite in local dev hides FK/order bugs)
+#                 engine as production, then concurrent writes and backup restore
 # Deployment is separate: the hosting platform auto-deploys main on push.
 name: CI
 
@@ -55,6 +56,9 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
+      - name: Check Composer security advisories
+        run: composer audit --locked --no-interaction
+
       - name: Run the feature tests (in-memory SQLite)
         run: |
           cp .env.example .env
@@ -74,16 +78,53 @@ jobs:
           cache: npm
           cache-dependency-path: at-ice-frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: Check npm security advisories
+        run: npm audit
       - run: npm run lint
       - run: npm run build
 
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ATICE_TEST_ROOT: /tmp/atice-browser-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_sqlite, bcmath, gd
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: at-ice-frontend/package-lock.json
+      - run: composer install --no-interaction --no-progress --prefer-dist
+        working-directory: at-ice-backend
+      - run: php tests/Support/seed_browser_smoke.php
+        working-directory: at-ice-backend
+      - run: npm ci --no-audit --no-fund
+        working-directory: at-ice-frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: at-ice-frontend
+      - run: npm run test:browser
+        working-directory: at-ice-frontend
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: browser-regression-report
+          path: /tmp/atice-browser-test/report
+          retention-days: 7
+
   migrations:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       mysql:
         image: mysql:8.4
         env:
-          MYSQL_DATABASE: atice
+          MYSQL_DATABASE: atice_test
           MYSQL_ROOT_PASSWORD: ci-only-password
         ports: ["3306:3306"]
         options: >-
@@ -96,7 +137,7 @@ jobs:
       DB_CONNECTION: mysql
       DB_HOST: 127.0.0.1
       DB_PORT: "3306"
-      DB_DATABASE: atice
+      DB_DATABASE: atice_test
       DB_USERNAME: root
       DB_PASSWORD: ci-only-password
     steps:
@@ -115,3 +156,18 @@ jobs:
           cp .env.example .env
           php artisan key:generate --force
           php artisan migrate --force
+
+      - name: Verify parallel attendance and payroll writes on MySQL
+        run: php artisan test --filter=ConcurrentWritesMysqlTest
+
+      - name: Prove backup restore into a new test database
+        env:
+          ATICE_BACKUP_TEST_ROOT: ${{ runner.temp }}/atice-backup-drill
+        run: php tests/Support/backup_restore_drill.php
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: synthetic-restore-evidence
+          path: ${{ runner.temp }}/atice-backup-drill/restore-evidence.json
+          retention-days: 7

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Applicant;
+use App\Models\Delivery;
 use App\Models\EmployeeMemo;
 use App\Models\LeaveRequest;
 use App\Models\StockOutRequest;
@@ -20,6 +21,8 @@ class NavCountController extends Controller
             '/admin/stock-out-approvals' => StockOutRequest::where('status', 'pending')->count(),
             // Formal memos HR endorsed, waiting for approval
             '/admin/memo-approvals' => EmployeeMemo::where('status', 'for_approval')->count(),
+            // Waiting deliveries (no driver): assign a driver or reschedule
+            '/admin/deliveries' => Delivery::where('status', 'queued')->count(),
             // New tickets, plus escalated ones still being worked on
             '/admin/support-inbox' => SupportMessage::where('status', 'open')
                 ->orWhere(fn ($q) => $q->whereNotNull('escalated_at')->where('status', 'in_progress'))

@@ -4,7 +4,8 @@ import Pusher from 'pusher-js';
 window.Pusher = Pusher;
 
 const echo = new Echo({
-    broadcaster: 'pusher',
+    // Realtime is optional; the live-feed poll still refreshes pages without it.
+    broadcaster: import.meta.env.VITE_PUSHER_APP_KEY ? 'pusher' : 'null',
     key: import.meta.env.VITE_PUSHER_APP_KEY,
     cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
     forceTLS: true,

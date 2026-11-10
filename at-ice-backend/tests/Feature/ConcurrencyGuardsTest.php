@@ -44,7 +44,7 @@ class ConcurrencyGuardsTest extends TestCase
 
     public function test_a_receipt_number_is_never_reused_after_a_gap(): void
     {
-        $prefix = 'ALF-'.now()->format('Ymd').'-';
+        $prefix = 'ALF-'.now(config('atice.timezone'))->format('Ymd').'-'; // receipt numbers use the business day
         // Today's receipts 001 and 003 exist (002 is missing): a count would
         // give 003 again, the next number must be 004.
         $user = User::create(['name' => 'Salesman', 'email' => 'sales@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'salesman']);

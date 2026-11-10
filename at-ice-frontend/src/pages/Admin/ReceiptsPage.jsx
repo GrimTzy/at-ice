@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "../../components/AdminLayout";
-import Echo from "laravel-echo";
-import Pusher from "pusher-js";
+import echo from "../../echo";
 import { SkeletonTableRows } from "../../components/Skeleton";
 import { useLiveTick } from "../../lib/live";
 import { printReceipt } from "../../lib/printReceipt";
@@ -19,14 +18,6 @@ import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, MiniBars, StatusBreakdown } from "../../components/Insight";
 import { Icon } from "../../components/icons";
-
-window.Pusher = Pusher;
-const echo = new Echo({
-  broadcaster: "pusher",
-  key: import.meta.env.VITE_PUSHER_APP_KEY,
-  cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
-  forceTLS: true,
-});
 
 // Icons
 const SearchIcon = () => <Icon name="search" size={14} />;

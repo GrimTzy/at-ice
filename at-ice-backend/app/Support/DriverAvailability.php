@@ -15,6 +15,9 @@ use Carbon\Carbon;
 //                record (shown, not selectable)
 // Each row also has open_stops (today's stops not done yet) and, for an
 // available Driver with none left, trip_completed_at (see tripCompletedAt).
+// Reserve drivers (a Driver account with users.is_reserve_driver, owner
+// 2026-11-11) are in the list with is_reserve true. They only take an absent
+// Driver's whole route (DeliveryDispatch), never the FIFO queue.
 // The rule applies to deliveries for today. A delivery for a later day can
 // go to any active Driver, since nobody has timed in for that day yet.
 class DriverAvailability
@@ -43,7 +46,7 @@ class DriverAvailability
         $drivers = User::where('role', 'driver')
             ->with(['employee' => fn ($q) => $q->with(['attendances' => fn ($a) => $a->whereDate('date', $today)])])
             ->orderBy('name')
-            ->get(['id', 'name', 'role']);
+            ->get(['id', 'name', 'role', 'is_reserve_driver']);
 
         $inTransit = Delivery::where('status', 'in_transit')
             ->whereIn('driver_id', $drivers->pluck('id'))
@@ -80,6 +83,7 @@ class DriverAvailability
                 'id' => $u->id,
                 'name' => $emp?->full_name ?: $u->name,
                 'employee_id' => $emp?->employee_id,
+                'is_reserve' => (bool) $u->is_reserve_driver,
                 'status' => $status,
                 'reason' => $reason,
                 'open_stops' => $openStops,

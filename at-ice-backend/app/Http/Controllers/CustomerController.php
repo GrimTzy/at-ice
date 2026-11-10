@@ -167,7 +167,7 @@ class CustomerController extends Controller
                         'must_change_password' => true,
                     ]);
 
-                    return Customer::create($data + $this->generateCodes($data['name'], $data['city']) + [
+                    return Customer::create($data + Customer::generateCodes($data['name'], $data['city']) + [
                         'user_id' => $user->id,
                     ]);
                 });
@@ -334,51 +334,6 @@ class CustomerController extends Controller
             (string) ($data['province'] ?? ''),
             (string) ($data['barangay'] ?? '')
         );
-    }
-
-    // Customer code and branch code, built from the business name and city, in the
-    // same pattern as the existing records: CUST-ALF-001 and ALF-SJDM-001.
-    //   prefix: first 3 letters of the first word of the name
-    //   area:   initials of a multi-word city (San Jose del Monte -> SJDM),
-    //           or the first 3 letters of a one-word city
-    // The number is the highest existing one for that prefix plus 1.
-    private function generateCodes(string $name, string $city): array
-    {
-        $firstWord = preg_split('/\s+/', trim($name))[0] ?? '';
-        $prefix = Str::upper(substr(preg_replace('/[^A-Za-z0-9]/', '', $firstWord), 0, 3)) ?: 'CUS';
-
-        $cityWords = preg_split('/\s+/', trim($city), -1, PREG_SPLIT_NO_EMPTY);
-        if (count($cityWords) > 1) {
-            $area = Str::upper(implode('', array_map(
-                fn ($w) => substr(preg_replace('/[^A-Za-z]/', '', $w), 0, 1),
-                $cityWords
-            )));
-        } else {
-            $area = Str::upper(substr(preg_replace('/[^A-Za-z]/', '', $city), 0, 3));
-        }
-        $area = $area ?: 'GEN';
-
-        return [
-            'customer_code' => $this->nextCode('customer_code', "CUST-{$prefix}-"),
-            'branch_code' => $this->nextCode('branch_code', "{$prefix}-{$area}-"),
-        ];
-    }
-
-    // Soft-deleted customers are included so a code is never reused.
-    private function nextCode(string $column, string $stem): string
-    {
-        $highest = 0;
-
-        Customer::withTrashed()
-            ->where($column, 'like', $stem.'%')
-            ->pluck($column)
-            ->each(function ($code) use ($stem, &$highest) {
-                if (preg_match('/^'.preg_quote($stem, '/').'(\d+)$/', $code, $m)) {
-                    $highest = max($highest, (int) $m[1]);
-                }
-            });
-
-        return $stem.str_pad($highest + 1, 3, '0', STR_PAD_LEFT);
     }
 
     // Fields a customer must have before Create Login (the same ones Add Customer

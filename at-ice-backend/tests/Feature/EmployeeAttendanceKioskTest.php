@@ -97,7 +97,7 @@ class EmployeeAttendanceKioskTest extends TestCase
         $this->assertNull($e->regularized_at);
 
         $this->putJson("/api/employees/{$e->id}", ['employment_status' => 'regular', 'street' => 'Rizal St', 'barangay' => 'Muzon', 'city' => 'San Jose Del Monte', 'province' => 'Bulacan'])->assertOk();
-        $this->assertSame(now()->toDateString(), $e->fresh()->regularized_at->toDateString());
+        $this->assertSame(now(config('atice.timezone'))->toDateString(), $e->fresh()->regularized_at->toDateString());
         $this->assertSame('employee.regularized', DB::table('audit_logs')->value('action'));
     }
 

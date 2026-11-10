@@ -14,7 +14,7 @@ import { formatDateTime } from "../../lib/time";
 const PAGES = [
   { key: "account", label: "Account", hint: "Your name, login email and password." },
   // Moved from HR > Rates and rules (owner, 2026-11-10)
-  { key: "deliveries", label: "Deliveries", hint: "FIFO dispatch, ice left on the trucks (rolling stock), alerts, delay notices, top-ups and the plant location." },
+  { key: "deliveries", label: "Deliveries", hint: "Truck limits, FIFO dispatch, alerts, delay notices, top-ups and the plant location." },
   { key: "support", label: "Support tickets", hint: "When a ticket is overdue and how many a customer may have open." },
   { key: "admin-pin", label: "Admin PIN", hint: "The 4-digit PIN that unlocks a locked Attendance Station kiosk." },
   { key: "old-records", label: "Old records", hint: "Inactive employees and old attendance past the retention period." },
@@ -46,7 +46,7 @@ const TIPS = {
   ],
   deliveries: [
     { title: "First done, first served", text: "The Driver who finished their list first gets the next queued delivery, oldest order first.", tone: "cyan", icon: "truck" },
-    { title: "Ice stays on the truck", text: "With rolling stock on, what is left after a trip is delivered first on the next one.", tone: "violet", icon: "box" },
+    { title: "Full load every trip", text: "Each truck is loaded full and sells out its load. Admin is warned when a Driver's day goes over the truck limits.", tone: "violet", icon: "box" },
   ],
   support: [
     { title: "Emergencies are never blocked", text: "An Emergency Ice Shortage ticket goes through even when a customer has reached the open-ticket limit.", tone: "rose", icon: "alert" },

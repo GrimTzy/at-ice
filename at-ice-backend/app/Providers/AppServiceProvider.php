@@ -4,6 +4,9 @@ namespace App\Providers;
 
 use App\Models\User;
 use App\Support\LiveFeed;
+use App\Support\MailGuard;
+use Illuminate\Mail\Events\MessageSending;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\Sanctum;
 
@@ -19,6 +22,9 @@ class AppServiceProvider extends ServiceProvider
     // Bootstrap any application services.
     public function boot(): void
     {
+        // Never email a .invalid address (dummy customer logins)
+        Event::listen(MessageSending::class, [MailGuard::class, 'handle']);
+
         // Realtime pop-up notices for every flow (see App\Support\LiveFeed)
         foreach (LiveFeed::models() as $model) {
             $model::created(fn ($m) => LiveFeed::record($m, 'created'));
