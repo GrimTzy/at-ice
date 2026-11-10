@@ -10,6 +10,7 @@ import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { timingPill, deliverByTime } from "../../lib/deliverBy";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -189,7 +190,11 @@ export default function CustomerDeliveries() {
                           {d.delivery_no}
                           {d.is_top_up && <span className="cell-note px-1.5 py-0.5 rounded-full text-[10px] font-semibold border bg-cyan-50 text-cyan-800 border-cyan-200">Top-up</span>}
                         </td>
-                        <td className="px-3 py-3 text-slate-600">{fmtDate(d.scheduled_date)}</td>
+                        <td className="px-3 py-3 text-slate-600">
+                          {fmtDate(d.scheduled_date)}
+                          {d.due_at && <span className="cell-note text-[11px] text-slate-500">by {deliverByTime(d.due_at)}</span>}
+                          {timingPill(d.timing) && <span className={`cell-note px-1.5 py-px rounded-full text-[10px] font-semibold ${timingPill(d.timing).cls}`}>{timingPill(d.timing).label}</span>}
+                        </td>
                         <td className="px-3 py-3 text-slate-600 hidden md:table-cell">{d.driver_name || "Not yet assigned"}</td>
                         <td className="px-3 py-3"><Badge status={d.status} /></td>
                         <td className="px-5 py-3 text-right">
@@ -239,6 +244,15 @@ export default function CustomerDeliveries() {
                 <div className="text-slate-400">Scheduled date</div>
                 <div className="text-slate-800 mt-0.5">{fmtDate(selected.scheduled_date)}</div>
               </div>
+              {selected.due_at && (
+                <div>
+                  <div className="text-slate-400">Deliver by</div>
+                  <div className="text-slate-800 mt-0.5 flex items-center gap-1.5">
+                    {deliverByTime(selected.due_at)}
+                    {timingPill(selected.timing) && <span className={`px-1.5 py-px rounded-full text-[10px] font-semibold ${timingPill(selected.timing).cls}`}>{timingPill(selected.timing).label}</span>}
+                  </div>
+                </div>
+              )}
               <div>
                 <div className="text-slate-400">Dispatched</div>
                 <div className="text-slate-800 mt-0.5">{fmtDateTime(selected.dispatched_at)}</div>

@@ -90,6 +90,7 @@ class DeliveryAdjust
                 'status' => $driverId ? 'pending' : 'queued',
                 'scheduled_date' => $today,
                 'ordered_at' => $due->copy()->setTimezone(config('app.timezone')),
+                'due_at' => $due->copy()->setTimezone(config('app.timezone')),
                 'parent_delivery_id' => $parent->id,
                 'is_top_up' => true,
                 'notes' => trim("Urgent top-up after {$parent->delivery_no}. ".($notes ?? '')),

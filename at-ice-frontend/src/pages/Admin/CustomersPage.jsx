@@ -688,7 +688,6 @@ export default function CustomersPage() {
       {/* Delivery contract for one store (same form as Deliveries > Contracts) */}
       {contractFor && (
         <ContractForm
-          stores={customers}
           store={contractFor}
           onClose={() => setContractFor(null)}
           onSaved={() => setContractFor(null)}

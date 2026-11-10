@@ -32,15 +32,19 @@ use Throwable;
 //                     has their pending deliveries given to the available
 //                     Drivers; when none is free they are queued
 //   assignQueued()    queued deliveries go to the available Drivers
-// Both are FIFO (owner, 2026-11-09): the oldest order (ordered_at) goes first,
-// to the Driver who finished their list first (trip_completed_at in
-// DriverAvailability). The trucks are refrigerated and stay out, so nobody
+// Deliver by is a deadline (owner, 2026-11-10): every store delivery has a
+// due_at, the time it must reach the store at the latest. Both go by it: the
+// earliest Deliver by first, and among the same time FIFO (owner, 2026-11-09),
+// the oldest order (ordered_at) first; each to the Driver who finished their
+// list first (trip_completed_at in DriverAvailability). The trucks are refrigerated and stay out, so nobody
 // queues at the plant: whoever is done first is next.
 //   sendTransitAlerts a delivery In transit too long tells Admin once
 // HR sets these in Rates and rules > Deliveries: auto_queue_on_trip_completion,
 // max_transit_hours_before_alert (and allow_rolling_stock_fifo, TruckStock).
 //   sendDelayNotices  a reassigned or queued delivery tells its store it may be
 //                     late, delivery.delay_notice_hours before it is due
+//   sendOverdueNotices a delivery past its Deliver by time and not delivered
+//                     tells its store and Admin once
 // Available = timed in today, not timed out, not in transit
 // (App\Support\DriverAvailability) and not off. There is no scheduler: run() is
 // called by the live-feed poll (every few seconds while anyone is signed in).
@@ -135,7 +139,7 @@ class DeliveryDispatch
             $pending = Delivery::where('driver_id', $driverId)
                 ->whereDate('scheduled_date', $date)
                 ->where('status', 'pending')
-                ->orderBy('ordered_at')->orderBy('id')
+                ->byDeadline()
                 ->lockForUpdate()
                 ->get();
 
@@ -150,8 +154,8 @@ class DeliveryDispatch
         });
     }
 
-    // Queued deliveries today, FIFO (oldest ordered_at first), to the
-    // available Drivers in first-done order.
+    // Queued deliveries today, earliest Deliver by first, then FIFO (oldest
+    // ordered_at), to the available Drivers in first-done order.
     // Off with delivery.auto_queue_on_trip_completion: Admin then picks a
     // Driver for each queued delivery (Edit on the delivery).
     public static function assignQueued(): int
@@ -164,7 +168,7 @@ class DeliveryDispatch
         return DB::transaction(function () use ($today) {
             $queued = Delivery::where('status', 'queued')
                 ->whereDate('scheduled_date', $today)
-                ->orderBy('ordered_at')->orderBy('id')
+                ->byDeadline()
                 ->lockForUpdate()
                 ->get();
             if ($queued->isEmpty()) {
@@ -202,6 +206,7 @@ class DeliveryDispatch
             }
             self::assignQueued();
             self::sendDelayNotices();
+            self::sendOverdueNotices();
             self::sendTransitAlerts();
         } catch (Throwable $e) {
             Log::warning('DeliveryDispatch: '.$e->getMessage());
@@ -246,8 +251,8 @@ class DeliveryDispatch
     }
 
     // A reassigned or queued delivery today tells its store it may be late,
-    // delivery.delay_notice_hours before it is due (a one-off delivery with no
-    // due time: right away). Once per delivery.
+    // delivery.delay_notice_hours before its Deliver by time (an older delivery
+    // with no Deliver by time: right away). Once per delivery.
     public static function sendDelayNotices(): int
     {
         $hours = (int) Settings::get('delivery.delay_notice_hours');
@@ -260,7 +265,7 @@ class DeliveryDispatch
 
         $sent = 0;
         foreach ($due as $d) {
-            $sendAt = $d->contract_id && $d->ordered_at ? $d->ordered_at->copy()->subHours($hours) : now();
+            $sendAt = $d->due_at ? $d->due_at->copy()->subHours($hours) : now();
             if (now()->lt($sendAt)) {
                 continue;
             }
@@ -281,8 +286,47 @@ class DeliveryDispatch
             return;
         }
 
-        $when = $d->ordered_at && $d->contract_id ? ' (due '.$d->ordered_at->format('g:i A').')' : '';
-        $message = "Your delivery {$d->delivery_no} today{$when} may be delayed: it was moved to another driver.";
+        $when = $d->due_at ? ' (deliver by '.$d->due_at->format('g:i A').')' : '';
+        self::tellStore($d, 'delay', "Your delivery {$d->delivery_no} today{$when} may be delayed: it was moved to another driver.");
+    }
+
+    // A delivery today past its Deliver by time and not delivered yet (waiting,
+    // queued or still on the road) tells its store and Admin once. The store
+    // knows the ice is late before it has to ask.
+    public static function sendOverdueNotices(): int
+    {
+        $late = Delivery::with(['customer', 'driver:id,name'])
+            ->whereDate('scheduled_date', DriverAvailability::today())
+            ->whereIn('status', ['pending', 'queued', 'in_transit'])
+            ->whereNotNull('due_at')
+            ->where('due_at', '<', now())
+            ->whereDoesntHave('notifications', fn ($q) => $q->where('kind', 'overdue'))
+            ->get();
+
+        foreach ($late as $d) {
+            $by = $d->due_at->format('g:i A');
+            self::tellStore($d, 'overdue', "Your delivery {$d->delivery_no} was due by {$by} and is running late. We are on it and will let you know when it arrives.");
+            LiveEvent::create([
+                'module' => 'deliveries',
+                'action' => 'updated',
+                'message' => mb_substr("Delivery {$d->delivery_no} to ".($d->customer?->name ?? 'a store')." is past its Deliver by time ({$by})".($d->driver ? ", driver {$d->driver->name}" : ', no driver yet').'.', 0, 255),
+                'roles' => [], // Admin sees every event
+                'user_ids' => [],
+                'actor_id' => null,
+            ]);
+        }
+
+        return $late->count();
+    }
+
+    // Sends one notice to the store on every channel it has, kept once per
+    // delivery and kind.
+    private static function tellStore(Delivery $d, string $kind, string $message): void
+    {
+        $customer = $d->customer;
+        if (! $customer) {
+            return;
+        }
         $channels = [];
 
         if ($customer->user_id) {
@@ -308,7 +352,7 @@ class DeliveryDispatch
 
         foreach ($channels ?: ['none'] as $channel) {
             DeliveryNotification::firstOrCreate(
-                ['delivery_id' => $d->id, 'channel' => $channel, 'kind' => 'delay'],
+                ['delivery_id' => $d->id, 'channel' => $channel, 'kind' => $kind],
                 ['customer_id' => $customer->id, 'message' => mb_substr($message, 0, 255), 'sent_at' => now()]
             );
         }
@@ -345,6 +389,13 @@ class DeliveryDispatch
     }
 
     // "Nov 16" for a delivery date
+    // The Deliver by time on a day, in the company's time zone, stored the way
+    // the other delivery times are.
+    public static function dueAt(string $date, string $time): Carbon
+    {
+        return Carbon::parse("{$date} {$time}", DriverAvailability::tz())->setTimezone(config('app.timezone'));
+    }
+
     public static function day(Delivery $d): string
     {
         return $d->scheduled_date ? $d->scheduled_date->format('M j') : 'its date';
@@ -438,6 +489,8 @@ class DeliveryDispatch
                             'status' => 'pending',
                             'scheduled_date' => $date,
                             'ordered_at' => Carbon::parse("{$date} {$time}"),
+                            // the contract's Deliver by time on that day
+                            'due_at' => Carbon::parse("{$date} {$time}"),
                             'notes' => "Contract {$contract->contract_no}",
                             'prepared_by' => $preparedBy,
                         ]);

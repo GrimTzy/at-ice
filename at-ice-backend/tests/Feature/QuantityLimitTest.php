@@ -33,7 +33,7 @@ class QuantityLimitTest extends TestCase
         CustomerPrice::create(['customer_id' => $customer->id, 'product_type' => 'bags', 'unit_price' => 50]);
 
         return [
-            'driver_id' => $driver->id, 'customer_id' => $customer->id, 'delivery_type' => 'outbound',
+            'driver_id' => $driver->id, 'customer_id' => $customer->id, 'delivery_type' => 'outbound', 'deliver_by' => '23:59',
             'scheduled_date' => DriverAvailability::today(),
             'items' => [['product_type' => 'bags', 'quantity_ordered' => $quantity]],
         ];
