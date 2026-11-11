@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 // Payroll (docs/REVIEW-DECISIONS.md). HR approves timesheets
 // (TimesheetController), which makes each payroll; HR processes the pay
 // here: Payroll Records for one pay period, adjustments (bonus, incentive,
-// referral bonus), marking paid (final, audited), payslips and the 13th month.
+// allowance), marking paid (final, audited), payslips and the 13th month.
 // Salary is confidential: no totals or summaries are returned.
 class PayrollController extends Controller
 {
@@ -57,6 +57,7 @@ class PayrollController extends Controller
             'employee_id' => $e->employee_id,
             'name' => $e->full_name,
             'position' => $e->position,
+            'missing_ids' => $e->missingGovIds(),
             'payroll' => $payrolls->get($e->id),
         ])
             ->filter(fn ($r) => ! $request->filled('status') || ($r['payroll'] && $r['payroll']->status === $request->status))

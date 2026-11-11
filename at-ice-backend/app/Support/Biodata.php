@@ -116,7 +116,7 @@ class Biodata
             'nationality' => 'nullable|string|max:50',
             'place_of_birth' => 'nullable|string|max:120',
             'personal_email' => 'nullable|email:rfc,filter|max:255',
-            'emergency_name' => 'nullable|string|max:120',
+            'emergency_name' => 'nullable|string|max:50',
             'emergency_relationship' => 'nullable|string|max:40',
             'emergency_phone' => ['nullable', 'regex:'.PhoneFormatter::MOBILE_REGEX],
             'education_level' => ['nullable', Rule::in(self::EDUCATION_LEVELS)],

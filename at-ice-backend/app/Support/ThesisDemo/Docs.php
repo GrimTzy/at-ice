@@ -198,13 +198,13 @@ class Docs
         $cr = LeaveCredits::for(Employee::find($c->emp['E12']), $c->asOf->toDateString());
         $l01 = DB::table('leave_requests')->where('id', $c->m->id('leave:L-01') ?? 0)->first();
         $l16 = DB::table('leave_requests')->where('id', $c->m->id('leave:L-16') ?? 0)->first();
-        $L[] = "- **Account:** {$this->who('E12')}, login {$this->login('E12')} > `/my-leave`. Credits: earned {$cr['earned']}, used {$cr['used']}, **available {$cr['available']}** (0.5 per period once regular, max 15, reset every Jan 1).";
+        $L[] = "- **Account:** {$this->who('E12')}, login {$this->login('E12')} > `/my-leave`. Credits: VL earned {$cr['vacation']['earned']}, **available {$cr['vacation']['available']}**; SL earned {$cr['sick']['earned']}, **available {$cr['sick']['available']}** (15 VL and 15 SL a year once regular, a 26th each pay period, reset every Jan 1; EL uses VL).";
         $L[] = '  - File a VL for next week: refused (14 days notice). File an SL dated 3 days ago: refused (one day after return).';
         if ($l01) {
             $L[] = '- **Account:** HR > **Leave Requests**: approve her pending VL **'.$this->dShort($l01->start_date).' to '.$this->d($l01->end_date).'**; it is paid from credits.';
         }
         if ($l16) {
-            $L[] = '- **Point out:** her VL **'.$this->dShort($l16->start_date).' (Fri) to '.$this->d($l16->end_date)." (Mon)** counts **{$l16->total_days} days**, weekend included (defect D3).";
+            $L[] = '- **Point out:** her VL **'.$this->dShort($l16->start_date).' (Fri) to '.$this->d($l16->end_date)." (Mon)** counts **{$l16->total_days} days**: only the work days, the weekend is not leave (defect D3, fixed).";
         }
         $L[] = '';
         $L[] = '### 5. Memo ladder and automation [M-01..M-05]';
@@ -390,7 +390,7 @@ class Docs
             ['L-07', 'Rejected with a reason', $this->name('E13').': '.$leave('L-07'), ''],
             ['L-08', 'Pending VL the employee cancels live', $this->name('E12').': '.$leave('L-08'), 'Employee > My Leave > Cancel'],
             ['L-15', 'Half-day leave', $this->name('E12').': '.$leave('L-15'), ''],
-            ['L-16', 'Leave over a weekend (D3)', $this->name('E12').': '.$leave('L-16'), ''],
+            ['L-16', 'Leave over a weekend (D3 fixed: work days only)', $this->name('E12').': '.$leave('L-16'), ''],
             ['L-18', 'Driver on leave, shown off on the board', $this->name('E06').': '.$leave('L-18'), 'Admin > Deliveries > Board'],
             ['M-01..M-05', 'Memo ladder to NTE', $this->name('E19').': '.$memo('E19'), 'HR > Memos'],
             ['M-07', 'Tardiness memo to acknowledge', $this->name('E08').': '.$memo('E08'), 'Employee > My Memos'],

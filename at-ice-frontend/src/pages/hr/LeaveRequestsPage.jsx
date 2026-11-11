@@ -2,9 +2,11 @@
 //
 // HR Leave Requests. Employees file their own leave (/my-leave); HR only
 // approves or rejects here (docs/REVIEW-DECISIONS.md):
-//   Approve  optional remarks. The days are paid from the employee's leave
-//            credits as far as they go, the rest is unpaid. A sick leave can be
-//            marked unpaid.
+//   Approve  optional remarks. VL and EL are paid from the vacation credits,
+//            SL from the sick credits, as far as they go; the rest is unpaid.
+//            A sick leave can be marked unpaid. Leave the law gives (maternity,
+//            paternity, solo parent, VAWC, special leave for women) is paid in
+//            full and uses no credits.
 //   Reject   a reason is required.
 // Every decision is written to the audit log. The list follows the live feed.
 
@@ -47,7 +49,17 @@ async function api(url, options = {}) {
 }
 
 const toList = (d) => (Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : []);
-const TYPE_LABEL = { sick: "Sick (SL)", vacation: "Vacation (VL)", emergency: "Emergency (EL)", maternity: "Maternity", paternity: "Paternity", other: "Other" };
+const TYPE_LABEL = {
+  sick: "Sick (SL)", vacation: "Vacation (VL)", emergency: "Emergency (EL)", maternity: "Maternity", paternity: "Paternity",
+  solo_parent: "Solo parent", vawc: "VAWC", special_women: "Special leave for women", other: "Other",
+};
+// the credits a type uses; the others are leave the law gives
+const POOL = { vacation: "vacation", emergency: "vacation", sick: "sick" };
+const LAW_TYPES = ["maternity", "paternity", "solo_parent", "vawc", "special_women"];
+// the credits left for this request's own leave type, or "By law"
+const creditsLeft = (l) => (!l.credits ? "—" : POOL[l.leave_type]
+  ? `${num(l.credits[POOL[l.leave_type]]?.available ?? 0)} ${POOL[l.leave_type] === "sick" ? "SL" : "VL"}`
+  : "By law");
 const typeLabel = (v) => TYPE_LABEL[v] || v || "—";
 const STATUS_LABEL = { pending: "Pending", approved: "Approved", rejected: "Rejected" };
 const STATUS_CLASS = { pending: "bg-amber-100 text-amber-700", approved: "bg-emerald-100 text-emerald-700", rejected: "bg-red-100 text-red-600" };
@@ -79,8 +91,8 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-// Leave balance of every active employee this year: credits earned, used by
-// type (approved leave) and left. Credits are one pool (LeaveCredits).
+// Leave balance of every active employee this year: VL and SL credits earned,
+// used and left (LeaveCredits), and the days of leave the law gives taken.
 function LeaveBalances({ live }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -100,14 +112,14 @@ function LeaveBalances({ live }) {
     return (data?.employees || []).filter((e) => !term || `${e.employee_id} ${e.name}`.toLowerCase().includes(term));
   }, [data, q]);
   const pager = usePagination(rows);
-  const types = Object.entries(data?.types || {});
+  const lawDays = (e) => LAW_TYPES.reduce((s, t) => s + Number(e.used_by_type?.[t] || 0), 0);
 
   return (
     <div className="mt-4 bg-white border border-black/[0.09] rounded-xl overflow-hidden">
       <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
         <div>
           <div className="text-[13px] font-semibold text-slate-800">Leave Balances{data ? ` · ${data.year}` : ""}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Credits are one pool for all leave types. Used counts approved leave only.</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">15 VL and 15 SL a year once regular; EL uses VL. Used counts approved, paid leave only.</div>
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-2 px-2.5 py-1.5 border border-black/[0.09] rounded-md text-slate-400 w-full sm:w-64">
@@ -129,9 +141,13 @@ function LeaveBalances({ live }) {
               <tr className="text-slate-400 border-b border-black/[0.09]">
                 <th className="px-[18px] py-2.5 font-medium">Employee ID</th>
                 <th className="px-[18px] py-2.5 font-medium">Name</th>
-                <th className="px-[18px] py-2.5 font-medium">Earned</th>
-                {types.map(([key, label]) => <th key={key} className="px-[18px] py-2.5 font-medium whitespace-nowrap">{label.replace(/ leave.*$/i, "")} used</th>)}
-                <th className="px-[18px] py-2.5 font-medium">Remaining</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">VL earned</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">VL used</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">VL left</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">SL earned</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">SL used</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">SL left</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap" title="Maternity, paternity, solo parent, VAWC and special leave for women">Leave by law</th>
               </tr>
             </thead>
             <tbody>
@@ -142,9 +158,13 @@ function LeaveBalances({ live }) {
                     {e.name}
                     {e.probationary && <div className="text-[10px] text-slate-400 font-normal">Probationary: no credits yet</div>}
                   </td>
-                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.earned)}</td>
-                  {types.map(([key]) => <td key={key} className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.used_by_type[key] || 0)}</td>)}
-                  <td className="px-[18px] py-2.5 text-slate-800 font-mono font-semibold">{num(e.available)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.vacation?.earned ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.vacation?.used ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-800 font-mono font-semibold">{num(e.vacation?.available ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.sick?.earned ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.sick?.used ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-800 font-mono font-semibold">{num(e.sick?.available ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(lawDays(e))}</td>
                 </tr>
               ))}
             </tbody>
@@ -249,7 +269,10 @@ export default function LeaveRequestsPage() {
   };
 
   const dl = decision?.leave;
-  const credit = dl?.credits?.available ?? 0;
+  const dlPool = dl ? POOL[dl.leave_type] : null;
+  const dlLaw = dl ? LAW_TYPES.includes(dl.leave_type) : false;
+  const credit = dlPool ? (dl?.credits?.[dlPool]?.available ?? 0) : 0;
+  const creditName = dlPool === "sick" ? "sick leave" : "vacation leave";
   const dlDays = dl ? Number(dl.total_days) : 0; // EL is already in days (hours ÷ hours per day)
 
   const pager = usePagination(filtered);
@@ -329,7 +352,7 @@ export default function LeaveRequestsPage() {
                       </td>
                       <td className="px-[18px] py-2.5 text-slate-600 whitespace-nowrap">{dates(l)}</td>
                       <td className="px-[18px] py-2.5 text-slate-600 font-mono whitespace-nowrap">{length(l)}</td>
-                      <td className="px-[18px] py-2.5 text-slate-600 font-mono">{l.credits ? num(l.credits.available) : "—"}</td>
+                      <td className="px-[18px] py-2.5 text-slate-600 font-mono whitespace-nowrap">{creditsLeft(l)}</td>
                       <td className="px-[18px] py-2.5">
                         <div className="status-stack">
                           <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_CLASS[l.status] || "bg-slate-100 text-slate-500"}`}>{STATUS_LABEL[l.status] || l.status}</span>
@@ -379,14 +402,20 @@ export default function LeaveRequestsPage() {
             </div>
             {dl.attachment_path && (
               <button type="button" onClick={() => openProtectedFile(`/api/leave-requests/${dl.id}/attachment`, "attachment")} className="self-start text-cyan-600 font-semibold cursor-pointer">
-                {dl.leave_type === "sick" ? "View medical certificate" : "View attachment"}
+                {dl.leave_type === "sick" ? "View medical certificate" : dlLaw ? "View proof" : "View attachment"}
               </button>
             )}
             {decision.status === "approved" ? (
               <>
-                <p className={`px-3 py-2 rounded-lg border ${credit >= dlDays ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
-                  {num(credit)} day(s) of leave credits left. {credit >= dlDays ? "This leave will be paid from them." : `${num(Math.max(0, dlDays - credit))} day(s) will be unpaid and deducted in payroll.`}
-                </p>
+                {dlLaw ? (
+                  <p className="px-3 py-2 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700">
+                    Leave given by law: paid in full, no credits used. Check the attached proof before approving.
+                  </p>
+                ) : (
+                  <p className={`px-3 py-2 rounded-lg border ${credit >= dlDays ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+                    {num(credit)} day(s) of {creditName} credits left. {credit >= dlDays ? "This leave will be paid from them." : `${num(Math.max(0, dlDays - credit))} day(s) will be unpaid and deducted in payroll.`}
+                  </p>
+                )}
                 {dl.leave_type === "sick" && (
                   <label className="flex items-center gap-2 text-slate-700">
                     <input name="sl_paid" type="checkbox" data-native checked={slPaid} onChange={(e) => setSlPaid(e.target.checked)} />
@@ -427,7 +456,7 @@ export default function LeaveRequestsPage() {
               ["Dates", dates(viewing)],
               ["Length", length(viewing)],
               ["Status", `${STATUS_LABEL[viewing.status] || viewing.status}${payLabel(viewing) ? ` · ${payLabel(viewing)}` : ""}`],
-              ["Credits left", viewing.credits ? `${num(viewing.credits.available)} day(s)` : "—"],
+              ["Credits left", creditsLeft(viewing)],
               ["Filed", fmtDateTime(viewing.created_at)],
             ].map(([label, value]) => (
               <div key={label} className="flex items-start justify-between gap-4">

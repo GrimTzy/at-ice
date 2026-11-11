@@ -17,7 +17,7 @@ const PAGES = [
   { key: "kiosk", label: "Kiosk", hint: "Wrong PINs before a kiosk or a network address is locked." },
   { key: "memos", label: "Disciplinary memos", hint: "Missing Time Out drafts and how long an offense counts." },
   { key: "thirteenth", label: "13th month", hint: "The date the 13th month pay is credited." },
-  { key: "records", label: "Records", hint: "How long inactive employees and old timesheets are kept. What happens after that is Admin's call." },
+  { key: "records", label: "Records", hint: "A month after deactivation the login, face, documents and personal details are deleted; the attendance, leave and payroll records stay 3 years (DOLE), then are anonymized." },
   { key: "pay-rates", label: "Holiday and overtime pay", hint: "Holiday and overtime rates, each from a date; past payrolls keep their rates." },
 ];
 

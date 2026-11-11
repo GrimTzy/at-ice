@@ -171,7 +171,7 @@ class PayrollComputationTest extends TestCase
         $this->assertEquals(600, (float) $payroll->net_pay);
 
         $this->getJson('/api/payroll-records?date=2026-10-14')->assertOk()->assertJsonPath('rows.0.payroll.status', 'unpaid');
-        $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])->assertCreated();
+        $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Bonus', 'amount' => 500, 'taxable' => false])->assertCreated();
         $this->assertEquals(1100, (float) $payroll->fresh()->net_pay);
 
         $this->postJson('/api/payrolls/mark-paid', ['ids' => [$payroll->id]])->assertOk();
@@ -208,7 +208,7 @@ class PayrollComputationTest extends TestCase
         $this->postJson('/api/timesheets/approve', ['date' => '2026-10-14', 'employee_ids' => [$e->id]])->assertOk();
         $payroll = Payroll::first();
 
-        $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])
+        $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Bonus', 'amount' => 500, 'taxable' => false])
             ->assertCreated()->json('adjustments.0.id');
         $this->assertEquals(1100, (float) $payroll->fresh()->net_pay);
 
@@ -227,7 +227,7 @@ class PayrollComputationTest extends TestCase
         $this->postJson('/api/timesheets/approve', ['date' => '2026-10-14', 'employee_ids' => [$e->id]])->assertOk();
         $payroll = Payroll::first();
 
-        $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])
+        $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Bonus', 'amount' => 500, 'taxable' => false])
             ->assertCreated()->json('adjustments.0.id');
         $this->postJson('/api/payrolls/mark-paid', ['ids' => [$payroll->id]])->assertOk();
 

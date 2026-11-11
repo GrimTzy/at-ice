@@ -744,6 +744,12 @@ export default function EmployeesPage() {
                   <tr key={emp.id} className="border-b border-black/[0.06] last:border-0 hover:bg-slate-50/60">
                     <td className="px-5 py-3">
                       <div className="font-medium text-slate-800">{fullName(emp)}</div>
+                      {emp.missing_ids?.length > 0 && (
+                        <span className="cell-note px-2 py-0.5 rounded-full text-[10.5px] font-medium border bg-amber-50 text-amber-800 border-amber-200"
+                          title={`Missing: ${emp.missing_ids.join(", ")}. Add them with Edit before the next payroll.`}>
+                          Missing {emp.missing_ids.length === 4 ? "gov't IDs" : emp.missing_ids.join(", ")}
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-slate-600 font-mono text-[12px] whitespace-nowrap">{emp.employee_id}</td>
                     <td className="px-5 py-3 text-slate-600">
@@ -909,7 +915,7 @@ export default function EmployeesPage() {
                   <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number, address, birthday, sex, civil status, emergency contact, highest attainment, school and work history" />
                   <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
                     <Field label="First Name" required error={formErrors.first_name}>
-                      <input name="first_name" required value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
+                      <input name="first_name" required maxLength={50} value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
                     </Field>
                     <Field label="M.I." error={formErrors.middle_initial}>
                       <input name="middle_initial" value={form.middle_initial} onChange={(e) => setForm((f) => ({ ...f, middle_initial: cleanInitial(e.target.value) }))}
@@ -918,7 +924,7 @@ export default function EmployeesPage() {
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
                     <Field label="Last Name" required error={formErrors.last_name}>
-                      <input name="last_name" required value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
+                      <input name="last_name" required maxLength={50} value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
                     </Field>
                     <Field label="Suffix" error={formErrors.suffix}>
                       <select name="suffix" value={form.suffix} onChange={handleChange("suffix")} aria-label="Name suffix" className={inputCls}>
@@ -984,7 +990,7 @@ export default function EmployeesPage() {
                   <div className="text-[12px] font-semibold text-slate-700 mt-1">Emergency contact</div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Field label="Name" error={formErrors.emergency_name}>
-                      <input name="emergency_name" value={form.emergency_name} onChange={handleChange("emergency_name")} maxLength={120} className={inputCls} />
+                      <input name="emergency_name" value={form.emergency_name} onChange={handleChange("emergency_name")} maxLength={50} className={inputCls} />
                     </Field>
                     <Field label="Relationship" error={formErrors.emergency_relationship}>
                       <input name="emergency_relationship" value={form.emergency_relationship} onChange={handleChange("emergency_relationship")} maxLength={40} placeholder="e.g. Mother" className={inputCls} />

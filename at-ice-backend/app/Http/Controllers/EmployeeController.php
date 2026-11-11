@@ -53,14 +53,20 @@ class EmployeeController extends Controller
         return $last.'.'.preg_replace('/\D/', '', $code).'@atice.cloud';
     }
 
-    // Next free code: EMP-0001, EMP-0002, ... (one above the highest in use).
+    // Next free code: EMP-0001, EMP-0002, ... the lowest number not in use. A
+    // code is only freed when its record is anonymized after the retention
+    // period (ArchiveExpiry), so a code is never reused while its records count.
     private static function nextEmployeeCode(): string
     {
-        $max = Employee::where('employee_id', 'like', 'EMP-%')->pluck('employee_id')
+        $used = Employee::where('employee_id', 'like', 'EMP-%')->pluck('employee_id')
             ->map(fn ($c) => (int) substr($c, 4))
-            ->max() ?? 0;
+            ->flip();
+        $n = 1;
+        while ($used->has($n)) {
+            $n++;
+        }
 
-        return 'EMP-'.str_pad($max + 1, 4, '0', STR_PAD_LEFT);
+        return 'EMP-'.str_pad($n, 4, '0', STR_PAD_LEFT);
     }
 
     private const PHONE_REGEX = PhoneFormatter::MOBILE_REGEX;
@@ -214,6 +220,8 @@ class EmployeeController extends Controller
 
         // Night-shift flag for the Day / Night filter and badge (list only)
         $employees->each(fn ($e) => $e->setAttribute('is_night', Lateness::isNight($e->shift_start, $e->shift_end, $e->shift)));
+        // SSS, PhilHealth, Pag-IBIG and TIN still missing (a "Missing" tag on the list)
+        $employees->each(fn ($e) => $e->setAttribute('missing_ids', $e->missingGovIds()));
 
         return response()->json($employees);
     }
@@ -230,8 +238,8 @@ class EmployeeController extends Controller
         $noAccount = in_array($request->position, self::NO_ACCOUNT_POSITIONS, true);
 
         $request->validate($this->nameRules() + $this->workRules() + [
-            'first_name' => 'required|string',
-            'last_name' => 'required|string',
+            'first_name' => 'required|string|max:50',
+            'last_name' => 'required|string|max:50',
             // The login email is made by the server (employeeEmail), never sent.
             // No password from HR either: the server makes a random one-time
             // password (oneTimePassword). The phone is required for an account so
@@ -414,8 +422,8 @@ class EmployeeController extends Controller
             : 'nullable|string|max:255|required_with:block_lot,street,subdivision,barangay,city,province,postal_code';
 
         $request->validate($this->nameRules() + $this->workRules() + [
-            'first_name' => 'sometimes|required|string',
-            'last_name' => 'sometimes|required|string',
+            'first_name' => 'sometimes|required|string|max:50',
+            'last_name' => 'sometimes|required|string|max:50',
             'phone' => ['nullable', 'regex:'.self::PHONE_REGEX],
             'street' => $addressRule,
             'barangay' => $addressRule,
@@ -658,6 +666,11 @@ class EmployeeController extends Controller
         $employee = Employee::with('user')->findOrFail($id);
         if ($employee->is_active) {
             return response()->json(['message' => 'This employee is already active.'], 422);
+        }
+        // their login and personal details are gone (ArchiveExpiry): a returning
+        // worker is added again with Add Employee
+        if ($employee->anonymized_at || $employee->personal_purged_at) {
+            return response()->json(['message' => 'This record no longer has the person\'s login and personal details (deleted after deactivation for data privacy). Add them again with Add Employee.'], 422);
         }
         $employee->update(['is_active' => true, 'deactivated_at' => null, 'deactivated_by' => null]);
         $employee->user?->update(['is_active' => true]);
