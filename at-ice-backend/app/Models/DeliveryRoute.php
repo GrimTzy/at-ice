@@ -12,22 +12,31 @@ use Illuminate\Database\Eloquent\Model;
 // Who drives it on a day (owner, 2026-11-11, Driver Stores):
 //   cover_driver_id   a temporary cover for one day or one week
 //                     (cover_from..cover_to); on those days only
-//   driver_id         the regular Driver, from driver_from (empty: any day);
-//                     before driver_from the previous regular
-//                     (previous_driver_id) still drives it
+//   driver_id         the regular Driver, from driver_from (empty: any day)
+//                     until driver_to (empty: until changed); before
+//                     driver_from the previous regular (previous_driver_id,
+//                     until previous_driver_to if set) still drives it.
+//                     After driver_to the route has no regular Driver: its
+//                     stops go to a reserve driver or Waiting
+//                     (DeliveryDispatch::queueDriverlessRouteStops) and the
+//                     route is cleared (DeliveryDispatch::endRegularDrivers).
+//                     Admin is alerted 3 days before driver_to, once.
 // When a cover ends, the regular Driver is back on his own: nothing is
 // changed, the cover's dates just no longer apply.
 // The code (A, B... Z, AA, AB...) is made by the system and never changes.
 class DeliveryRoute extends Model
 {
     protected $fillable = [
-        'code', 'name', 'driver_id', 'driver_from', 'previous_driver_id',
-        'cover_driver_id', 'cover_from', 'cover_to', 'is_active', 'notes',
+        'code', 'name', 'driver_id', 'driver_from', 'driver_to', 'driver_to_alerted_at',
+        'previous_driver_id', 'previous_driver_to', 'cover_driver_id', 'cover_from', 'cover_to', 'is_active', 'notes',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'driver_from' => 'date:Y-m-d',
+        'driver_to' => 'date:Y-m-d',
+        'driver_to_alerted_at' => 'datetime',
+        'previous_driver_to' => 'date:Y-m-d',
         'cover_from' => 'date:Y-m-d',
         'cover_to' => 'date:Y-m-d',
     ];
@@ -38,7 +47,9 @@ class DeliveryRoute extends Model
         return self::resolveDriver([
             'driver_id' => $this->driver_id,
             'driver_from' => $this->driver_from?->toDateString(),
+            'driver_to' => $this->driver_to?->toDateString(),
             'previous_driver_id' => $this->previous_driver_id,
+            'previous_driver_to' => $this->previous_driver_to?->toDateString(),
             'cover_driver_id' => $this->cover_driver_id,
             'cover_from' => $this->cover_from?->toDateString(),
             'cover_to' => $this->cover_to?->toDateString(),
@@ -53,10 +64,27 @@ class DeliveryRoute extends Model
             return (int) $r['cover_driver_id'];
         }
         if (! empty($r['driver_from']) && $date < $r['driver_from']) {
-            return empty($r['previous_driver_id']) ? null : (int) $r['previous_driver_id'];
+            $ended = ! empty($r['previous_driver_to']) && $date > $r['previous_driver_to'];
+
+            return empty($r['previous_driver_id']) || $ended ? null : (int) $r['previous_driver_id'];
+        }
+        if (! empty($r['driver_to']) && $date > $r['driver_to']) {
+            return null; // after Until: no regular Driver
         }
 
         return empty($r['driver_id']) ? null : (int) $r['driver_id'];
+    }
+
+    // The regular Driver on $date, leaving any cover aside.
+    public function regularOn(string $date): ?int
+    {
+        return self::resolveDriver([
+            'driver_id' => $this->driver_id,
+            'driver_from' => $this->driver_from?->toDateString(),
+            'driver_to' => $this->driver_to?->toDateString(),
+            'previous_driver_id' => $this->previous_driver_id,
+            'previous_driver_to' => $this->previous_driver_to?->toDateString(),
+        ], $date);
     }
 
     // driver id => route code, for who drives which active route on $date.
@@ -85,8 +113,10 @@ class DeliveryRoute extends Model
     {
         $today = DriverAvailability::today();
 
-        return $q->where(fn ($w) => $w->where('driver_id', $driverId)
-            ->orWhere(fn ($p) => $p->where('previous_driver_id', $driverId)->whereDate('driver_from', '>', $today))
+        return $q->where(fn ($w) => $w->where(fn ($d) => $d->where('driver_id', $driverId)
+            ->where(fn ($t) => $t->whereNull('driver_to')->orWhereDate('driver_to', '>=', $today)))
+            ->orWhere(fn ($p) => $p->where('previous_driver_id', $driverId)->whereDate('driver_from', '>', $today)
+                ->where(fn ($t) => $t->whereNull('previous_driver_to')->orWhereDate('previous_driver_to', '>=', $today)))
             ->orWhere(fn ($c) => $c->where('cover_driver_id', $driverId)->whereDate('cover_to', '>=', $today)));
     }
 

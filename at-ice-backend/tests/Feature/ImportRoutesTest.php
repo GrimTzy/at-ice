@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Console\Commands\ImportRoutes;
 use App\Models\Customer;
 use App\Models\DeliveryRoute;
+use App\Models\ReferencePrice;
 use App\Models\RouteStop;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -137,6 +138,64 @@ class ImportRoutesTest extends TestCase
         file_put_contents($this->dir.'/bad.csv', "route,stop_order,store_name,address,lat,lng\nA,1,Robinsons (5 tenants),Somewhere,14.7,121.0\n");
         $this->artisan('routes:import', ['file' => $this->dir.'/bad.csv'])->assertFailed();
         $this->assertSame(0, Customer::count());
+    }
+
+    // The SJDM routes shipped with the app (database/data): 49 rows, 48
+    // Alfamart branches and the 40 SM tenants (sjdm-stores.csv, found by name).
+    public function test_the_shipped_sjdm_file_dry_runs_and_saves_nothing(): void
+    {
+        $file = base_path('database/data/sjdm-routes.csv');
+        $this->assertSame(base_path('database/data').DIRECTORY_SEPARATOR.'sjdm-stores.csv', ImportRoutes::tenantsFileFor($file));
+        // store data only: no logins, passwords or emails in the shipped files
+        foreach (['sjdm-routes.csv', 'sjdm-stores.csv'] as $name) {
+            $text = file_get_contents(base_path("database/data/{$name}"));
+            $this->assertStringNotContainsString('@', $text);
+            $this->assertDoesNotMatchRegularExpression('/password|login|email/i', $text);
+        }
+
+        $this->artisan('routes:import', ['file' => $file, '--dry-run' => true])
+            ->expectsOutputToContain('[DRY RUN] 49 route rows, 88 customers')
+            ->expectsOutputToContain('Dry run: nothing was saved')
+            ->assertSuccessful();
+
+        $this->assertSame(0, Customer::count());
+        $this->assertSame(0, User::count());
+        $this->assertSame(0, DeliveryRoute::count());
+        $this->assertSame(0, RouteStop::count());
+        $this->assertSame([], Storage::disk('local')->allFiles());
+        Mail::assertNothingSent();
+    }
+
+    // Alfamart buys bags only: with the client's reference prices (Alfamart
+    // bags only, set by the reference_prices migration) nothing is missing.
+    public function test_alfamart_needs_only_a_bags_price(): void
+    {
+        $this->assertNull(ReferencePrice::for('convenience_store', 'small_sack'));
+        $this->assertSame(['bags'], ImportRoutes::productsFor('Alfamart'));
+
+        $this->artisan('routes:import', ['file' => $this->dir.'/routes.csv'])
+            ->expectsOutputToContain('Reference prices: set for every product these stores buy (Alfamart: bags only).')
+            ->doesntExpectOutputToContain('MISSING REFERENCE PRICES')
+            ->assertSuccessful();
+    }
+
+    // A missing reference price does not stop the import; it is listed
+    // clearly. Alfamart sacks are never listed.
+    public function test_missing_reference_prices_are_listed_and_the_import_goes_on(): void
+    {
+        ReferencePrice::where('customer_type', 'supermarket')->where('product_type', 'big_sack')->update(['unit_price' => null]);
+        ReferencePrice::where('customer_type', 'convenience_store')->delete(); // no row at all
+
+        $this->artisan('routes:import', ['file' => $this->dir.'/routes.csv'])
+            ->expectsOutputToContain('MISSING REFERENCE PRICES (2)')
+            ->expectsOutputToContain('| SM Malls      | Big Sack (50kg) | 3 ')
+            ->expectsOutputToContain('| Alfamart      | Bags (5kg)      | 3 ')
+            ->doesntExpectOutputToContain('Small Sack')
+            ->assertSuccessful();
+
+        $this->assertSame(['A', 'D'], DeliveryRoute::orderBy('code')->pluck('code')->all());
+        $this->assertSame(6, Customer::count());
+        $this->assertCount(1, Storage::disk('local')->files());
     }
 
     public function test_address_parts(): void

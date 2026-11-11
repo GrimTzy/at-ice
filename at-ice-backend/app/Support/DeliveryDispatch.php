@@ -53,6 +53,12 @@ use Throwable;
 // list first (trip_completed_at in DriverAvailability). The trucks are refrigerated and stay out, so nobody
 // queues at the plant: whoever is done first is next.
 //   sendTransitAlerts a delivery In transit too long tells Admin once
+//   alertEndingRegularDrivers  a route's regular Driver with an Until
+//                     (Driver Stores, "No end date" + Until) tells Admin once,
+//                     3 days before, so a new Driver can be assigned
+//   endRegularDrivers after Until the route has no regular Driver
+//   queueDriverlessRouteStops  today's route stops with no Driver go to a
+//                     reserve driver or Waiting, like an absent Driver's
 // HR sets these in Rates and rules > Deliveries: auto_queue_on_trip_completion,
 // max_transit_hours_before_alert (and allow_rolling_stock_fifo, TruckStock).
 //   sendDelayNotices  a reassigned or queued delivery tells its store it may be
@@ -306,6 +312,107 @@ class DeliveryDispatch
         return $moved;
     }
 
+    // A regular Driver with an Until (owner, 2026-11-12): Admin is told once,
+    // from 3 days before it, so a new Driver can be assigned in time.
+    public static function alertEndingRegularDrivers(): int
+    {
+        $today = DriverAvailability::today();
+        $soon = Carbon::parse($today)->addDays(3)->toDateString();
+        $routes = DeliveryRoute::with('driver:id,name')
+            ->where('is_active', true)
+            ->whereNotNull('driver_id')
+            ->whereNull('driver_to_alerted_at')
+            ->whereDate('driver_to', '>=', $today)
+            ->whereDate('driver_to', '<=', $soon)
+            ->get();
+
+        $sent = 0;
+        foreach ($routes as $r) {
+            // once, even when two polls run at the same moment
+            if (! DeliveryRoute::whereKey($r->id)->whereNull('driver_to_alerted_at')->update(['driver_to_alerted_at' => now()])) {
+                continue;
+            }
+            $to = $r->driver_to->toDateString();
+            $days = (int) Carbon::parse($today)->diffInDays(Carbon::parse($to));
+            $when = $days === 0 ? 'today' : ($days === 1 ? 'tomorrow' : "in {$days} days");
+            LiveEvent::create([
+                'module' => 'deliveries',
+                'action' => 'updated',
+                'message' => mb_substr("{$r->name}: ".($r->driver?->name ?? 'its regular driver')." is the regular driver until {$r->driver_to->format('M j')} ({$when}). Assign a new driver in Driver Stores, or its stops go to the reserve driver or Waiting.", 0, 255),
+                'roles' => [], // Admin sees every event
+                'user_ids' => [],
+                'actor_id' => null,
+            ]);
+            $sent++;
+        }
+
+        return $sent;
+    }
+
+    // After its Until the route has no regular Driver (its deliveries already
+    // have none for those days: DeliveryRoute::resolveDriver).
+    public static function endRegularDrivers(): int
+    {
+        $today = DriverAvailability::today();
+        $ended = DeliveryRoute::whereNotNull('driver_to')->whereDate('driver_to', '<', $today)->get();
+        foreach ($ended as $r) {
+            $before = $r->only(['driver_id', 'driver_to']);
+            $r->update([
+                'driver_id' => null, 'driver_from' => null, 'driver_to' => null, 'driver_to_alerted_at' => null,
+                'previous_driver_id' => null, 'previous_driver_to' => null,
+            ]);
+            Audit::log('route.regular_driver_ended', $r, $before, ['driver_id' => null]);
+        }
+
+        return $ended->count();
+    }
+
+    // Route stops today with no Driver (the route has none today, e.g. after
+    // its regular Driver's Until) are Waiting: a reserve driver who has timed
+    // in takes them (assignWaitingToReserve), otherwise Admin is alerted once
+    // per route and day, and the stores are told.
+    public static function queueDriverlessRouteStops(): int
+    {
+        $today = DriverAvailability::today();
+
+        return DB::transaction(function () use ($today) {
+            $stops = Delivery::with(['customer', 'route:id,name'])
+                ->where('status', 'pending')
+                ->whereNull('driver_id')
+                ->whereNotNull('route_id')
+                ->where('delivery_type', 'outbound')
+                ->whereDate('scheduled_date', $today)
+                ->lockForUpdate()
+                ->get();
+            foreach ($stops->groupBy('route_id') as $list) {
+                foreach ($list as $d) {
+                    $d->update(['status' => 'queued']);
+                }
+                $routeName = $list->first()->route?->name ?? 'A route';
+                $n = $list->count();
+                $stopsText = $n.' '.($n === 1 ? 'stop is' : 'stops are');
+                // the reserve may take them right away; only the Waiting ones are told
+                if (self::reassignRoute((int) $list->first()->route_id, null, $today) === 0) {
+                    foreach ($list as $d) {
+                        self::notifyChange($d, 'waiting', "Your delivery {$d->delivery_no} today is waiting for a driver. We will tell you when it is moved.");
+                    }
+                    if (Cache::add('no-driver-alert:'.md5("{$routeName}|{$today}"), 1, now()->addDays(2))) {
+                        LiveEvent::create([
+                            'module' => 'deliveries',
+                            'action' => 'updated',
+                            'message' => mb_substr("{$routeName} has no driver today and no reserve driver can take it. {$stopsText} Waiting: assign a driver or reschedule them.", 0, 255),
+                            'roles' => [], // Admin sees every event
+                            'user_ids' => [],
+                            'actor_id' => null,
+                        ]);
+                    }
+                }
+            }
+
+            return $stops->count();
+        });
+    }
+
     // Admin presses Reschedule on a Waiting delivery: it moves to $date, or to
     // the next delivery day (the contract's next day, else the day after),
     // with the Driver of that day. The store is told. Returns the truck-limit
@@ -402,9 +509,12 @@ class DeliveryDispatch
         Auth::forgetUser();
         try {
             $today = DriverAvailability::today();
+            self::alertEndingRegularDrivers();
+            self::endRegularDrivers();
             foreach (array_keys(self::offDrivers($today)) as $driverId) {
                 self::reassign((int) $driverId, $today);
             }
+            self::queueDriverlessRouteStops();
             self::assignWaitingToReserve();
             self::assignQueued();
             self::sendDelayNotices();

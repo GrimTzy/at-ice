@@ -70,9 +70,12 @@ class RouteController extends Controller
 
     // PUT /api/routes/{id}: name, active, notes, and who drives it (Driver
     // Stores; the code never changes):
-    //   driver_id, driver_from?   the regular Driver ("No end date"), from
-    //                             driver_from (default today). Until then the
-    //                             current regular Driver keeps it. null: none.
+    //   driver_id, driver_from?,  the regular Driver ("No end date"), from
+    //   driver_to?                driver_from (default today) until driver_to
+    //                             (empty: until changed). Before driver_from
+    //                             the current regular Driver keeps it; after
+    //                             driver_to it has none (reserve or Waiting),
+    //                             and Admin is alerted 3 days before. null: none.
     //   cover_driver_id,          a temporary cover ("One day", "One week"):
     //   cover_from?, cover_to     only on those days; then the regular Driver
     //                             is back on his own. null ends the cover.
@@ -89,6 +92,7 @@ class RouteController extends Controller
             'name' => 'sometimes|required|string|max:100',
             'driver_id' => $driverRule(),
             'driver_from' => 'sometimes|nullable|date|after_or_equal:'.$today,
+            'driver_to' => 'sometimes|nullable|date|after_or_equal:'.$today,
             'cover_driver_id' => $driverRule(),
             'cover_from' => 'sometimes|nullable|date|after_or_equal:'.$today,
             'cover_to' => 'required_with:cover_driver_id|nullable|date|after_or_equal:'.$today,
@@ -99,6 +103,7 @@ class RouteController extends Controller
             'driver_id.exists' => 'Please select a driver.',
             'cover_driver_id.exists' => 'Please select a driver.',
             'driver_from.after_or_equal' => 'The start date cannot be in the past.',
+            'driver_to.after_or_equal' => 'Until must be on or after From.',
             'cover_from.after_or_equal' => 'The start date cannot be in the past.',
             'cover_to.required_with' => 'Pick the last day of the cover.',
             'cover_to.after_or_equal' => 'The end date cannot be in the past.',
@@ -111,18 +116,31 @@ class RouteController extends Controller
 
         // the regular Driver
         if (array_key_exists('driver_id', $data)) {
-            if ($why = $this->driverTaken($data['driver_id'], $route->id)) {
-                return response()->json(['message' => $why, 'errors' => ['driver_id' => [$why]]], 422);
-            }
             $new = $data['driver_id'] ? (int) $data['driver_id'] : null;
             $from = $new ? Carbon::parse($data['driver_from'] ?? $today)->toDateString() : null;
-            // who drives it until a later start: the one driving it today
-            $current = $route->driver_from && $route->driver_from->toDateString() > $today ? $route->previous_driver_id : $route->driver_id;
-            $later = $new && $from > $today && (int) $current !== $new;
+            $to = $new && ! empty($data['driver_to']) ? Carbon::parse($data['driver_to'])->toDateString() : null;
+            if ($to && $to < $from) {
+                $why = 'Until must be on or after From.';
+
+                return response()->json(['message' => $why, 'errors' => ['driver_to' => [$why]]], 422);
+            }
+            if ($why = $this->driverTaken($new, $route->id, $from ?? $today, $to)) {
+                return response()->json(['message' => $why, 'errors' => ['driver_id' => [$why]]], 422);
+            }
+            // who drives it until a later start: the one driving it today (none
+            // after their Until), and only up to their Until
+            $waiting = $route->driver_from && $route->driver_from->toDateString() > $today;
+            $current = $route->regularOn($today);
+            $currentTo = $current ? ($waiting ? $route->previous_driver_to : $route->driver_to)?->toDateString() : null;
+            $later = $new && $from > $today && $current !== $new;
             $update += [
                 'driver_id' => $new,
                 'driver_from' => $later ? $from : null,
+                'driver_to' => $to,
                 'previous_driver_id' => $later ? $current : null,
+                'previous_driver_to' => $later ? $currentTo : null,
+                // a new Until (or a new driver) is alerted again, 3 days before it
+                'driver_to_alerted_at' => $new && $new === (int) $route->driver_id && $to === $route->driver_to?->toDateString() ? $route->driver_to_alerted_at : null,
             ];
         }
 
@@ -142,7 +160,7 @@ class RouteController extends Controller
             $update += ['cover_driver_id' => $cover, 'cover_from' => $coverFrom, 'cover_to' => $coverTo];
         }
 
-        $who = ['driver_id', 'driver_from', 'previous_driver_id', 'cover_driver_id', 'cover_from', 'cover_to'];
+        $who = ['driver_id', 'driver_from', 'driver_to', 'previous_driver_id', 'previous_driver_to', 'cover_driver_id', 'cover_from', 'cover_to'];
         $before = $route->only(array_merge($fields, $who));
         $changed = DB::transaction(function () use ($route, $update, $who) {
             $route->update($update);
@@ -337,9 +355,11 @@ class RouteController extends Controller
             : "{$d->delivery_no} is not waiting for a driver, so it cannot be rescheduled here.";
     }
 
-    // A Driver is the regular Driver of one route only, and a reserve driver
-    // has no route.
-    private function driverTaken(?int $driverId, ?int $exceptRouteId = null): ?string
+    // A Driver is the regular Driver of one route at a time, and a reserve
+    // driver has no route. Another route only counts on days that overlap
+    // $from..$to ($to null: no end), so a Driver whose Until on Route A has
+    // passed, or comes before $from, may take Route B.
+    private function driverTaken(?int $driverId, ?int $exceptRouteId = null, ?string $from = null, ?string $to = null): ?string
     {
         if (! $driverId) {
             return null;
@@ -347,8 +367,12 @@ class RouteController extends Controller
         if (User::whereKey($driverId)->value('is_reserve_driver')) {
             return 'This driver is a reserve driver. Make them a regular driver first (Driver Stores).';
         }
+        $from ??= DriverAvailability::today();
         $other = DeliveryRoute::where('driver_id', $driverId)->where('is_active', true)
-            ->when($exceptRouteId, fn ($q) => $q->where('id', '!=', $exceptRouteId))->value('name');
+            ->when($exceptRouteId, fn ($q) => $q->where('id', '!=', $exceptRouteId))
+            ->where(fn ($q) => $q->whereNull('driver_to')->orWhereDate('driver_to', '>=', $from))
+            ->when($to, fn ($q) => $q->where(fn ($w) => $w->whereNull('driver_from')->orWhereDate('driver_from', '<=', $to)))
+            ->value('name');
 
         return $other ? "This driver already has {$other}." : null;
     }
@@ -383,7 +407,10 @@ class RouteController extends Controller
             'driver' => $r->driver ? ['id' => $r->driver->id, 'name' => $r->driver->name] : null,
             // a new regular Driver from a later day; previous_driver drives it until then
             'driver_from' => $r->driver_from?->toDateString(),
+            // the regular Driver's last day (null: until changed); after it the route has none
+            'driver_to' => $r->driver_to?->toDateString(),
             'previous_driver' => $r->driver_from && $r->previousDriver ? ['id' => $r->previousDriver->id, 'name' => $r->previousDriver->name] : null,
+            'previous_driver_to' => $r->driver_from ? $r->previous_driver_to?->toDateString() : null,
             // a temporary cover that is running or still to come (null otherwise)
             'cover' => $r->hasCover() && $r->coverDriver ? [
                 'driver' => ['id' => $r->coverDriver->id, 'name' => $r->coverDriver->name],
@@ -409,11 +436,15 @@ class RouteController extends Controller
     private function whoText(DeliveryRoute $r): string
     {
         $regular = $r->driver?->name;
+        $until = $r->driver_to ? " until {$r->driver_to->format('M j')}" : '';
         $text = ! $regular
             ? ' It has no regular driver; on days without one its stores go to their Driver Stores driver.'
             : ($r->driver_from
-                ? " {$regular} is the regular driver from {$r->driver_from->format('M j')}".($r->previousDriver ? " ({$r->previousDriver->name} until then)." : '.')
-                : " {$regular} is the regular driver.");
+                ? " {$regular} is the regular driver from {$r->driver_from->format('M j')}{$until}".($r->previousDriver ? " ({$r->previousDriver->name} until then)." : '.')
+                : " {$regular} is the regular driver{$until}.");
+        if ($regular && $r->driver_to) {
+            $text .= ' After that the route has no regular driver; you will be alerted 3 days before.';
+        }
         if ($r->hasCover() && $r->coverDriver) {
             $text .= " {$r->coverDriver->name} covers it from {$r->cover_from->format('M j')} to {$r->cover_to->format('M j')}"
                 .($regular ? ", then {$regular} is back." : '.');

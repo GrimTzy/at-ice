@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Customer;
+use App\Models\DeliveryItem;
 use App\Models\DeliveryRoute;
 use App\Models\ReferencePrice;
 use App\Models\RouteStop;
@@ -15,16 +16,25 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
-// Imports the client's fixed routes (2026-11-10):
-//   php artisan routes:import F:/AT-ICE-demo-handoff/routes/routes.csv --dry-run
+// Imports the client's fixed routes (2026-11-10). The SJDM routes ship with
+// the app (store names, addresses, map pins, route and stop order only):
+//   php artisan routes:import database/data/sjdm-routes.csv --dry-run
+//   php artisan routes:import database/data/sjdm-routes.csv
 //
 // routes.csv: route, stop_order, store_name, address, lat, lng. A row whose
-// store is a mall listed in the tenants file (stores.csv next to it, or
-// --tenants=) becomes one customer per tenant, all sharing that stop (SM City
+// store is a mall listed in the tenants file (--tenants=, else the file next
+// to it named like it with "stores" for "routes", e.g. sjdm-stores.csv, else
+// stores.csv) becomes one customer per tenant, all sharing that stop (SM City
 // San Jose del Monte: 40 tenants). Each new customer gets a Customer Portal
-// login with a dummy email (name@atice.invalid) and a one-time password
-// (must change it on first login). No email is sent. The logins and
-// passwords go to a private CSV in storage/app/private, never to the screen.
+// login with a dummy email (name@atice.invalid, which can never receive
+// mail) and a one-time password (must change it on first login). No email
+// is sent. The logins and passwords go to a private CSV on the local disk
+// (storage/app/private), never to the screen.
+//
+// Prices: the import sets none. It lists the reference prices (Customer
+// Prices) that are missing for what the imported stores buy: Alfamart
+// branches buy bags only, never sacks (client, 2026-11-12); the others all
+// three. A missing price does not stop the import.
 //
 // Safe to run again: customers are matched by name, routes by code, and a
 // store's stop is updated. --dry-run shows what would happen and saves nothing.
@@ -39,10 +49,16 @@ class ImportRoutes extends Command
 
     private const EMAIL_DOMAIN = 'atice.invalid';
 
+    // Chains that buy bags only (retail), never small or big sacks (client,
+    // 2026-11-12). Every other store may buy all three products.
+    public const BAGS_ONLY_CHAINS = ['Alfamart'];
+
+    private const PRODUCTS = ['bags', 'small_sack', 'big_sack'];
+
     public function handle(): int
     {
         $file = $this->argument('file');
-        $tenantsFile = $this->option('tenants') ?: dirname($file).DIRECTORY_SEPARATOR.'stores.csv';
+        $tenantsFile = $this->option('tenants') ?: self::tenantsFileFor($file);
         $dry = (bool) $this->option('dry-run');
 
         try {
@@ -151,6 +167,28 @@ class ImportRoutes extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    // sjdm-routes.csv -> sjdm-stores.csv next to it when there is one, else
+    // stores.csv next to it.
+    public static function tenantsFileFor(string $file): string
+    {
+        $dir = dirname($file).DIRECTORY_SEPARATOR;
+        $base = basename($file);
+        if (stripos($base, 'routes') !== false) {
+            $named = $dir.str_ireplace('routes', 'stores', $base);
+            if (is_file($named)) {
+                return $named;
+            }
+        }
+
+        return $dir.'stores.csv';
+    }
+
+    // The products a store buys: bags only for Alfamart, else all three.
+    public static function productsFor(?string $chain): array
+    {
+        return in_array($chain, self::BAGS_ONLY_CHAINS, true) ? ['bags'] : self::PRODUCTS;
     }
 
     // Header row => list of rows keyed by the header, after checking the
@@ -308,17 +346,36 @@ class ImportRoutes extends Command
         }
     }
 
-    // A customer type with no reference price cannot have a contract
-    // approved until Admin sets the prices.
+    // The reference prices (per customer type) missing for what the imported
+    // stores buy: bags only for Alfamart, all three for the others. A
+    // contract for a store needs a price for each product in it, so Admin
+    // sets these in Customer Prices first. The import itself goes on.
     private function checkReferencePrices(array $entries): void
     {
         $table = ReferencePrice::table();
-        foreach (collect($entries)->pluck('customer_type')->unique() as $type) {
-            $missing = array_filter(['bags', 'small_sack', 'big_sack'], fn ($p) => ($table[$type][$p] ?? null) === null);
-            if ($missing) {
-                $label = Customer::TYPES[$type] ?? $type;
-                $this->warn("No reference price for {$label}: ".implode(', ', $missing).'. Set it in Customer Prices before approving contracts.');
+        $missing = [];
+        foreach ($entries as $e) {
+            foreach (self::productsFor($e['chain']) as $product) {
+                if (($table[$e['customer_type']][$product] ?? null) === null) {
+                    $missing[$e['customer_type']][$product] = ($missing[$e['customer_type']][$product] ?? 0) + 1;
+                }
             }
         }
+
+        if (! $missing) {
+            $this->info('Reference prices: set for every product these stores buy (Alfamart: bags only).');
+
+            return;
+        }
+        $rows = [];
+        foreach ($missing as $type => $products) {
+            foreach (self::PRODUCTS as $product) {
+                if (isset($products[$product])) {
+                    $rows[] = [Customer::TYPES[$type] ?? $type, DeliveryItem::PRODUCT_TYPES[$product] ?? $product, $products[$product]];
+                }
+            }
+        }
+        $this->warn('MISSING REFERENCE PRICES ('.count($rows).'). The routes and customers are imported anyway; set these in Customer Prices > Reference prices before saving contracts for these stores:');
+        $this->table(['Customer type', 'Product', 'Imported stores that need it'], $rows);
     }
 }

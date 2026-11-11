@@ -22,8 +22,8 @@ class RouteStop extends Model
         return $this->belongsTo(Customer::class);
     }
 
-    // customer id => [route_id, driver_id, driver_from, previous_driver_id,
-    // cover_driver_id, cover_from, cover_to, stop_order, stop_group,
+    // customer id => [route_id, driver_id, driver_from, driver_to,
+    // previous_driver_id, previous_driver_to, cover_driver_id, cover_from, cover_to, stop_order, stop_group,
     // route_code] for active routes (who drives on a day:
     // DeliveryRoute::resolveDriver)
     public static function forCustomers(array $customerIds): array
@@ -36,12 +36,14 @@ class RouteStop extends Model
             ->join('delivery_routes', 'delivery_routes.id', '=', 'route_stops.route_id')
             ->where('delivery_routes.is_active', true)
             ->whereIn('route_stops.customer_id', $customerIds)
-            ->get(['route_stops.customer_id', 'route_stops.route_id', 'route_stops.stop_order', 'route_stops.stop_group', 'delivery_routes.driver_id', 'delivery_routes.driver_from', 'delivery_routes.previous_driver_id', 'delivery_routes.cover_driver_id', 'delivery_routes.cover_from', 'delivery_routes.cover_to', 'delivery_routes.code'])
+            ->get(['route_stops.customer_id', 'route_stops.route_id', 'route_stops.stop_order', 'route_stops.stop_group', 'delivery_routes.driver_id', 'delivery_routes.driver_from', 'delivery_routes.driver_to', 'delivery_routes.previous_driver_id', 'delivery_routes.previous_driver_to', 'delivery_routes.cover_driver_id', 'delivery_routes.cover_from', 'delivery_routes.cover_to', 'delivery_routes.code'])
             ->mapWithKeys(fn ($r) => [$r->customer_id => [
                 'route_id' => (int) $r->route_id,
                 'driver_id' => $r->driver_id ? (int) $r->driver_id : null,
                 'driver_from' => $r->driver_from ? substr((string) $r->driver_from, 0, 10) : null,
+                'driver_to' => $r->driver_to ? substr((string) $r->driver_to, 0, 10) : null,
                 'previous_driver_id' => $r->previous_driver_id ? (int) $r->previous_driver_id : null,
+                'previous_driver_to' => $r->previous_driver_to ? substr((string) $r->previous_driver_to, 0, 10) : null,
                 'cover_driver_id' => $r->cover_driver_id ? (int) $r->cover_driver_id : null,
                 'cover_from' => $r->cover_from ? substr((string) $r->cover_from, 0, 10) : null,
                 'cover_to' => $r->cover_to ? substr((string) $r->cover_to, 0, 10) : null,
