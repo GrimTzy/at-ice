@@ -97,7 +97,9 @@ function TicketReply({ ticket, onSent }) {
 export default function CustomerSupport() {
   // An unsent message survives a refresh.
   const draft = useDraft("support:new", { topic: SUPPORT_TOPICS[0].key, message: "" });
-  const { topic, message } = draft.values;
+  const { message } = draft.values;
+  // a draft saved with a topic no longer offered falls back to the first one
+  const topic = SUPPORT_TOPICS.some((t) => t.key === draft.values.topic) ? draft.values.topic : SUPPORT_TOPICS[0].key;
   const { topic: setTopic } = draft.set;
   const setMessage = draft.set.message;
   const [sending, setSending] = useState(false);
@@ -106,11 +108,8 @@ export default function CustomerSupport() {
   const [branch, setBranch] = useState("");
   const [history, setHistory] = useState([]);
 
-  // one open ticket per topic (Emergency Ice Shortage is never blocked): point
-  // the customer to the ticket they already have instead
-  const openSame = topic === "emergency_supply"
-    ? null
-    : history.find((m) => m.topic === topic && ACTIVE.includes(m.status));
+  // one open ticket per topic: point the customer to the ticket they already have instead
+  const openSame = history.find((m) => m.topic === topic && ACTIVE.includes(m.status));
 
   const loadHistory = useCallback(async () => {
     try {

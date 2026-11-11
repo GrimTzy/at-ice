@@ -140,6 +140,11 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged, sear
         )}
         <div>
           <div className={labelCls}>Stores<Req /></div>
+          {/* "At least one store" is checked with the other required fields before anything is sent */}
+          <input
+            type="text" name="store_ids_check" tabIndex={-1} aria-hidden="true" className="sr-only" value={form.store_ids.join(",")} onChange={() => {}}
+            ref={(el) => el?.setCustomValidity(form.store_ids.length ? "" : "Pick at least one store.")}
+          />
           <StorePicker stores={stores} value={form.store_ids} onChange={(ids) => { setForm({ ...form, store_ids: ids }); setError(""); }}
             note={(s) => (currentDriver[s.id] ? `now: ${currentDriver[s.id]}` : "no driver")} />
         </div>

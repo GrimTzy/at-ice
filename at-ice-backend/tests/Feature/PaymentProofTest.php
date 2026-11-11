@@ -183,6 +183,41 @@ class PaymentProofTest extends TestCase
             ->assertStatus(422)->assertJsonValidationErrors('customer_type');
     }
 
+    public function test_mark_paid_by_gcash_needs_a_proof_and_keeps_it_with_the_invoice(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $this->patchJson("/api/receipts/{$this->receipt->id}/paid", ['payment_method' => 'gcash'])
+            ->assertStatus(422)->assertJsonValidationErrors('proof');
+        $this->assertSame('unpaid', $this->receipt->fresh()->payment_status);
+
+        // the form sends a POST with _method so the file can go with it
+        $this->post("/api/receipts/{$this->receipt->id}/paid", [
+            '_method' => 'PATCH',
+            'payment_method' => 'gcash',
+            'reference_no' => '3014 552 870 116',
+            'proof' => UploadedFile::fake()->create('gcash.jpg', 120, 'image/jpeg'),
+        ], ['Accept' => 'application/json'])->assertOk();
+
+        $this->assertSame('paid', $this->receipt->fresh()->payment_status);
+        $proof = PaymentProof::where('receipt_id', $this->receipt->id)->firstOrFail();
+        $this->assertSame('approved', $proof->status);
+        $this->assertSame($this->admin->id, $proof->reviewed_by);
+        $this->assertSame('3014 552 870 116', $proof->reference_no);
+        Storage::disk('local')->assertExists($proof->file_path);
+        // Admin's own proof is not put in front of Admin as one to review
+        $this->assertFalse(LiveEvent::where('message', 'like', 'Payment proof for Invoice%sent by%')->exists());
+    }
+
+    public function test_mark_paid_in_cash_needs_no_proof(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $this->patchJson("/api/receipts/{$this->receipt->id}/paid", ['payment_method' => 'cash'])->assertOk();
+
+        $this->assertSame('paid', $this->receipt->fresh()->payment_status);
+        $this->assertSame(0, PaymentProof::count());
+    }
+
     public function test_support_topics_include_the_new_reasons(): void
     {
         // one ticket per topic is allowed; the 3-per-10-minutes limit is tested in SupportTicketTest

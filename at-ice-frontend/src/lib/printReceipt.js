@@ -62,8 +62,6 @@ export function printReceipt(receipt, customer) {
   .num { text-align: right; font-family: "Courier New", monospace; }
   .total { margin-top: 12px; display: flex; justify-content: space-between; align-items: center; background: #ecfeff; border: 1px solid #a5f3fc; padding: 10px 12px; font-size: 14px; font-weight: 700; }
   .total .num { font-size: 16px; }
-  .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 56px; }
-  .sign div { border-top: 1px solid #0f172a; padding-top: 4px; text-align: center; font-size: 10.5px; color: #334155; }
   .notice { margin-top: 22px; color: #64748b; font-size: 10px; text-align: center; }
 </style></head>
 <body><div class="sheet">
@@ -83,6 +81,8 @@ export function printReceipt(receipt, customer) {
     <div><span>Address</span>${esc(address || "—")}</div>
     <div><span>Delivered</span>${esc(day(r.delivery?.delivered_at || r.delivery?.scheduled_date || r.created_at))}</div>
     <div><span>Contact</span>${esc(c.contact_number || c.contact_person || "—")}</div>
+    <div><span>Driver</span>${esc(r.delivery?.driver?.name || "—")}</div>
+    <div><span>Salesman</span>${esc(r.salesman?.name || "—")}</div>
     <div><span>Payment</span>${status === "paid" ? `${esc(MOP_LABEL[r.payment_method] || r.payment_method || "—")}, ${esc(day(r.paid_at))}` : "Not yet paid"}</div>
   </div>
 
@@ -92,11 +92,6 @@ export function printReceipt(receipt, customer) {
   </table>
 
   <div class="total"><span>TOTAL</span><span class="num">${esc(peso(r.total_amount))}</span></div>
-
-  <div class="sign">
-    <div>Delivered by</div>
-    <div>Received by (signature over printed name)</div>
-  </div>
 
   <div class="notice">
     This is a system-generated delivery invoice for the customer's records. It is not an official receipt (BIR).<br>

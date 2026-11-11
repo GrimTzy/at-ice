@@ -235,7 +235,7 @@ class Docs
         $r = DB::table('receipts')->whereIn('id', $this->ids('receipts'))->where('customer_id', $k2->id ?? 0);
         $pend = DB::table('payment_proofs as pp')->join('receipts as r', 'r.id', '=', 'pp.receipt_id')->whereIn('pp.id', $this->ids('payment_proofs'))->get(['pp.status', 'r.receipt_no']);
         $L[] = "- **Account:** customer **{$k2->name}**, login `".DB::table('users')->where('id', $k2->user_id ?? 0)->value('email').'` > **Receipts**:';
-        $L[] = '  - overdue now (more than 15 days unpaid): '.$this->list((clone $r)->where('payment_status', 'overdue')->orderBy('created_at')->get(), fn ($x) => $x->receipt_no).'. This list grows every day; it is decided when the page opens.';
+        $L[] = '  - overdue now (unpaid 14 days or more): '.$this->list((clone $r)->where('payment_status', 'overdue')->orderBy('created_at')->get(), fn ($x) => $x->receipt_no).'. This list grows every day; it is decided when the page opens.';
         $L[] = '  - payment proofs: '.$this->list($pend, fn ($x) => "{$x->status} on {$x->receipt_no}");
         $L[] = '- **Account:** Admin > **Receipts** > payment proofs > **Approve** the pending one: the invoice becomes paid.';
         $L[] = '';
@@ -400,7 +400,7 @@ class Docs
             ['D-03', 'Upcoming, no driver yet', $del($this->deliveries()->where('d.status', 'pending')), 'Assign a timed-in group Driver'],
             ['D-05', 'Reassigned + delay notice', $del($this->deliveries()->whereNotNull('d.reassigned_from_driver_id')), 'Customer > notices'],
             ['D-06', 'Cancelled (skip day / emergency)', $this->list($this->deliveries()->where('d.status', 'cancelled')->orderBy('d.scheduled_date')->get(), fn ($x) => "{$x->delivery_no} ({$x->customer}): {$x->cancel_reason}"), ''],
-            ['D-07..D-09', 'Contracts pending / approved / cancelled', $this->list(DB::table('delivery_contracts')->whereIn('id', $this->ids('delivery_contracts'))->orderBy('id')->get(), fn ($k) => "{$k->contract_no} {$k->status}"), 'Admin > Deliveries > Contracts'],
+            ['D-07..D-09', 'Contracts pending / approved / cancelled', $this->list(DB::table('delivery_contracts')->whereIn('id', $this->ids('delivery_contracts'))->orderBy('id')->get(), fn ($k) => "{$k->contract_no} {$k->status}"), 'Admin > CRM > Customers > Contracts button'],
             ['D-14', 'Short delivery', $del($this->deliveries()->join('delivery_proofs as p', 'p.delivery_id', '=', 'd.id')->whereNotNull('p.notes')), 'Invoice = delivered quantity'],
             ['D-15', 'Urgent top-up', $del($this->deliveries()->where('d.is_top_up', true)), ''],
             ['D-16', 'Change requests', $this->list(DB::table('delivery_adjustment_requests as r')->join('deliveries as d', 'd.id', '=', 'r.delivery_id')->whereIn('r.id', $this->ids('delivery_adjustment_requests'))->get(['r.status', 'd.delivery_no']), fn ($x) => "{$x->status} {$x->delivery_no}"), 'Admin applies or declines the pending one'],

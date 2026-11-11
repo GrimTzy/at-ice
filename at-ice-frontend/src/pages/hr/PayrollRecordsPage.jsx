@@ -12,6 +12,7 @@
 // Salary is confidential: there are no totals or summary cards.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import HrLayout from "../../components/HrLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
@@ -39,6 +40,14 @@ const todayLocal = () => new Date().toLocaleDateString("en-CA");
 const addDays = (ymd, n) => { const d = new Date(`${ymd}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const peso = (v) => `₱${Number(v || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const n = (v) => Number(v || 0);
+// gov_share is the part of the month's SSS, PhilHealth and Pag-IBIG taken this
+// pay day (HR > Rates > Payroll), not a share of the salary
+const govShareText = (share) => {
+  if (share == null) return "—";
+  if (share >= 1) return "the whole month's contribution is deducted this pay day";
+  if (share <= 0) return "none this pay day (already deducted this month)";
+  return `${Math.round(share * 100)}% of the month's contribution this pay day`;
+};
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 function printPayslip(p) {
@@ -281,7 +290,7 @@ export default function PayrollRecordsPage() {
               <input name="search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name" className="w-full bg-transparent outline-none text-xs text-slate-800 placeholder:text-slate-500" />
             </div>
             <div className="flex-1" />
-            <span className="text-[11px] text-slate-400">Pay day {period?.pay_day || "—"} · SSS, PhilHealth, Pag-IBIG this pay day: {data ? `${Math.round(data.gov_share * 100)}%` : "—"}</span>
+            <span className="text-[11px] text-slate-400">Pay day {period?.pay_day || "—"} · SSS, PhilHealth, Pag-IBIG: {govShareText(data?.gov_share)}</span>
             <button type="button" data-no-confirm onClick={() => markPaid([...selected])} disabled={selected.size === 0 || busy} className="min-w-[150px] px-3.5 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold text-center disabled:opacity-40 cursor-pointer">
               {busy ? "Saving…" : selected.size ? `Mark selected paid (${selected.size})` : "Mark selected paid"}
             </button>
@@ -349,7 +358,9 @@ export default function PayrollRecordsPage() {
                               </td>
                             </>
                           ) : (
-                            <td colSpan={9} className="px-3 py-2.5 text-slate-400">Timesheet not approved by HR yet.</td>
+                            <td colSpan={9} className="px-3 py-2.5 text-slate-400">
+                              Timesheet not approved by HR yet. <Link to="/hr/timesheets" className="font-medium text-cyan-700 hover:underline">Approve it in Timesheets</Link>, then it is paid here.
+                            </td>
                           )}
                         </tr>
                       );

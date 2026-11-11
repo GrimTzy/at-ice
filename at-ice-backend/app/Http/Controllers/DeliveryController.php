@@ -25,7 +25,8 @@ class DeliveryController extends Controller
     // ?from=&to= limit it to scheduled dates (contracts make many deliveries).
     public function index(Request $request)
     {
-        $q = Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs', 'reassignedFrom:id,name', 'contract:id,contract_no,name'])
+        $q = Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs', 'reassignedFrom:id,name', 'contract:id,contract_no,name',
+            'iceLoadings:id,delivery_id,product_type,quantity_loaded,checker_id,created_at', 'iceLoadings.checker:id,name'])
             ->latest();
         if ($from = $request->query('from')) {
             $q->whereDate('scheduled_date', '>=', $from);

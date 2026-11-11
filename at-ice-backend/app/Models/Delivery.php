@@ -106,6 +106,12 @@ class Delivery extends Model
         return $this->hasMany(DeliveryProof::class);
     }
 
+    // The Checker's truck counts (Ice loading), one row per product
+    public function iceLoadings()
+    {
+        return $this->hasMany(IceLoading::class);
+    }
+
     // The Driver and the Salesman pressing Arrived at the store (GPS checked).
     public function arrivals()
     {

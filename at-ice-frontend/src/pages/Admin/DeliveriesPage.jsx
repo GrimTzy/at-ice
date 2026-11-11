@@ -12,7 +12,6 @@ import DraftHint from "../../components/DraftHint";
 import { DriverView, StoreView, EditDeliveryModal } from "./deliveries/BoardViews";
 import SameDayChanges from "./deliveries/SameDayChanges";
 import AdjustmentRequests from "./deliveries/AdjustmentRequests";
-import ContractsTab from "./deliveries/ContractsTab";
 import DriverStoresTab from "./deliveries/DriverStoresTab";
 import { ReassignedTag } from "./deliveries/shared";
 import { STATUS_STYLE, DRIVER_GROUPS, driverGroup, timeOf, nowHm } from "./deliveries/utils";
@@ -47,12 +46,6 @@ const STATUS_FILTERS = [
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ];
-const CONTRACT_STATUS_FILTERS = [
-  { value: "all", label: "All" },
-  { value: "pending", label: "Pending" },
-  { value: "approved", label: "Approved" },
-  { value: "cancelled", label: "Cancelled" },
-];
 // A customer without a type is a dealer (same default as Customer Prices).
 const typeOf = (c) => c?.customer_type || "dealer";
 const boardDeliveries = (board) => board?.deliveries || [];
@@ -76,6 +69,18 @@ const PRODUCT_TYPES = [
   { value: "big_sack",   label: "Big Sack (50kg)" },
 ];
 const productLabel = (type) => PRODUCT_TYPES.find((p) => p.value === type)?.label || type;
+
+// The Checker's latest count per product (a recount replaces the earlier one)
+const truckLoads = (d) => Object.values((d.ice_loadings || []).reduce((m, l) => (!m[l.product_type] || l.id > m[l.product_type].id ? { ...m, [l.product_type]: l } : m), {}));
+// Short loading note under an open delivery's status in the table
+const loadNote = (d) => {
+  if (d.delivery_type === "inbound" || ["delivered", "cancelled"].includes(d.status)) return null;
+  const loads = truckLoads(d);
+  if (!loads.length) return "Not loaded yet";
+  const loaded = loads.reduce((s, l) => s + Number(l.quantity_loaded || 0), 0);
+  const ordered = (d.items || []).reduce((s, it) => s + Number(it.quantity_ordered || 0), 0);
+  return `Loaded ${loaded} of ${ordered}`;
+};
 
 const EMPTY_ITEM = { product_type: "", quantity_ordered: "" };
 // Today as YYYY-MM-DD in the browser's local time (toISOString would be UTC).
@@ -113,7 +118,6 @@ function statusLabel(d) {
 const TABS = [
   { value: "drivers", label: "Driver View" },
   { value: "stores", label: "Store View" },
-  { value: "contracts", label: "Contracts" },
   { value: "assign", label: "Driver Stores" },
   { value: "list", label: "All Deliveries" },
 ];
@@ -135,9 +139,8 @@ export default function DeliveriesPage() {
   // One toolbar for every tab: search, customer type and (where the tab has
   // one) a status filter.
   const [typeFilter, setTypeFilter] = useState("");
-  const [subStatus, setSubStatus] = useState("all"); // Store View and Contracts
+  const [subStatus, setSubStatus] = useState("all"); // Store View
   const [driverFilter, setDriverFilter] = useState("all"); // Driver View: driver status
-  const [contractList, setContractList] = useState([]);
 
   const maxQty = useMaxQuantity(); // same limit as Ice Loading and the Salesman confirmation
   // New Delivery modal: kept as a draft while open, so a refresh reopens it as it was.
@@ -429,7 +432,6 @@ export default function DeliveriesPage() {
   const statusFilterFor = {
     list: { value: statusFilter, set: setStatusFilter, options: STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: counts[f.value] ?? 0 })) },
     stores: { value: subStatus, set: setSubStatus, options: STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: f.value === "all" ? boardForType.length : boardForType.filter((d) => d.status === f.value).length })) },
-    contracts: { value: subStatus, set: setSubStatus, options: CONTRACT_STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: f.value === "all" ? contractList.length : contractList.filter((c) => c.status === f.value).length })) },
   }[tab];
 
   // Today at a glance for the KPI cards
@@ -498,7 +500,7 @@ export default function DeliveriesPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={tab === "list" ? "Search delivery, customer, invoice…" : tab === "contracts" ? "Search contract or store…" : "Search store, chain or driver…"}
+                placeholder={tab === "list" ? "Search delivery, customer, invoice…" : "Search store, chain or driver…"}
                 aria-label="Search"
                 className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
               />
@@ -549,7 +551,6 @@ export default function DeliveriesPage() {
         {tab === "stores" && (
           <StoreView board={viewBoard} loading={boardLoading} filtered={!!(needle || typeFilter || subStatus !== "all")} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
         )}
-        {tab === "contracts" && <ContractsTab live={live} onChanged={refreshAll} search={needle} type={typeFilter} status={subStatus} onLoaded={setContractList} />}
         {tab === "assign" && (
           <DriverStoresTab stores={activeStores} drivers={board?.drivers || []} live={live} onChanged={refreshAll} search={needle} type={typeFilter} />
         )}
@@ -597,6 +598,7 @@ export default function DeliveriesPage() {
                       <span className={`inline-flex items-center justify-center min-w-[84px] px-2.5 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
                         {d.status?.replace("_", " ")}
                       </span>
+                      {loadNote(d) && <span className="cell-note text-[11px] text-slate-500">{loadNote(d)}</span>}
                     </td>
                     <td className="px-[18px] py-2.5">
                       {proof ? (
@@ -852,6 +854,31 @@ export default function DeliveriesPage() {
                   ))}
                 </div>
               </div>
+              {viewing.delivery_type !== "inbound" && (
+                <div>
+                  <div className="text-[11px] text-slate-400 uppercase tracking-wide mb-1.5">Truck loading</div>
+                  {truckLoads(viewing).length === 0 ? (
+                    <div className="item-card rounded-xl px-3.5 py-2.5 text-[12px] text-slate-400">The Checker has not counted this truck yet.</div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      {truckLoads(viewing).map((l) => {
+                        const ordered = (viewing.items || []).find((it) => it.product_type === l.product_type)?.quantity_ordered;
+                        return (
+                          <div key={l.id} className="item-card flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5">
+                            <span className="text-slate-700">
+                              {productLabel(l.product_type)}
+                              <span className="block text-[11px] text-slate-400">{l.checker?.name || "Checker"} · {dateTime12(l.created_at, { year: false })}</span>
+                            </span>
+                            <span className={`font-mono text-right ${ordered != null && Number(ordered) !== Number(l.quantity_loaded) ? "text-amber-600 font-medium" : "text-slate-500"}`}>
+                              {l.quantity_loaded} loaded{ordered != null ? ` of ${ordered}` : ""}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
               <SameDayChanges delivery={viewing} onChanged={refreshAll} />
               {proofs[viewing.id] && <ProofSection proof={proofs[viewing.id]} />}
             </div>

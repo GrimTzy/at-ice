@@ -238,7 +238,8 @@ class LiveFeed
                 // Admin (always notified) reviews a new proof. On approval the
                 // invoice's own "Paid" notice reaches the customer.
                 $no = $m->receipt?->receipt_no ?? "#{$m->receipt_id}";
-                if ($a === 'created') {
+                // a proof Admin attached on Mark as Paid needs no review
+                if ($a === 'created' && $m->status === 'pending') {
                     return ['receipts', "Payment proof for Invoice {$no} sent by ".($m->customer?->name ?? 'a customer'), []];
                 }
                 if ($a === 'updated' && $m->status === 'rejected') {

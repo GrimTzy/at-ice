@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\LoginLockout;
+use App\Support\SessionIdle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
@@ -57,10 +58,17 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $newToken = $user->createToken('auth_token');
+        // Only the sign-ins that have an idle limit are tracked; nothing is kept
+        // for the employees on their phones.
+        if (SessionIdle::minutesFor($user)) {
+            SessionIdle::touch($newToken->accessToken);
+        }
 
         return response()->json([
-            'token' => $token,
+            'token' => $newToken->plainTextToken,
+            // minutes of inactivity before sign-out; null = no limit for this role
+            'idle_minutes' => SessionIdle::minutesFor($user),
             'role' => $user->role,
             'sub_role' => $user->sub_role ?? null,
             'must_change_password' => (bool) $user->must_change_password,

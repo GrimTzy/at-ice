@@ -8,6 +8,7 @@
 // amounts are shown here.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import HrLayout from "../../components/HrLayout";
 import { plural } from "../../lib/plural";
 import { SkeletonList } from "../../components/Skeleton";
@@ -149,7 +150,7 @@ export default function TimesheetsPage() {
 
       <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
         <div className="px-[18px] py-3 border-b border-black/[0.09] text-[11px] text-slate-400">
-          From the Attendance Station and approved leave. Approving makes the payroll; pay it in Payroll. Pay amounts are not shown here. Tick the overtime to approve it with the timesheet; overtime not approved is not paid.
+          <b className="font-semibold text-slate-600">Step 1 of 2.</b> Hours come from the Attendance Station and approved leave. Approving makes the payroll; step 2 is paying it in <Link to="/hr/payroll" className="font-medium text-cyan-700 hover:underline">Payroll</Link>. Pay amounts are not shown here. Tick the overtime to approve it with the timesheet; overtime not approved is not paid.
         </div>
         {loading ? <SkeletonList /> : error ? (
           <div className="px-[18px] py-8 text-center text-[12px] text-red-600">{error}</div>

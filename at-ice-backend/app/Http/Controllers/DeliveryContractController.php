@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
-// Admin > Deliveries > Contracts: one delivery schedule per customer (a whole
+// Admin > CRM > Customers > Contracts: one delivery schedule per customer (a whole
 // chain such as SM, or a single store) with a date range and delivery days.
 // Approving it makes the daily deliveries (App\Support\DeliveryDispatch).
 class DeliveryContractController extends Controller

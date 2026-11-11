@@ -3,44 +3,43 @@ import { toast } from "../../../lib/toast";
 import { useMaxQuantity } from "../../../lib/limits";
 import { QTY_INPUT_PROPS, cleanQty } from "../../../lib/quantity";
 import { api, todayStr, shortDate, timeOf, DAYS, daysLabel, PRODUCT_TYPES, productLabel, storeName, ymd, inputCls, labelCls, btnPrimary, btnGhost } from "./utils";
-import { Modal } from "./shared";
+import { Modal, PlusIcon } from "./shared";
 import Req from "../../../components/Req";
 
 const CONTRACT_BADGE = {
   pending: "bg-amber-50 text-amber-700 border-amber-200",
   approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  ended: "bg-slate-100 text-slate-500 border-slate-200",
   cancelled: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
-// Contracts: one delivery schedule per store, a date range and delivery days.
-// Approving it makes every daily delivery, so nobody fills in a form each day.
-// A contract is made from its store's row (CRM > Customers > Contract), so
-// this tab only lists, approves and cancels them (owner, 2026-11-10).
-// The page toolbar passes `search`, `type` (customer type) and `status`.
-export default function ContractsTab({ live, onChanged, search = "", type = "", status = "all", onLoaded }) {
-  const [contracts, setContracts] = useState([]);
-  const [loading, setLoading] = useState(true);
+// An approved contract past its end date shows as ended
+const shownStatus = (c) => (c.status === "approved" && c.end_date < todayStr() ? "ended" : c.status);
+
+// A store's delivery contracts, opened from its Contract button (CRM >
+// Customers). One schedule per store with a date range and delivery days.
+// Admin makes one here (ContractForm), then approves it, which makes every
+// daily delivery, so nobody fills in a form each day; cancelling stops the
+// upcoming ones. This replaced the Contracts tab in Deliveries (owner,
+// 2026-11-10).
+export function StoreContracts({ store, onClose }) {
+  const [contracts, setContracts] = useState(null);
+  const [making, setMaking] = useState(false);
   const [confirm, setConfirm] = useState(null); // { contract, action }
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
-      setContracts(await api("delivery-contracts"));
+      const list = await api("delivery-contracts");
+      setContracts(list
+        .filter((c) => (c.stores || []).some((s) => s.id === store.id))
+        .sort((a, b) => (b.start_date || "").localeCompare(a.start_date || "") || b.id - a.id));
     } catch (err) {
       toast.error(err.message);
-    } finally {
-      setLoading(false);
+      setContracts([]);
     }
-  }, []);
-  useEffect(() => { load(); }, [load, live]);
-  useEffect(() => { onLoaded?.(contracts); }, [contracts, onLoaded]);
-
-  const shown = contracts.filter((c) =>
-    (status === "all" || c.status === status)
-    && (!type || (c.stores || []).some((s) => (s.customer_type || "dealer") === type))
-    && (!search || `${c.name} ${c.contract_no} ${c.chain || ""} ${(c.stores || []).map((s) => s.name).join(" ")}`.toLowerCase().includes(search)));
-  const narrowed = !!(search || type || status !== "all");
+  }, [store.id]);
+  useEffect(() => { load(); }, [load]);
 
   async function act() {
     const { contract, action } = confirm;
@@ -50,7 +49,6 @@ export default function ContractsTab({ live, onChanged, search = "", type = "", 
       toast.success(res.message);
       setConfirm(null);
       load();
-      onChanged();
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -58,71 +56,83 @@ export default function ContractsTab({ live, onChanged, search = "", type = "", 
     }
   }
 
-  return (
-    <div className="p-[18px] flex flex-col gap-3">
-      <p className="text-[12px] text-slate-500 max-w-2xl">
-        One schedule per store with a date range and delivery days. Make one from the store's Contract button in CRM &gt; Customers. Once Admin approves it here, the daily deliveries are made automatically and go to the store's assigned driver (Driver Stores tab).
-      </p>
+  if (making) {
+    return <ContractForm store={store} onClose={() => setMaking(false)} onSaved={() => { setMaking(false); load(); }} />;
+  }
 
-      <div className="overflow-x-auto lg:overflow-visible rounded-xl border border-black/[0.09]">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="text-left text-slate-400 text-[11px] uppercase tracking-widest">
-              <th className="px-3 py-2.5 font-medium">Contract</th>
-              <th className="px-3 py-2.5 font-medium">Stores</th>
-              <th className="px-3 py-2.5 font-medium">Dates</th>
-              <th className="px-3 py-2.5 font-medium">Days</th>
-              <th className="px-3 py-2.5 font-medium">Items per store</th>
-              <th className="px-3 py-2.5 font-medium">Deliveries</th>
-              <th className="px-3 py-2.5 font-medium">Status</th>
-              <th className="px-3 py-2.5 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && contracts.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">Loading…</td></tr>}
-            {!loading && shown.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">{narrowed && contracts.length ? "No contracts match this filter." : "No contracts yet. Make one with a store's Contract button in CRM > Customers."}</td></tr>}
-            {shown.map((c) => (
-              <tr key={c.id} className="border-t border-black/[0.06] align-top">
-                <td className="px-3 py-2.5">
-                  <div className="text-slate-800 font-medium">{c.name}</div>
-                  <div className="text-[11px] text-slate-400 font-mono">{c.contract_no}{c.chain ? ` · ${c.chain}` : ""}</div>
-                </td>
-                <td className="px-3 py-2.5 text-slate-600" title={(c.stores || []).map((s) => s.name).join("\n")}>
-                  {(c.stores || []).length}
-                </td>
-                <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{shortDate(c.start_date)} – {shortDate(c.end_date)}</td>
-                <td className="px-3 py-2.5 text-slate-600">{daysLabel(c.delivery_days)}<div className="text-[11px] text-slate-400">by {timeOf(c.delivery_time)}</div></td>
-                <td className="px-3 py-2.5 text-slate-600">{(c.items || []).map((i) => `${i.quantity} × ${productLabel(i.product_type)}`).join(", ")}</td>
-                <td className="px-3 py-2.5 text-slate-600 tabular-nums">
-                  {c.status === "pending" ? <span className="text-slate-400">{c.planned} to make</span> : `${c.delivered_count} / ${c.deliveries_count} delivered`}
-                </td>
-                <td className="px-3 py-2.5">
-                  <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${CONTRACT_BADGE[c.status] || ""}`}>{c.status}</span>
-                  {c.approved_by && <div className="text-[11px] text-slate-400 mt-1">by {c.approved_by.name}</div>}
-                </td>
-                <td className="px-3 py-2.5">
-                  <div className="flex gap-1.5 justify-end">
-                    {c.status === "pending" && (
-                      <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "approve" })} className="px-2 py-1 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[11.5px] font-medium">Approve</button>
-                    )}
-                    {c.status !== "cancelled" && (
-                      <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "cancel" })} className="px-2 py-1 rounded-md border border-black/[0.09] text-red-600 text-[11.5px] hover:bg-red-50">Cancel</button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+  return (
+    <>
+      <Modal title={`Contracts for ${storeName(store)}`} onClose={onClose} wide>
+        <div className="p-5 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[12px] text-slate-500 max-w-xl">
+              Every contract this store has had, newest first, including ended and cancelled ones. Approving a contract makes its daily deliveries, each with the store's assigned driver (Deliveries &gt; Driver Stores).
+            </p>
+            <button type="button" onClick={() => setMaking(true)} className={`${btnPrimary} flex items-center gap-1.5`}>
+              <PlusIcon /> New contract
+            </button>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-black/[0.09]">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-slate-400 text-[11px] uppercase tracking-widest">
+                  <th className="px-3 py-2.5 font-medium">Contract</th>
+                  <th className="px-3 py-2.5 font-medium">Dates</th>
+                  <th className="px-3 py-2.5 font-medium">Days</th>
+                  <th className="px-3 py-2.5 font-medium">Items</th>
+                  <th className="px-3 py-2.5 font-medium">Deliveries</th>
+                  <th className="px-3 py-2.5 font-medium">Status</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contracts === null && <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">Loading…</td></tr>}
+                {contracts?.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">No contracts for this store yet. Make one with New contract.</td></tr>}
+                {(contracts || []).map((c) => (
+                  <tr key={c.id} className="border-t border-black/[0.06] align-top">
+                    <td className="px-3 py-2.5">
+                      <div className="text-slate-800 font-medium font-mono text-[12px]">{c.contract_no}</div>
+                      {(c.stores || []).length > 1 && <span className="cell-note text-[11px] text-slate-400">{c.stores.length} stores{c.chain ? ` · ${c.chain}` : ""}</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{shortDate(c.start_date)} – {shortDate(c.end_date)}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{daysLabel(c.delivery_days)}<span className="cell-note text-[11px] text-slate-400">by {timeOf(c.delivery_time)}</span></td>
+                    <td className="px-3 py-2.5 text-slate-600">{(c.items || []).map((i) => `${i.quantity} × ${productLabel(i.product_type)}`).join(", ")}</td>
+                    <td className="px-3 py-2.5 text-slate-600 tabular-nums">
+                      {c.status === "pending" ? <span className="text-slate-400">{c.planned} to make</span> : `${c.delivered_count} / ${c.deliveries_count} delivered`}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${CONTRACT_BADGE[shownStatus(c)] || ""}`}>{shownStatus(c)}</span>
+                      {c.approved_by && <span className="cell-note text-[11px] text-slate-400">by {c.approved_by.name}</span>}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex gap-1.5 justify-end">
+                        {c.status === "pending" && (
+                          <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "approve" })} className="px-2 py-1 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[11.5px] font-medium">Approve</button>
+                        )}
+                        {["pending", "approved"].includes(shownStatus(c)) && (
+                          <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "cancel" })} className="px-2 py-1 rounded-md border border-black/[0.09] text-red-600 text-[11.5px] hover:bg-red-50">Cancel</button>
+                        )}
+                        {["ended", "cancelled"].includes(shownStatus(c)) && <span className="text-[12px] text-slate-400">History only</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex justify-end pt-3 border-t border-black/[0.09]">
+            <button type="button" onClick={onClose} className={btnGhost}>Close</button>
+          </div>
+        </div>
+      </Modal>
 
       {confirm && (
         <Modal title={confirm.action === "approve" ? "Approve contract?" : "Cancel contract?"} onClose={() => setConfirm(null)}>
           <div className="p-5 flex flex-col gap-4">
             <p className="text-[12.5px] text-slate-600">
               {confirm.action === "approve"
-                ? <>About <b>{confirm.contract.planned}</b> deliveries for <b>{confirm.contract.name}</b> will be made now, from {shortDate(confirm.contract.start_date)} to {shortDate(confirm.contract.end_date)}, each with its store's assigned driver.</>
-                : <>All of <b>{confirm.contract.name}</b>'s upcoming deliveries that have not started will be cancelled. Deliveries in transit or delivered stay.</>}
+                ? <>About <b>{confirm.contract.planned}</b> deliveries under <b>{confirm.contract.contract_no}</b> will be made now, from {shortDate(confirm.contract.start_date)} to {shortDate(confirm.contract.end_date)}, each with its store's assigned driver.</>
+                : <>All upcoming deliveries under <b>{confirm.contract.contract_no}</b> that have not started will be cancelled{(confirm.contract.stores || []).length > 1 ? `, for all ${confirm.contract.stores.length} stores` : ""}. Deliveries in transit or delivered stay.</>}
             </p>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setConfirm(null)} className={btnGhost}>{confirm.action === "approve" ? "Cancel" : "Keep contract"}</button>
@@ -133,7 +143,7 @@ export default function ContractsTab({ live, onChanged, search = "", type = "", 
           </div>
         </Modal>
       )}
-    </div>
+    </>
   );
 }
 
@@ -191,7 +201,7 @@ export function ContractForm({ store, onClose, onSaved }) {
         method: "POST",
         body: { ...form, chain: null, notes: form.notes || null, items: form.items.map((i) => ({ ...i, quantity: Number(i.quantity) })) },
       });
-      toast.success(`Contract ${saved.contract_no} was added. Approve it in Deliveries > Contracts to make the deliveries.`);
+      toast.success(`Contract ${saved.contract_no} was added. Approve it in the list to make the deliveries.`);
       onSaved();
     } catch (err) {
       fail(err.message);

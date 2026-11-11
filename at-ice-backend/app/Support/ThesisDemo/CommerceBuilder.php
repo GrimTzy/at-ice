@@ -522,7 +522,7 @@ class CommerceBuilder
             'K3a', 'K3b' => $age > 15 ? 14 : null,
             'K4' => $age > 5 ? 3 : null,
         };
-        $status = $paidAfter !== null ? 'paid' : ($age > 15 ? 'overdue' : 'unpaid');
+        $status = $paidAfter !== null ? 'paid' : ($age >= \App\Models\Receipt::OVERDUE_DAYS ? 'overdue' : 'unpaid');
         $paidAt = $paidAfter !== null ? $at->addDays($paidAfter)->setTime(14, 0)->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s') : null;
         $created = $at->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');
 

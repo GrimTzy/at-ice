@@ -31,4 +31,28 @@ return [
         'ip' => ['failures' => 40, 'window' => 900, 'lock' => 900],
     ],
 
+    // Sign-out after inactivity (App\Support\SessionIdle, middleware idle). Minutes
+    // without any action before the session ends, whether the page stays open,
+    // the tab is closed or the computer is switched off. Only the desktop
+    // portals have it: Admin, HR and Customer. null = no idle limit: the
+    // employees (Checker, Salesman, Maintenance, Driver) work on phones in the
+    // field, with the phone in a pocket between jobs, so they are never signed
+    // out for being idle; their sessions still end by the token expiry in
+    // config/sanctum.php. Employees are told apart by their sub role. The web
+    // app shows a countdown and signs out by itself at the same time; `grace`
+    // only absorbs the delay between the two so a busy person is never cut off
+    // by a race.
+    'session_idle' => [
+        'minutes' => [
+            'admin' => (int) env('IDLE_MINUTES_ADMIN', 30),
+            'hr' => (int) env('IDLE_MINUTES_HR', 30),
+            'customer' => (int) env('IDLE_MINUTES_CUSTOMER', 30),
+            'checker' => null,
+            'maintenance' => null,
+            'salesman' => null,
+            'driver' => null,
+        ],
+        'grace' => 60,
+    ],
+
 ];

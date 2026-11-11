@@ -450,6 +450,9 @@ class BiController extends Controller
             'low_stock' => $lowStock,
             'out_of_stock' => $outOfStock,
             'critical_items' => $criticalItems,
+            // items (often new ones from the Checker) that still need Admin's min/max
+            'no_limits' => $products->filter(fn ($p) => $p->minimum_stock === null || $p->maximum_stock === null)
+                ->sortByDesc('id')->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->values(),
             'projects' => $projects,
         ]);
     }
@@ -576,7 +579,7 @@ class BiController extends Controller
     // GET /api/bi/overdue-receipts
     // Returns: receipts that are overdue. Counts BOTH receipts already marked
     // "overdue" (the Receipts page marks them) AND unpaid receipts older than
-    // 15 days that have not been marked yet. Previously only "unpaid" was
+    // OVERDUE_DAYS (14) that have not been marked yet. Previously only "unpaid" was
     // counted, so the card showed 0 once the Receipts page had marked them.
     public function overdueReceipts()
     {
@@ -598,7 +601,8 @@ class BiController extends Controller
                 'receipt_no' => $r->receipt_no,
                 'total_amount' => (float) $r->total_amount,
                 'created_at' => $r->created_at->toDateString(),
-                'days_overdue' => (int) $r->created_at->diffInDays(Carbon::now()),
+                // days past the due date, not the invoice's age
+                'days_overdue' => max(0, (int) $r->created_at->diffInDays(Carbon::now()) - self::OVERDUE_DAYS),
                 'customer_name' => $r->delivery?->customer?->name ?? 'N/A',
                 'customer_id' => $r->customer_id,
             ]);

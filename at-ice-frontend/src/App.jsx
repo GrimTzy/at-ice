@@ -10,6 +10,7 @@ import Toaster from './components/Toaster'
 import ActionGuard from './components/ActionGuard'
 import AttachmentViewer from './components/AttachmentViewer'
 import OverflowTitle from './components/OverflowTitle'
+import IdleGuard from './components/IdleGuard'
 import RouteLoading from './components/RouteLoading'
 import { DestinationWatcher } from './lib/destination'
 import { installHeroPulse } from './lib/heroPulse'
@@ -89,6 +90,7 @@ function App() {
       <ActionGuard />
       <AttachmentViewer />
       <OverflowTitle />
+      <IdleGuard />
       <DestinationWatcher />
       {/* Pages load on demand (React.lazy); the loader fades in only if a page is slow */}
       <Suspense fallback={<RouteLoading />}>

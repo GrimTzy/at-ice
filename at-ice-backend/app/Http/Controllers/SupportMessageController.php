@@ -50,32 +50,29 @@ class SupportMessageController extends Controller
         }
 
         $data = $request->validate([
-            'topic' => ['required', Rule::in(array_keys(SupportMessage::TOPICS))],
+            'topic' => ['required', Rule::in(array_diff(array_keys(SupportMessage::TOPICS), SupportMessage::RETIRED_TOPICS))],
             'message' => 'required|string|min:5|max:2000',
         ]);
 
-        // Limits (Emergency Ice Shortage is never blocked): one open ticket per
-        // topic, the customer adds to it with Reply; and at most
-        // support.max_open_tickets open tickets at once.
-        if (! in_array($data['topic'], SupportMessage::UNLIMITED_TOPICS, true)) {
-            $active = SupportMessage::where('customer_id', $customer->id)->whereIn('status', SupportMessage::ACTIVE);
+        // Limits: one open ticket per topic, the customer adds to it with Reply;
+        // and at most support.max_open_tickets open tickets at once.
+        $active = SupportMessage::where('customer_id', $customer->id)->whereIn('status', SupportMessage::ACTIVE);
 
-            $same = (clone $active)->where('topic', $data['topic'])->value('ticket_no');
-            if ($same) {
-                return response()->json([
-                    'message' => "You already have an open ticket about this ({$same}). Add to it with Reply instead.",
-                    'errors' => ['topic' => ["You already have an open ticket about this ({$same}). Add to it with Reply instead."]],
-                    'ticket_no' => $same,
-                ], 422);
-            }
+        $same = (clone $active)->where('topic', $data['topic'])->value('ticket_no');
+        if ($same) {
+            return response()->json([
+                'message' => "You already have an open ticket about this ({$same}). Add to it with Reply instead.",
+                'errors' => ['topic' => ["You already have an open ticket about this ({$same}). Add to it with Reply instead."]],
+                'ticket_no' => $same,
+            ], 422);
+        }
 
-            $max = (int) Settings::get('support.max_open_tickets');
-            if ($active->count() >= $max) {
-                return response()->json([
-                    'message' => "You have {$max} open tickets. Please wait for one to be resolved, or add to an open one with Reply.",
-                    'errors' => ['topic' => ["You have {$max} open tickets. Please wait for one to be resolved, or add to an open one with Reply."]],
-                ], 422);
-            }
+        $max = (int) Settings::get('support.max_open_tickets');
+        if ($active->count() >= $max) {
+            return response()->json([
+                'message' => "You have {$max} open tickets. Please wait for one to be resolved, or add to an open one with Reply.",
+                'errors' => ['topic' => ["You have {$max} open tickets. Please wait for one to be resolved, or add to an open one with Reply."]],
+            ], 422);
         }
 
         $message = SupportMessage::create([
@@ -118,7 +115,10 @@ class SupportMessageController extends Controller
     public function index()
     {
         return response()->json([
-            'messages' => SupportMessage::with(self::DETAIL)->withCount('replies')->latest()->limit(500)->get(),
+            // last_customer_reply_at: the inbox shows "New" when the customer wrote since Admin last opened it
+            'messages' => SupportMessage::with(self::DETAIL)->withCount('replies')
+                ->withMax(['replies as last_customer_reply_at' => fn ($q) => $q->where('kind', 'customer')], 'created_at')
+                ->latest()->limit(500)->get(),
             'open_count' => SupportMessage::where('status', 'open')->count(),
             'escalated_count' => SupportMessage::whereNotNull('escalated_at')->whereIn('status', SupportMessage::ACTIVE)->count(),
             'overdue_hours' => (int) Settings::get('support.overdue_hours'),

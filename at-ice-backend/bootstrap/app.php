@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'password.changed' => \App\Http\Middleware\EnsurePasswordChanged::class,
             'kiosk' => \App\Http\Middleware\EnsureKioskToken::class,
             'timed.in' => \App\Http\Middleware\EnsureTimedIn::class,
+            'idle' => \App\Http\Middleware\EnforceIdleTimeout::class,
         ]);
         // Check the role before route model binding, so a wrong role gets 403 on
         // every route, not 404 for ids that do not exist (which showed which ids do).

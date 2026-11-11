@@ -194,7 +194,7 @@ class CustomerPortalController extends Controller
         Receipt::markOverdue();
 
         // delivery and customer are sent too, for the printable receipt.
-        $receipts = Receipt::with(['items', 'delivery', 'customer', 'paymentProofs'])
+        $receipts = Receipt::with(['items', 'delivery', 'delivery.driver:id,name', 'customer', 'paymentProofs'])
             ->where('customer_id', $customer->id)
             ->latest()
             ->get();

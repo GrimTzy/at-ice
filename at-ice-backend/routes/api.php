@@ -87,12 +87,15 @@ Route::post('attendances', [AttendanceController::class, 'store'])->middleware([
 // Live feed (realtime pop-up notices, polled every few seconds by every open
 // page; see App\Support\LiveFeed). Own limit so polling never eats the api one.
 Route::get('live-feed', [LiveFeedController::class, 'index'])
-    ->middleware(['auth:sanctum', 'password.changed', 'throttle:40,1,live']);
+    ->middleware(['auth:sanctum', 'idle:passive', 'password.changed', 'throttle:40,1,live']);
 
-Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->group(function () {
+Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,api'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    // The web app sends this while the person is working, so a page they are
+    // reading (no requests of their own) does not count as idle.
+    Route::post('/session/ping', fn () => response()->json(['ok' => true]));
     // Whether the signed-in employee or Driver has timed in at the kiosk
     // (Checker, Salesman, Maintenance and Driver pages).
     Route::get('my-time-in', fn (\Illuminate\Http\Request $request) => response()->json([

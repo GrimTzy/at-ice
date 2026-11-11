@@ -20,7 +20,7 @@ import { ActivityFeed, ProgressRing, StatusBreakdown } from "../../components/In
 import { Icon } from "../../components/icons";
 import { focusRecord } from "../../lib/destination";
 import { plural } from "../../lib/plural";
-import { ContractForm } from "./deliveries/ContractsTab";
+import { StoreContracts } from "./deliveries/StoreContracts";
 
 const API_BASE = "/api";
 
@@ -118,7 +118,7 @@ export default function CustomersPage() {
   const [creatingAccountFor, setCreatingAccountFor] = useState(null);
   // Why Create Login failed, shown under that customer's button: { id, message }
   const [accountError, setAccountError] = useState(null);
-  const [contractFor, setContractFor] = useState(null); // customer whose delivery contract is being made
+  const [contractFor, setContractFor] = useState(null); // customer whose delivery contracts are open
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -447,7 +447,7 @@ export default function CustomersPage() {
               {!loading && pager.pageItems.map((c) => (
                 <tr key={c.id} data-row-key={c.id} className="border-t border-black/[0.06]">
                   <td className="px-[18px] py-2.5">
-                    <div className="font-medium text-slate-800">{c.name}</div>
+                    <button type="button" onClick={() => setContractFor(c)} title="Contract history" className="font-medium text-slate-800 text-left hover:text-cyan-700 hover:underline underline-offset-2">{c.name}</button>
                     <div className="text-[11px] text-slate-400">{c.invoice_code && <span className="mr-1 px-1.5 py-px rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-semibold">{c.invoice_code}</span>}{c.customer_code}{c.branch_code ? ` · ${c.branch_code}` : ""}</div>
                   </td>
                   <td className="px-[18px] py-2.5 text-slate-600">
@@ -505,8 +505,8 @@ export default function CustomersPage() {
                       <button
                         onClick={() => setContractFor(c)}
                         className="p-1.5 rounded-md border border-transparent bg-cyan-500 hover:bg-cyan-600 text-white"
-                        title="Contract"
-                        aria-label={`Delivery contract for ${c.name}`}
+                        title="Contracts"
+                        aria-label={`Delivery contracts for ${c.name}`}
                       >
                         <ContractIcon />
                       </button>
@@ -685,14 +685,8 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Delivery contract for one store (same form as Deliveries > Contracts) */}
-      {contractFor && (
-        <ContractForm
-          store={contractFor}
-          onClose={() => setContractFor(null)}
-          onSaved={() => setContractFor(null)}
-        />
-      )}
+      {/* The store's delivery contracts: make, approve and cancel them */}
+      {contractFor && <StoreContracts store={contractFor} onClose={() => setContractFor(null)} />}
 
       {/* Deactivate confirmation */}
       {deactivateTarget && (

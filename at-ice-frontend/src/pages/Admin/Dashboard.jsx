@@ -359,6 +359,17 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Stays until every item has its min and max (Checkers add items without them) */}
+      {(inventory.no_limits || []).length > 0 && (
+        <div role="status" className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-cyan-50 border border-cyan-200 text-[12px] text-cyan-800">
+          <span>
+            {inventory.no_limits.length === 1 ? "1 item needs" : `${inventory.no_limits.length} items need`} a minimum and maximum stock:{" "}
+            <b>{inventory.no_limits.slice(0, 3).map((p) => p.name).join(", ")}{inventory.no_limits.length > 3 ? ", …" : ""}</b>
+          </span>
+          <button onClick={() => navigate("/admin/stock-limits")} className="shrink-0 font-medium underline underline-offset-2 cursor-pointer bg-transparent border-0 p-0 text-cyan-800">Set limits</button>
+        </div>
+      )}
+
       {/* STAT CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-[1.4fr_1fr_1fr_1fr_1fr] gap-3">
 
@@ -948,7 +959,7 @@ export default function Dashboard() {
                 >
                   <div className="text-xs text-slate-800 font-medium truncate">{r.customer_name}</div>
                   <div className="text-xs text-slate-800 font-mono font-semibold">{fmt(r.total_amount)}</div>
-                  <div className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${r.days_overdue > 15 ? "bg-red-100 text-red-500" : "bg-amber-100 text-amber-600"}`}>{plural(r.days_overdue, "day")}</div>
+                  <div className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${r.days_overdue > 14 ? "bg-red-100 text-red-500" : "bg-amber-100 text-amber-600"}`} title="Days past the 14-day due date">{r.days_overdue ? `${plural(r.days_overdue, "day")} late` : "Due today"}</div>
                 </div>
               ))}
             </div>

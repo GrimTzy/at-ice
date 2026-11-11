@@ -76,7 +76,7 @@ class SupportTicketTest extends TestCase
         $this->assertSame(2, DB::table('audit_logs')->whereIn('action', ['support.resolve', 'support.close'])->count());
     }
 
-    public function test_one_open_ticket_per_topic_and_a_cap_on_open_tickets_but_emergencies_always_go_through(): void
+    public function test_one_open_ticket_per_topic_a_cap_on_open_tickets_and_no_emergency_supply_topic(): void
     {
         $this->withoutMiddleware(ThrottleRequests::class); // the rate limit has its own test
 
@@ -91,10 +91,11 @@ class SupportTicketTest extends TestCase
         $this->postJson('/api/my-support-messages', ['topic' => 'wrong_quantity', 'message' => 'Short by two.'])
             ->assertStatus(422)->assertJsonValidationErrors('topic');
 
-        $this->postJson('/api/my-support-messages', ['topic' => 'emergency_supply', 'message' => 'Need 20 sacks now.'])->assertCreated();
-        $this->postJson('/api/my-support-messages', ['topic' => 'emergency_supply', 'message' => 'Need 20 more.'])->assertCreated();
+        // emergency supply is no longer offered: the client does not allow emergency deliveries
+        $this->postJson('/api/my-support-messages', ['topic' => 'emergency_supply', 'message' => 'Need 20 sacks now.'])
+            ->assertStatus(422)->assertJsonValidationErrors('topic');
 
-        // once resolved, the same topic can be filed again (emergencies count toward the cap, so raise it)
+        // once resolved, the same topic can be filed again
         Settings::set('support.max_open_tickets', 10);
         Sanctum::actingAs($this->admin);
         $this->patchJson("/api/support-messages/{$id}/resolve", ['resolution_note' => 'Delivered late, apologized'])->assertOk();
