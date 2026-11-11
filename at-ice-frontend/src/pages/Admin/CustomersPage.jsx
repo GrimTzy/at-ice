@@ -585,6 +585,7 @@ export default function CustomersPage() {
                 <div className="col-span-2">
                   <Field
                     label="Branch / Business Name"
+                    maxLength={50}
                     value={form.name}
                     onChange={(v) => setForm((f) => {
                       // The type follows the name while it is blank or still
@@ -633,7 +634,7 @@ export default function CustomersPage() {
                     Customer Code and Branch Code are generated when you save.
                   </p>
                 )}
-                <Field label="Contact Person" value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required={need("contact_person")} />
+                <Field label="Contact Person" maxLength={50} value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required={need("contact_person")} />
                 <div>
                   <label htmlFor="customer-contact-number" className="text-[11px] text-slate-500 mb-1 block">Contact Number{need("contact_number") && <Req />}</label>
                   <PhoneInput
@@ -818,7 +819,7 @@ export default function CustomersPage() {
   );
 }
 
-function Field({ label, value, onChange, required, disabled, placeholder, inputMode, type = "text", multiline = false }) {
+function Field({ label, value, onChange, required, disabled, placeholder, inputMode, maxLength, type = "text", multiline = false }) {
   const Tag = multiline ? "textarea" : "input";
   const id = useId();
   return (
@@ -835,6 +836,7 @@ function Field({ label, value, onChange, required, disabled, placeholder, inputM
         disabled={disabled}
         placeholder={placeholder}
         inputMode={inputMode}
+        maxLength={maxLength}
         className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
       />
     </div>

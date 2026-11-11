@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Pagination from "../../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../../lib/usePagination";
 import { toast } from "../../../lib/toast";
 import { useMaxQuantity } from "../../../lib/limits";
 import { QTY_INPUT_PROPS, cleanQty } from "../../../lib/quantity";
@@ -57,6 +59,8 @@ export function StoreContracts({ store, contract: running = null, onClose, onCha
     }
   }
 
+  const pager = usePagination(contracts || []);
+
   if (making) {
     return <ContractForm store={store} contract={running} onClose={() => setMaking(false)} onSaved={() => { setMaking(false); load(); onChanged(); }} />;
   }
@@ -89,14 +93,14 @@ export function StoreContracts({ store, contract: running = null, onClose, onCha
               <tbody>
                 {contracts === null && <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">Loading…</td></tr>}
                 {contracts?.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">No contracts for this store yet. Make one with New contract.</td></tr>}
-                {(contracts || []).map((c) => (
+                {pager.pageItems.map((c) => (
                   <tr key={c.id} className="border-t border-black/[0.06] align-top">
                     <td className="px-3 py-2.5">
                       <div className="text-slate-800 font-medium font-mono text-[12px]">{c.contract_no}</div>
                       {(c.stores || []).length > 1 && <span className="cell-note text-[11px] text-slate-400">{c.stores.length} stores{c.chain ? ` · ${c.chain}` : ""}</span>}
                     </td>
                     <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{shortDate(c.start_date)} – {shortDate(c.end_date)}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{daysLabel(c.delivery_days)}<span className="cell-note text-[11px] text-slate-400">by {timeOf(c.delivery_time)}</span></td>
+                    <td className="px-3 py-2.5 text-slate-600">{daysLabel(c.delivery_days)}<span className="cell-note text-[11px] text-slate-400">{c.delivery_from ? `${timeOf(c.delivery_from)}–${timeOf(c.delivery_time)}` : `by ${timeOf(c.delivery_time)}`}</span></td>
                     <td className="px-3 py-2.5 text-slate-600">{(c.items || []).map((i) => `${i.quantity} × ${productLabel(i.product_type)}`).join(", ")}</td>
                     <td className="px-3 py-2.5 text-slate-600 tabular-nums">
                       {c.status === "pending" ? <span className="text-slate-400">{c.planned} to make</span> : `${c.delivered_count} / ${c.deliveries_count} delivered`}
@@ -120,6 +124,7 @@ export function StoreContracts({ store, contract: running = null, onClose, onCha
                 ))}
               </tbody>
             </table>
+            {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} />}
           </div>
           <div className="flex justify-end pt-3 border-t border-black/[0.09]">
             <button type="button" onClick={onClose} className={btnGhost}>Close</button>
@@ -160,10 +165,11 @@ export function ContractForm({ store = null, contract = null, onClose, onSaved }
     name: contract.name, chain: contract.chain || "", store_ids: (contract.stores || []).map((s) => s.id),
     start_date: String(contract.start_date).slice(0, 10), end_date: String(contract.end_date).slice(0, 10),
     delivery_days: contract.delivery_days || [], delivery_time: String(contract.delivery_time || "08:00").slice(0, 5),
+    delivery_from: contract.delivery_from ? String(contract.delivery_from).slice(0, 5) : "",
     items: (contract.items || []).map((i) => ({ product_type: i.product_type, quantity: String(i.quantity) })), notes: contract.notes || "",
   } : {
     name: store ? store.name : "", chain: "", store_ids: store ? [store.id] : [], start_date: todayStr(), end_date: "",
-    delivery_days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], delivery_time: "08:00",
+    delivery_days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], delivery_from: "06:00", delivery_time: "08:00",
     items: [{ product_type: "", quantity: "" }], notes: "",
   }));
   const [saving, setSaving] = useState(false);
@@ -184,6 +190,8 @@ export function ContractForm({ store = null, contract = null, onClose, onSaved }
     e.preventDefault();
     if (!form.end_date || form.end_date < form.start_date) return fail("The end date must be on or after the start date.");
     if (!form.delivery_days.length) return fail("Pick at least one delivery day.");
+    if (!form.delivery_from) return fail("Pick the time the delivery window opens.");
+    if (form.delivery_from >= form.delivery_time) return fail("The window must open before the Deliver by time.");
     if (form.items.some((i) => !i.product_type || !(Number(i.quantity) >= 1))) return fail("Pick a product and a quantity of at least 1 for every item.");
     setSaving(true);
     try {
@@ -213,19 +221,27 @@ export function ContractForm({ store = null, contract = null, onClose, onSaved }
           <label htmlFor="contract-branch" className={labelCls}>Branch name</label>
           <input id="contract-branch" name="branch_name" value={storeName(store)} readOnly aria-readonly="true" className={`${inputCls} cursor-default`} />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="contract-from" className={labelCls}>From<Req /></label>
+            <label htmlFor="contract-from" className={labelCls}>Start date<Req /></label>
             <input id="contract-from" name="start_date" type="date" required min={editing ? undefined : todayStr()} max={yearAhead} value={form.start_date} onChange={(e) => set({ start_date: e.target.value })} className={inputCls} />
           </div>
           <div>
-            <label htmlFor="contract-to" className={labelCls}>To<Req /></label>
+            <label htmlFor="contract-to" className={labelCls}>End date<Req /></label>
             <input id="contract-to" name="end_date" type="date" required min={form.start_date} max={yearAhead} value={form.end_date} onChange={(e) => set({ end_date: e.target.value })} className={inputCls} />
           </div>
+        </div>
+        {/* The time window: the ice may arrive from the first time, and must by the second (a deadline) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="contract-deliver-by" className={labelCls}>Deliver by<Req /></label>
+            <label htmlFor="contract-deliver-from" className={labelCls}>Deliver from<Req /></label>
+            <TimeSelect id="contract-deliver-from" required value={form.delivery_from} onChange={(e) => set({ delivery_from: e.target.value })} className="w-full" selectClassName={`${inputCls} flex-1 min-w-0`} />
+          </div>
+          <div>
+            <label htmlFor="contract-deliver-by" className={labelCls}>Deliver by (latest)<Req /></label>
             <TimeSelect id="contract-deliver-by" required value={form.delivery_time} onChange={(e) => set({ delivery_time: e.target.value })} className="w-full" selectClassName={`${inputCls} flex-1 min-w-0`} />
           </div>
+          <p className="sm:col-span-2 -mt-1.5 text-[11px] text-slate-400">The store gets its ice inside this window, e.g. 6:00–8:00 AM for a mall that opens at 9:00.</p>
         </div>
         <div>
           <div className={labelCls}>Delivery days<Req /></div>

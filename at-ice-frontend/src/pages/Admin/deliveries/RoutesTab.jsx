@@ -212,7 +212,7 @@ function RouteForm({ route, routes, stores, onClose, onSaved }) {
         {error && <div role="alert" className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div>
           <label htmlFor="route-name" className={labelCls}>Route name<Req /></label>
-          <input id="route-name" name="name" required maxLength={60} value={name} onChange={(e) => { setName(e.target.value); setError(""); }} placeholder="e.g. Route A" className={inputCls} />
+          <input id="route-name" name="name" required maxLength={50} value={name} onChange={(e) => { setName(e.target.value); setError(""); }} placeholder="e.g. Route A" className={inputCls} />
         </div>
         <div>
           <div className={labelCls}>Stores on this route</div>

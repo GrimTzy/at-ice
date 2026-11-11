@@ -47,14 +47,6 @@ const isEscalated = (t) => Boolean(t.escalated_at) && isActive(t);
 const utc = (v) => (v ? new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(v) ? v : `${String(v).replace(" ", "T")}Z`).getTime() : 0);
 const lastActivity = (t) => Math.max(utc(t.created_at), utc(t.last_customer_reply_at));
 
-// When this Admin last opened each ticket, kept in this browser
-const SEEN_KEY = "support:seen";
-function readSeen() {
-  try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || {}; } catch { return {}; }
-}
-function saveSeen(seen) {
-  try { localStorage.setItem(SEEN_KEY, JSON.stringify(seen)); } catch { /* private window */ }
-}
 
 const NewPill = () => (
   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap bg-cyan-50 text-cyan-800 border-cyan-200">New</span>
@@ -102,6 +94,7 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
   const [escalating, setEscalating] = useState(false);
   const [reason, setReason] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const [showDetails, setShowDetails] = useState(true);
 
   const load = useCallback(async () => {
     setError("");
@@ -199,6 +192,14 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
       </div>
 
       <div className="px-5 py-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Details</div>
+          <button type="button" data-no-confirm onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}
+            className="text-[12px] font-medium text-cyan-700 hover:underline cursor-pointer">
+            {showDetails ? "Hide details" : "Show details"}
+          </button>
+        </div>
+        {showDetails && (
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-[12px]">
           <div className="min-w-0">
             <div className="text-[11px] text-slate-400">Customer</div>
@@ -234,6 +235,7 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
             </select>
           </label>
         </div>
+        )}
 
         {t.escalated_at && (
           <div className="rounded-lg border border-rose-200 bg-rose-50/60 px-3 py-2">
@@ -396,18 +398,16 @@ export default function SupportInboxPage() {
   const [error, setError] = useState("");
   const [selected, setSelectedId] = useState(null);
   const [sort, setSort] = useState("newest");
-  const [seen, setSeen] = useState(readSeen);
+  // tickets opened in this visit, before the list reloads with their read_at
+  const [opened, setOpened] = useState({});
 
-  // A ticket counts as New until Admin opens it after the customer's last message
-  const isNew = useCallback((t) => isActive(t) && t.id !== selected && lastActivity(t) > (seen[t.id] || 0), [seen, selected]);
+  // A ticket counts as New until this Admin opens it after the customer's last
+  // message (read_at is saved on the server when the ticket is opened)
+  const isNew = useCallback((t) => isActive(t) && t.id !== selected
+    && lastActivity(t) > Math.max(utc(t.read_at), opened[t.id] || 0), [opened, selected]);
   const setSelected = useCallback((id) => {
     setSelectedId(id);
-    if (id == null) return;
-    setSeen((prev) => {
-      const next = { ...prev, [id]: Date.now() };
-      saveSeen(next);
-      return next;
-    });
+    if (id != null) setOpened((prev) => ({ ...prev, [id]: Date.now() }));
   }, []);
 
   const load = useCallback(async () => {

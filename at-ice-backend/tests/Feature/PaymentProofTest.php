@@ -72,7 +72,9 @@ class PaymentProofTest extends TestCase
         $this->submit()->assertStatus(422);
 
         // The customer sees it on the invoice and can open their own file.
-        $this->getJson('/api/my-receipts')->assertOk()->assertJsonPath('0.payment_proofs.0.status', 'pending');
+        $this->getJson('/api/my-receipts')->assertOk()->assertJsonPath('0.payment_proofs.0.status', 'pending')
+            // the printed invoice names the salesman like the Admin's copy; only the name is sent
+            ->assertJsonPath('0.salesman.name', 'Salesman')->assertJsonMissingPath('0.salesman.email');
         $this->get("/api/my-payment-proofs/{$proof->id}/file")->assertOk();
     }
 
@@ -115,7 +117,9 @@ class PaymentProofTest extends TestCase
         // The overdue count is not reset: the invoice date is unchanged.
         $this->assertTrue($receipt->created_at->eq($created));
         $this->assertTrue(DB::table('audit_logs')->where('action', 'payment_proof.rejected')->where('subject_id', $proof->id)->exists());
-        $this->assertTrue(LiveEvent::where('message', 'like', '%was rejected: The reference number does not match.')->exists());
+        $notice = LiveEvent::where('message', 'like', '%was rejected: The reference number does not match.')->firstOrFail();
+        // the customer re-sends it and the invoice's Salesman, who collects, is told too
+        $this->assertEqualsCanonicalizing([$this->customerUser->id, $receipt->salesman_id], $notice->user_ids);
 
         // The customer sees the reason and may send a new proof.
         Sanctum::actingAs($this->customerUser);

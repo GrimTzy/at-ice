@@ -10,7 +10,7 @@ import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
-import { StopMeta, ArrivalChips } from "../../components/RouteParts";
+import { StopMeta, ArrivalChips, RouteOrderNote } from "../../components/RouteParts";
 import { pressArrived } from "../../lib/route";
 import { toast } from "../../lib/toast";
 import { KpiIcon } from "../../components/Kpi";
@@ -162,6 +162,8 @@ export default function SalesmanDashboard() {
           {query ? "No delivery matches your search." : delivered ? "Deliveries you confirm show here." : crew?.on_shift ? "Your driver has no stops left today." : "Your route shows once a driver has timed in."}
         </EmptyCard>
       )}
+
+      {status === "ready" && !delivered && visible.some((d) => d.stop_no) && <RouteOrderNote />}
 
       {status === "ready" && visible.length > 0 && (
         <div className="grid grid-cols-1 gap-3">

@@ -95,6 +95,7 @@ class CustomerPortalController extends Controller
                 // Deliver by: the latest time it reaches the store, and whether
                 // it made it (on_time, late, overdue, due)
                 'due_at' => $delivery->due_at,
+                'due_from' => $delivery->due_from, // when its time window opens (may be empty)
                 'timing' => $delivery->timing,
                 // Plate number is folded into the display name on the server,
                 // for example "Rhalf Valencia (PN: V7824)".
@@ -193,8 +194,9 @@ class CustomerPortalController extends Controller
 
         Receipt::markOverdue();
 
-        // delivery and customer are sent too, for the printable receipt.
-        $receipts = Receipt::with(['items', 'delivery', 'delivery.driver:id,name', 'customer', 'paymentProofs'])
+        // delivery, customer and the salesman's name are sent too, so the printed
+        // invoice is the same as the Admin's copy
+        $receipts = Receipt::with(['items', 'delivery', 'delivery.driver:id,name', 'customer', 'salesman:id,name', 'paymentProofs'])
             ->where('customer_id', $customer->id)
             ->latest()
             ->get();

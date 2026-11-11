@@ -13,7 +13,7 @@ import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
-import { StopMeta, ArrivalChips } from "../../components/RouteParts";
+import { StopMeta, ArrivalChips, RouteOrderNote } from "../../components/RouteParts";
 import { pressArrived } from "../../lib/route";
 import { toast } from "../../lib/toast";
 import FilterSelect from "../../components/FilterSelect";
@@ -248,6 +248,7 @@ export function DeliveriesPage() {
         {!loading && visible.length === 0 && (
           <EmptyState icon="truck">No deliveries found.</EmptyState>
         )}
+        {!loading && visible.some((d) => d.route_today && d.stop_no) && <RouteOrderNote />}
         {!loading && pager.pageItems.map((d) => {
           const cfg = STATUS_CONFIG[d.status] || STATUS_CONFIG.pending;
           const open = expanded === d.id;

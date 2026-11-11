@@ -1,3 +1,6 @@
+import Req from "../../components/Req";
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import { useCallback, useEffect, useState } from "react";
 import CustomerLayout from "../../components/CustomerLayout";
 import MessageBubble from "../../components/MessageBubble";
@@ -162,6 +165,8 @@ export default function CustomerSupport() {
     }
   };
 
+  const pager = usePagination(history);
+
   return (
     <CustomerLayout pageTitle="Contact Support" breadcrumb="Support">
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-5 items-start">
@@ -191,8 +196,10 @@ export default function CustomerSupport() {
             </label>
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-500">Message / Details</span>
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-500">Message / Details<Req /></span>
               <textarea name="message"
+                required
+                minLength={5}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={4}
@@ -224,7 +231,7 @@ export default function CustomerSupport() {
               <div className="px-1 text-[13px] font-semibold text-slate-800">
                 Your Tickets <span className="text-slate-400 font-normal">· {history.length}</span>
               </div>
-              {history.map((m) => {
+              {pager.pageItems.map((m) => {
                 const s = TICKET_STATUS[statusOf(m)] || TICKET_STATUS.open;
                 return (
                   <div key={m.id} className={`${ICE_CARD} overflow-hidden`}>
@@ -265,6 +272,7 @@ export default function CustomerSupport() {
                   </div>
                 );
               })}
+              {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} />}
             </div>
           )}
         </div>

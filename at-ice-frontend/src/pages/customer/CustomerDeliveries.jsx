@@ -10,7 +10,7 @@ import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
-import { timingPill, deliverByTime } from "../../lib/deliverBy";
+import { timingPill, windowLabel } from "../../lib/deliverBy";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -192,7 +192,7 @@ export default function CustomerDeliveries() {
                         </td>
                         <td className="px-3 py-3 text-slate-600">
                           {fmtDate(d.scheduled_date)}
-                          {d.due_at && <span className="cell-note text-[11px] text-slate-500">by {deliverByTime(d.due_at)}</span>}
+                          {d.due_at && <span className="cell-note text-[11px] text-slate-500">{windowLabel(d.due_from, d.due_at)}</span>}
                           {timingPill(d.timing) && <span className={`cell-note px-1.5 py-px rounded-full text-[10px] font-semibold ${timingPill(d.timing).cls}`}>{timingPill(d.timing).label}</span>}
                         </td>
                         <td className="px-3 py-3 text-slate-600 hidden md:table-cell">{d.driver_name || "Not yet assigned"}</td>
@@ -246,9 +246,9 @@ export default function CustomerDeliveries() {
               </div>
               {selected.due_at && (
                 <div>
-                  <div className="text-slate-400">Deliver by</div>
+                  <div className="text-slate-400">Arrives</div>
                   <div className="text-slate-800 mt-0.5 flex items-center gap-1.5">
-                    {deliverByTime(selected.due_at)}
+                    {windowLabel(selected.due_from, selected.due_at)}
                     {timingPill(selected.timing) && <span className={`px-1.5 py-px rounded-full text-[10px] font-semibold ${timingPill(selected.timing).cls}`}>{timingPill(selected.timing).label}</span>}
                   </div>
                 </div>

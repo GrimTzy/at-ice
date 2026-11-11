@@ -35,6 +35,21 @@ class SupportTicketTest extends TestCase
         return $this->postJson('/api/my-support-messages', ['topic' => $topic, 'message' => 'Please check this.'])->assertCreated()->json('id');
     }
 
+    // The inbox "New" badge: read_at is per Admin and saved when the ticket is opened
+    public function test_opening_a_ticket_marks_it_read_for_that_admin_only(): void
+    {
+        $id = $this->file('late_delivery');
+        $other = User::create(['name' => 'Second Admin', 'email' => 'admin2@atice.cloud', 'password' => 'secret-password', 'role' => 'admin']);
+
+        Sanctum::actingAs($this->admin);
+        $this->assertNull(collect($this->getJson('/api/support-messages')->json('messages'))->firstWhere('id', $id)['read_at']);
+        $this->getJson("/api/support-messages/{$id}")->assertOk();
+        $this->assertNotNull(collect($this->getJson('/api/support-messages')->json('messages'))->firstWhere('id', $id)['read_at']);
+
+        Sanctum::actingAs($other);
+        $this->assertNull(collect($this->getJson('/api/support-messages')->json('messages'))->firstWhere('id', $id)['read_at']);
+    }
+
     public function test_a_message_becomes_a_numbered_ticket_with_a_priority_from_its_topic(): void
     {
         $first = $this->file('staff_conduct');

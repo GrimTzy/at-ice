@@ -152,6 +152,8 @@ class CheckerRulesTest extends TestCase
         $this->putJson("/api/products/{$id}", ['minimum_stock' => 20, 'maximum_stock' => 200])->assertOk();
         $this->assertSame(20, (int) $product->fresh()->minimum_stock);
         $this->assertSame(200, (int) $product->fresh()->maximum_stock);
+        // the Checker's notice says what the Admin set, not just "updated"
+        $this->assertSame('Item Sacks 50kg limits set to min 20, max 200 by Admin', \App\Models\LiveEvent::latest('id')->value('message'));
         $this->putJson("/api/products/{$id}", ['minimum_stock' => 300, 'maximum_stock' => 200])->assertUnprocessable();
     }
 

@@ -11,7 +11,7 @@ class Delivery extends Model
 
     protected $fillable = [
         'delivery_no', 'contract_id', 'driver_id', 'reassigned_from_driver_id', 'customer_id', 'delivery_type',
-        'supplier_id', 'status', 'scheduled_date', 'ordered_at', 'due_at',
+        'supplier_id', 'status', 'scheduled_date', 'ordered_at', 'due_at', 'due_from',
         'dispatched_at', 'delivered_at', 'notes', 'cancel_reason', 'prepared_by',
         'parent_delivery_id', 'is_top_up',
     ];
@@ -27,16 +27,18 @@ class Delivery extends Model
         'scheduled_date' => 'date:Y-m-d',
         'ordered_at' => 'datetime',
         'due_at' => 'datetime',
+        'due_from' => 'datetime',
         'dispatched_at' => 'datetime',
         'delivered_at' => 'datetime',
     ];
 
     protected $appends = ['timing'];
 
-    // Against its Deliver by time (due_at), a deadline: delivered at or before
-    // it is on_time, after it is late; not delivered yet and past it is
-    // overdue, otherwise due. minutes: how late, or how long until it is due.
-    // null for a delivery with no Deliver by time and for a cancelled one.
+    // Against its time window (due_from to due_at; due_at, Deliver by, is the
+    // deadline): delivered at or before the deadline is on_time, after it is
+    // late, and before the window opens is early; not delivered yet and past
+    // the deadline is overdue, otherwise due. minutes: how late or early, or
+    // how long until it is due. null with no Deliver by time and when cancelled.
     public function getTimingAttribute(): ?array
     {
         if (! $this->due_at || $this->status === 'cancelled') {
@@ -44,6 +46,9 @@ class Delivery extends Model
         }
         if ($this->status === 'delivered' && $this->delivered_at) {
             $late = $this->delivered_at->gt($this->due_at);
+            if (! $late && $this->due_from && $this->delivered_at->lt($this->due_from)) {
+                return ['state' => 'early', 'minutes' => (int) $this->delivered_at->diffInMinutes($this->due_from)];
+            }
 
             return ['state' => $late ? 'late' : 'on_time', 'minutes' => $late ? (int) $this->due_at->diffInMinutes($this->delivered_at) : 0];
         }

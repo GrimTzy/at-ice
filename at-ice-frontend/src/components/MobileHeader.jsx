@@ -10,6 +10,7 @@ import LeaveRequestButton from "./LeaveRequestButton";
 import { MyMemosButton } from "./MyMemos";
 import { ScopeStatusRow } from "./NightMode";
 import { Icon } from "./icons";
+import NoticeBell from "./NoticeBell";
 
 // The one top bar of the Driver, Checker, Salesman and Maintenance screens:
 // AT-ICE logo and page title on the left; on the right the
@@ -45,6 +46,7 @@ export default function MobileHeader({ role, title, back = null, status = null, 
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {status}
           {action}
+          <NoticeBell />
           <ProfileMenu name={user?.name || label} email={user?.email} role={label} initials={initialsOf(user?.name, label.slice(0, 2).toUpperCase())} />
         </div>
       </div>

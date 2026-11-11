@@ -242,8 +242,10 @@ class LiveFeed
                 if ($a === 'created' && $m->status === 'pending') {
                     return ['receipts', "Payment proof for Invoice {$no} sent by ".($m->customer?->name ?? 'a customer'), []];
                 }
+                // the customer re-sends it; the invoice's Salesman collects, so
+                // they are told too (QA review, 2026-11-11)
                 if ($a === 'updated' && $m->status === 'rejected') {
-                    return ['receipts', "Your payment proof for Invoice {$no} was rejected: {$m->reject_reason}", [], [$m->customer?->user_id]];
+                    return ['receipts', "Payment proof for Invoice {$no} was rejected: {$m->reject_reason}", [], [$m->customer?->user_id, $m->receipt?->salesman_id]];
                 }
 
                 return null;
@@ -258,6 +260,11 @@ class LiveFeed
                     ['employee:salesman'], [$d?->driver_id]];
 
             case Models\Product::class:
+                // the Admin setting the limits of an item a Checker added says so
+                if ($a === 'updated' && $m->wasChanged(['minimum_stock', 'maximum_stock'])) {
+                    return ['inventory', "Item {$m->name} limits set to min {$m->minimum_stock}, max {$m->maximum_stock}{$by}", ['employee:checker', 'employee:maintenance']];
+                }
+
                 return ['inventory', "Item {$m->name} {$verb}{$by}", ['employee:checker', 'employee:maintenance']];
 
             case Models\InventoryAlert::class:

@@ -27,6 +27,7 @@ use App\Http\Controllers\KioskController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\NavCountController;
 use App\Http\Controllers\LiveFeedController;
+use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PaymentController;
@@ -89,10 +90,14 @@ Route::post('attendances', [AttendanceController::class, 'store'])->middleware([
 // page; see App\Support\LiveFeed). Own limit so polling never eats the api one.
 Route::get('live-feed', [LiveFeedController::class, 'index'])
     ->middleware(['auth:sanctum', 'idle:passive', 'password.changed', 'throttle:40,1,live']);
+// The notice bell reloads itself on a live notice, so it is not activity either
+Route::get('notices', [NoticeController::class, 'index'])
+    ->middleware(['auth:sanctum', 'idle:passive', 'password.changed', 'throttle:40,1,notices']);
 
 Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,api'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('notices/read', [NoticeController::class, 'read']);
     Route::get('/me', [AuthController::class, 'me']);
     // The web app sends this while the person is working, so a page they are
     // reading (no requests of their own) does not count as idle.

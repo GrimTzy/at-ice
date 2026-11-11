@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\Audit;
 use App\Support\Settings;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 // Contact Support as tickets: customers send messages, the Admin (dispatch
@@ -112,12 +113,15 @@ class SupportMessageController extends Controller
 
     // GET /api/support-messages (admin): every ticket, newest first, plus the
     // overdue limit and the people a ticket can be assigned to
-    public function index()
+    public function index(Request $request)
     {
         return response()->json([
-            // last_customer_reply_at: the inbox shows "New" when the customer wrote since Admin last opened it
+            // last_customer_reply_at and read_at (this Admin's): the inbox shows
+            // "New" when the customer wrote since this Admin last opened it
             'messages' => SupportMessage::with(self::DETAIL)->withCount('replies')
                 ->withMax(['replies as last_customer_reply_at' => fn ($q) => $q->where('kind', 'customer')], 'created_at')
+                ->addSelect(['read_at' => DB::table('support_message_reads')->select('read_at')
+                    ->whereColumn('support_message_id', 'support_messages.id')->where('user_id', $request->user()->id)->limit(1)])
                 ->latest()->limit(500)->get(),
             'open_count' => SupportMessage::where('status', 'open')->count(),
             'escalated_count' => SupportMessage::whereNotNull('escalated_at')->whereIn('status', SupportMessage::ACTIVE)->count(),
@@ -127,8 +131,15 @@ class SupportMessageController extends Controller
     }
 
     // GET /api/support-messages/{supportMessage} (admin): one ticket with its thread
+    // Opening a ticket, or acting on it, marks it read for this Admin (the inbox
+    // "New" badge).
     public function show(SupportMessage $supportMessage)
     {
+        DB::table('support_message_reads')->updateOrInsert(
+            ['support_message_id' => $supportMessage->id, 'user_id' => request()->user()->id],
+            ['read_at' => now()],
+        );
+
         return response()->json($supportMessage->load([...self::DETAIL, 'replies.user:id,name']));
     }
 
