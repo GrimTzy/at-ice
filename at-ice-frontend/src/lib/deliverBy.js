@@ -1,4 +1,5 @@
 import { PILL } from "./statusTones";
+import { formatTime, TZ } from "./time";
 
 // "Deliver by" is a deadline (owner, 2026-11-10): the latest time the ice
 // reaches the store. The server sends `due_at` and `timing`
@@ -17,15 +18,16 @@ export function timingPill(timing) {
   return null;
 }
 
-// "8:00 AM" from a due_at value, in the viewer's local time
+// Display and edit deadlines in the same business timezone as the API.
 export function deliverByTime(dueAt) {
   if (!dueAt) return "";
-  return new Date(dueAt).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+  return formatTime(dueAt, { fallback: "" });
 }
 
 // "08:00" for a time field
 export function deliverByValue(dueAt) {
   if (!dueAt) return "";
   const d = new Date(dueAt);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 }

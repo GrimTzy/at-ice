@@ -43,7 +43,7 @@ class DriverAvailability
         $drivers = User::where('role', 'driver')
             ->with(['employee' => fn ($q) => $q->with(['attendances' => fn ($a) => $a->whereDate('date', $today)])])
             ->orderBy('name')
-            ->get(['id', 'name', 'role']);
+            ->get(['id', 'name', 'role', 'is_reserve_driver']);
 
         $inTransit = Delivery::where('status', 'in_transit')
             ->whereIn('driver_id', $drivers->pluck('id'))
@@ -80,6 +80,7 @@ class DriverAvailability
                 'id' => $u->id,
                 'name' => $emp?->full_name ?: $u->name,
                 'employee_id' => $emp?->employee_id,
+                'is_reserve' => (bool) $u->is_reserve_driver,
                 'status' => $status,
                 'reason' => $reason,
                 'open_stops' => $openStops,

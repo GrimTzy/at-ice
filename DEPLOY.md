@@ -76,3 +76,61 @@ workers and applicants' resumes, never served by nginx) volumes.
 ls -lh /backups
 gunzip < /backups/atice-YYYY-MM-DD-HHMM.sql.gz | mysql -uroot -p"$MYSQL_ROOT_PASSWORD" atice
 ```
+
+## Release gates and rollback
+
+Before publishing a release, require the CI security audits, SQLite feature tests,
+browser regression, MySQL 8.4 migrations/concurrency tests and synthetic restore
+drill to pass. The local MySQL 8.0 test run does not replace the MySQL 8.4 CI run.
+Pushing `main` triggers deployment, so review these results on a PR first.
+
+The face dependency patch keeps the existing recognition models, 128-value
+descriptors and matching threshold. The browser suite executes the real models
+with synthetic data; it cannot establish recognition accuracy for real employees.
+Before release, test existing enrollments and new enrollment on the actual kiosk,
+unknown faces, lighting, camera permission denial, and attendance time-in/out.
+The current attendance flow intentionally does not require a blink/head-turn
+challenge. Anti-spoofing would require a separately approved behavior change.
+
+### Preserve a recoverable release
+
+Record the currently deployed Git SHA/image digests and intended release SHA.
+Take a coordinated backup of MySQL, `public-storage`, `private-storage`, and the
+application key/configuration (keep secrets in protected backup storage, not Git).
+The app key is needed to decrypt encrypted data. A database dump alone does not
+include uploaded photos or private documents.
+
+For a consistent DB-and-files snapshot, pause incoming writes with maintenance
+mode, stop the worker and scheduler, and allow in-flight jobs/requests to finish
+before taking the dump and both storage archives. Check every command's exit
+status, archive readability and SHA-256 hashes. Resume only after those backups
+are complete. Copy the backup set off the application server.
+
+### Prove restore before switching traffic
+
+Restore a copy of the dump into a **new staging database**, with new staging
+storage volumes. Do not import over the live database as a rehearsal. Restore
+both public/private archives, compare table counts and representative records,
+and verify attachment hashes and authorized downloads. Disable outgoing mail,
+Pusher broadcasts and scheduled jobs in the restored staging environment.
+
+The committed `tests/Support/backup_restore_drill.php` performs a synthetic
+MySQL dump/restore, compares all table rows and column definitions, and checks
+two synthetic public/private attachment round trips. It refuses existing restore
+databases and is restricted to database names containing `test`. It tests the
+restore mechanics; it does not prove that the hosting platform's nightly backup
+schedule, remote storage destination, or actual production backup is healthy.
+
+### Rollback decision
+
+If a deployment fails before accepting writes and has no incompatible schema
+change, redeploy the recorded previous image/SHA and rerun the smoke checks.
+Keep maintenance mode until the application, database and attachment versions
+are consistent. Do not run `migrate:rollback` blindly.
+
+If the new release accepted writes, restoring the pre-release snapshot would
+lose those writes. Preserve a fresh backup and reconcile the intervening records
+before any data restore. Test the chosen recovery on staging first and record
+the release, backup timestamps, verification results and any accepted data-loss
+window. Resume the worker and scheduler and leave maintenance mode only after
+the recovered system passes its checks.

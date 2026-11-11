@@ -218,4 +218,15 @@ class DeliveryFifoTest extends TestCase
         $batches = TruckStockBatch::where('driver_id', $driver->id)->orderBy('product_type')->get();
         $this->assertSame([['bags', 40], ['big_sack', 2]], $batches->map(fn ($b) => [$b->product_type, $b->quantity_left])->all());
     }
+    public function test_a_reserve_driver_covers_before_the_regular_drivers(): void
+    {
+        $ana = $this->driver('Ana', '06:30:00');   // free since 06:30
+        $ben = $this->driver('Ben', '07:00:00');   // free later than Ana
+        $this->putJson("/api/drivers/{$ben->id}/reserve", ['is_reserve' => true])->assertOk();
+
+        $this->assertSame([$ben->id, $ana->id], DeliveryDispatch::availableDrivers());
+
+        $this->putJson("/api/drivers/{$ben->id}/reserve", ['is_reserve' => false])->assertOk();
+        $this->assertSame([$ana->id, $ben->id], DeliveryDispatch::availableDrivers());
+    }
 }

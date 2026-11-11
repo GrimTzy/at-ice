@@ -12,6 +12,7 @@ import DraftHint from "../../components/DraftHint";
 import { DriverView, StoreView, EditDeliveryModal } from "./deliveries/BoardViews";
 import SameDayChanges from "./deliveries/SameDayChanges";
 import AdjustmentRequests from "./deliveries/AdjustmentRequests";
+import RoutesTab from "./deliveries/RoutesTab";
 import DriverStoresTab from "./deliveries/DriverStoresTab";
 import { ReassignedTag } from "./deliveries/shared";
 import { STATUS_STYLE, DRIVER_GROUPS, driverGroup, timeOf, nowHm } from "./deliveries/utils";
@@ -118,6 +119,7 @@ function statusLabel(d) {
 const TABS = [
   { value: "drivers", label: "Driver View" },
   { value: "stores", label: "Store View" },
+  { value: "routes", label: "Routes" },
   { value: "assign", label: "Driver Stores" },
   { value: "list", label: "All Deliveries" },
 ];
@@ -500,7 +502,7 @@ export default function DeliveriesPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={tab === "list" ? "Search delivery, customer, invoice…" : "Search store, chain or driver…"}
+                placeholder={tab === "list" ? "Search delivery, customer, invoice…" : tab === "routes" ? "Search store…" : "Search store, chain or driver…"}
                 aria-label="Search"
                 className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
               />
@@ -551,8 +553,9 @@ export default function DeliveriesPage() {
         {tab === "stores" && (
           <StoreView board={viewBoard} loading={boardLoading} filtered={!!(needle || typeFilter || subStatus !== "all")} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
         )}
+        {tab === "routes" && <RoutesTab stores={activeStores} live={live} search={needle} type={typeFilter} />}
         {tab === "assign" && (
-          <DriverStoresTab stores={activeStores} drivers={board?.drivers || []} live={live} onChanged={refreshAll} search={needle} type={typeFilter} />
+          <DriverStoresTab drivers={board?.drivers || []} live={live} onChanged={refreshAll} search={needle} type={typeFilter} />
         )}
 
         {tab === "list" && (<>

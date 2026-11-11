@@ -20,7 +20,8 @@ import { ActivityFeed, ProgressRing, StatusBreakdown } from "../../components/In
 import { Icon } from "../../components/icons";
 import { focusRecord } from "../../lib/destination";
 import { plural } from "../../lib/plural";
-import { StoreContracts } from "./deliveries/StoreContracts";
+import { ContractForm, StoreContracts } from "./deliveries/StoreContracts";
+import { todayStr, daysLabel } from "./deliveries/utils";
 
 const API_BASE = "/api";
 
@@ -118,7 +119,8 @@ export default function CustomersPage() {
   const [creatingAccountFor, setCreatingAccountFor] = useState(null);
   // Why Create Login failed, shown under that customer's button: { id, message }
   const [accountError, setAccountError] = useState(null);
-  const [contractFor, setContractFor] = useState(null); // customer whose delivery contracts are open
+  const [contractFor, setContractFor] = useState(null); // customer whose contract form is open
+  const [historyFor, setHistoryFor] = useState(null); // customer whose contract history is open
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -136,9 +138,33 @@ export default function CustomersPage() {
     }
   }, []);
 
+  // Delivery days per store, from its running or pending contracts (Days column)
+  const [daysByStore, setDaysByStore] = useState({});
+  const [contractByStore, setContractByStore] = useState({}); // the store's one running contract (Contract button edits it)
+  const fetchContractDays = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/delivery-contracts`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const list = await res.json();
+      const today = todayStr();
+      const map = {};
+      const byStore = {};
+      (Array.isArray(list) ? list : []).filter((k) => k.status !== "cancelled" && k.end_date >= today).forEach((k) => {
+        (k.stores || []).forEach((s) => {
+          map[s.id] = [...new Set([...(map[s.id] || []), ...(k.delivery_days || [])])];
+          byStore[s.id] = k;
+        });
+      });
+      setDaysByStore(map);
+      setContractByStore(byStore);
+    } catch (err) {
+      console.error("fetchContractDays error:", err);
+    }
+  }, []);
+
   // reload when a live notice for this page arrives (lib/live.js)
   const live = useLiveTick(["customers"]);
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers, live]);
+  useEffect(() => { fetchCustomers(); fetchContractDays(); }, [fetchCustomers, fetchContractDays, live]);
 
   function openAddForm() {
     setEditingId(null);
@@ -432,22 +458,23 @@ export default function CustomersPage() {
                 <th className="px-[18px] py-2.5 font-medium">Contact</th>
                 <th className="px-[18px] py-2.5 font-medium">Type</th>
                 <th className="px-[18px] py-2.5 font-medium text-center">Portal Login</th>
+                <th className="px-[18px] py-2.5 font-medium">Days</th>
                 <th className="px-[18px] py-2.5 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <SkeletonTableRows cols={6} />
+                <SkeletonTableRows cols={7} />
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
+                <tr><td colSpan={7} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
                   {filtering ? "No customers match your search or filters." : "No customers found."}
                 </td></tr>
               )}
               {!loading && pager.pageItems.map((c) => (
                 <tr key={c.id} data-row-key={c.id} className="border-t border-black/[0.06]">
                   <td className="px-[18px] py-2.5">
-                    <button type="button" onClick={() => setContractFor(c)} title="Contract history" className="font-medium text-slate-800 text-left hover:text-cyan-700 hover:underline underline-offset-2">{c.name}</button>
+                    <button type="button" onClick={() => setHistoryFor(c)} title="Contract history" className="font-medium text-slate-800 text-left hover:text-cyan-700 hover:underline underline-offset-2">{c.name}</button>
                     <div className="text-[11px] text-slate-400">{c.invoice_code && <span className="mr-1 px-1.5 py-px rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-semibold">{c.invoice_code}</span>}{c.customer_code}{c.branch_code ? ` · ${c.branch_code}` : ""}</div>
                   </td>
                   <td className="px-[18px] py-2.5 text-slate-600">
@@ -493,6 +520,12 @@ export default function CustomersPage() {
                       );
                     })()}
                   </td>
+                  <td className="px-[18px] py-2.5 text-slate-600 whitespace-nowrap">
+                    {daysByStore[c.id]?.length ? daysLabel(daysByStore[c.id]) : <span className="text-slate-300">—</span>}
+                    {contractByStore[c.id] && !c.store_route_id && (
+                      <div className="text-[11px] text-amber-600" title="Add this store to a route (Deliveries > Routes) so its deliveries get a driver">No route</div>
+                    )}
+                  </td>
                   <td className="px-[18px] py-2.5">
                     <div className="flex items-center gap-1.5 justify-end">
                       <button
@@ -505,8 +538,8 @@ export default function CustomersPage() {
                       <button
                         onClick={() => setContractFor(c)}
                         className="p-1.5 rounded-md border border-transparent bg-cyan-500 hover:bg-cyan-600 text-white"
-                        title="Contracts"
-                        aria-label={`Delivery contracts for ${c.name}`}
+                        title={contractByStore[c.id] ? "Edit contract" : "Contract"}
+                        aria-label={`${contractByStore[c.id] ? "Edit delivery contract" : "Delivery contract"} for ${c.name}`}
                       >
                         <ContractIcon />
                       </button>
@@ -685,8 +718,25 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* The store's delivery contracts: make, approve and cancel them */}
-      {contractFor && <StoreContracts store={contractFor} onClose={() => setContractFor(null)} />}
+      {/* The store's one contract: a new one, or its running one to edit */}
+      {contractFor && (
+        <ContractForm
+          store={contractFor}
+          contract={contractByStore[contractFor.id] || null}
+          onClose={() => setContractFor(null)}
+          onSaved={() => { setContractFor(null); fetchContractDays(); }}
+        />
+      )}
+
+      {/* Every contract the store has had, from its name (history, Cancel) */}
+      {historyFor && (
+        <StoreContracts
+          store={historyFor}
+          contract={contractByStore[historyFor.id] || null}
+          onClose={() => setHistoryFor(null)}
+          onChanged={fetchContractDays}
+        />
+      )}
 
       {/* Deactivate confirmation */}
       {deactivateTarget && (

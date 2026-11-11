@@ -10,6 +10,7 @@ use App\Http\Controllers\CustomerPortalController;
 use App\Http\Controllers\CustomerPriceController;
 use App\Http\Controllers\DeliveryAdjustmentRequestController;
 use App\Http\Controllers\DeliveryContractController;
+use App\Http\Controllers\StoreRouteController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DeliveryProofController;
 use App\Http\Controllers\DeliveryRouteController;
@@ -193,13 +194,23 @@ Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,a
         Route::get('delivery-contracts', [DeliveryContractController::class, 'index']);
         Route::get('delivery-contracts/next-number', [DeliveryContractController::class, 'nextNumber']);
         Route::post('delivery-contracts', [DeliveryContractController::class, 'store']);
+        Route::put('delivery-contracts/{id}', [DeliveryContractController::class, 'update']);
         Route::post('delivery-contracts/{id}/approve', [DeliveryContractController::class, 'approve']);
         Route::post('delivery-contracts/{id}/cancel', [DeliveryContractController::class, 'cancel']);
+
+        // Routes: named groups of stores (Route A, Route B...)
+        Route::get('store-routes', [StoreRouteController::class, 'index']);
+        Route::post('store-routes', [StoreRouteController::class, 'store']);
+        Route::put('store-routes/{id}', [StoreRouteController::class, 'update']);
+        Route::delete('store-routes/{id}', [StoreRouteController::class, 'destroy']);
 
         // Which Driver handles which stores, and Drivers who are off (stops go first-done first)
         Route::get('driver-store-assignments', [DriverAssignmentController::class, 'index']);
         Route::post('driver-store-assignments', [DriverAssignmentController::class, 'store']);
         Route::delete('driver-store-assignments/{id}', [DriverAssignmentController::class, 'destroy']);
+        Route::put('drivers/{id}/reserve', [DriverAssignmentController::class, 'setReserve']);
+        Route::post('driver-route-assignments', [DriverAssignmentController::class, 'assignRoute']);
+        Route::delete('driver-route-assignments/{id}', [DriverAssignmentController::class, 'unassignRoute']);
 
         Route::get('products-summary', [ProductController::class, 'index']);
 
