@@ -54,7 +54,7 @@ class HolidayController extends Controller
     {
         $data = $request->validate([
             'date' => ['required', 'date_format:Y-m-d', Rule::unique('holidays', 'date')->ignore($ignore)],
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:50',
             'type' => ['required', Rule::in(Holiday::TYPES)],
             'is_double' => 'nullable|boolean',
         ], [

@@ -71,7 +71,7 @@ class ProductController extends Controller
 
         $validated = $request->validate([
             'product_code' => 'nullable|string|max:50|unique:products,product_code',
-            'name' => 'required|string|max:255|unique:products,name',
+            'name' => 'required|string|max:50|unique:products,name',
             'category' => 'nullable|string|max:100',
             'unit' => 'nullable|string|max:50',
             'unit_price' => 'nullable|numeric|min:0',
@@ -127,7 +127,7 @@ class ProductController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'name')->ignore($product->id)],
+            'name' => ['sometimes', 'required', 'string', 'max:50', Rule::unique('products', 'name')->ignore($product->id)],
             'category' => 'nullable|string|max:100',
             'unit' => 'nullable|string|max:50',
             'unit_price' => 'nullable|numeric|min:0',

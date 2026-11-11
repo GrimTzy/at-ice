@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import RoleShell from "../../components/RoleShell";
 import { StatusBadge, LoadingButton, BottomSheet, Stepper, ErrorBanner, EmptyCard, CardSkeleton, SearchBar, Icon } from "../../components/MobileUi";
 import { CARD, CARD_BUTTON, FIELD, LABEL, matchesQuery } from "../../lib/mobileUi";
@@ -135,6 +137,9 @@ export default function CheckerIceLoadingPage() {
   const toCount = deliveries.filter((d) => !d.loaded).length;
   const shownDeliveries = deliveries.filter((d) => matchesQuery(query, d.customer, d.delivery_no, d.driver, d.loaded_by));
   const shownHistory = history.filter((g) => matchesQuery(query, g.delivery?.customer?.name, g.delivery?.delivery_no, g.checker));
+  // 10 a page like every list; two lists on one screen, so each bar sits under its own list
+  const truckPager = usePagination(shownDeliveries);
+  const countPager = usePagination(shownHistory);
 
   return (
     <RoleShell role="checker" title="Ice loading">
@@ -156,7 +161,7 @@ export default function CheckerIceLoadingPage() {
               <EmptyCard icon="truck" title={query ? "No match" : "No trucks to count"}>{query ? "No truck or delivery matches your search." : "No pending or in-transit deliveries for today or earlier."}</EmptyCard>
             ) : (
               <div className="grid grid-cols-1 gap-3">
-                {shownDeliveries.map((d) => (
+                {truckPager.pageItems.map((d) => (
                   <button key={d.id} type="button" onClick={() => openCount(d)} disabled={d.loaded}
                     aria-label={`${d.delivery_no} ${d.customer || ""}${d.loaded ? ", counted" : ", tap to count"}`}
                     className={`${CARD_BUTTON} flex items-center gap-3 ${d.loaded ? "!opacity-100 border-emerald-200 bg-emerald-50/40" : ""}`}>
@@ -174,13 +179,14 @@ export default function CheckerIceLoadingPage() {
                 ))}
               </div>
             )}
+            {truckPager.total > PAGE_SIZES[0] && <Pagination pager={truckPager} fixed />}
           </section>
 
           <section aria-label="Recorded counts" className="space-y-3">
             <h2 className="text-[15px] font-semibold text-slate-900">Recorded counts</h2>
             {shownHistory.length === 0 ? (
               <EmptyCard icon="clipboard" title={query ? "No match" : "No counts yet"}>{query ? "No recorded count matches your search." : "Counts you save show here."}</EmptyCard>
-            ) : shownHistory.map((g) => (
+            ) : countPager.pageItems.map((g) => (
               <article key={g.key} className={CARD}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -197,6 +203,7 @@ export default function CheckerIceLoadingPage() {
                 <div className="text-[12px] text-slate-400 mt-2">{formatDateTime(g.loaded_at, { year: false })}{g.checker ? ` · ${g.checker}` : ""}</div>
               </article>
             ))}
+            {countPager.total > PAGE_SIZES[0] && <Pagination pager={countPager} fixed />}
           </section>
         </>
       )}

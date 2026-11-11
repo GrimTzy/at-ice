@@ -104,8 +104,8 @@ function App() {
         <Route path="/forgot-password" element={<LightOnly><ForgotPasswordPage /></LightOnly>} />
         {/* Public job application form, opened from the QR code in HRIS > Interviews */}
         <Route path="/apply" element={<LightOnly><ApplyPage /></LightOnly>} />
-        {/* The same form from an employee's referral link (records who referred) */}
-        <Route path="/job-applications/:referrer" element={<LightOnly><ApplyPage /></LightOnly>} />
+        {/* Old referral QR links open the general form (referrals were removed, QA review 2026-11-11) */}
+        <Route path="/job-applications/:code" element={<Navigate to="/apply" replace />} />
 
         {/* Old per-role login links still work: they all go to the one login page. */}
         {["/admin/login", "/hr/login", "/driver/login", "/customer/login", "/checker/login", "/salesman/login", "/maintenance/login"].map((path) => (

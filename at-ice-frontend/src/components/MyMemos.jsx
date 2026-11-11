@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import Pagination from "./Pagination";
+import { PAGE_SIZES, usePagination } from "../lib/usePagination";
 import { BottomSheet, StatusBadge } from "./MobileUi";
 import { useLiveTick } from "../lib/live";
 import { formatDateShort, formatDateTime } from "../lib/time";
@@ -123,6 +125,7 @@ export function MyMemosButton({ compact = false, variant = "icon", onActivate })
   const { memos, loading, error, load, setMemos } = useMyMemos();
   const [open, setOpen] = useState(false);
   const pending = memos.filter((m) => needsAck(m) || m.status === "awaiting_physical").length;
+  const pager = usePagination(memos);
 
   return (
     <>
@@ -169,9 +172,12 @@ export function MyMemosButton({ compact = false, variant = "icon", onActivate })
             <p className="max-w-[260px] text-[13px] leading-relaxed text-slate-500">Important announcements and shift notes will appear here.</p>
           </div>
         ) : (
-          memos.map((m) => (
+          <>
+          {pager.pageItems.map((m) => (
             <MemoCard key={m.id} memo={m} onAcknowledged={(id, at) => setMemos((list) => list.map((x) => (x.id === id ? { ...x, status: "acknowledged", acknowledged_at: at } : x)))} />
-          ))
+          ))}
+          {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} fixed />}
+          </>
         )}
       </BottomSheet>
     </>

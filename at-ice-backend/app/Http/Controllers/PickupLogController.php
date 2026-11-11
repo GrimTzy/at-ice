@@ -28,7 +28,7 @@ class PickupLogController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'company_name' => 'required|string|max:255',
+            'company_name' => 'required|string|max:50',
             'product_type' => 'required|in:bags,small_sack,big_sack',
             'quantity' => 'required|integer|min:1|max:'.config('atice.max_stock_quantity'),
             'notes' => 'nullable|string|max:1000',
@@ -54,7 +54,7 @@ class PickupLogController extends Controller
     public function update(Request $request, PickupLog $pickupLog)
     {
         $validated = $request->validate([
-            'company_name' => 'sometimes|required|string|max:255',
+            'company_name' => 'sometimes|required|string|max:50',
             'product_type' => 'sometimes|required|in:bags,small_sack,big_sack',
             'quantity' => 'sometimes|required|integer|min:1|max:'.config('atice.max_stock_quantity'),
             'notes' => 'nullable|string|max:1000',

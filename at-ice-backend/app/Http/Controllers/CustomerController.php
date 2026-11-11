@@ -90,7 +90,7 @@ class CustomerController extends Controller
     // GET /api/customers/invoice-code?name=...: the code a new customer would get.
     public function suggestInvoiceCode(Request $request)
     {
-        $request->validate(['name' => 'required|string|max:255']);
+        $request->validate(['name' => 'required|string|max:50']);
 
         return response()->json(['invoice_code' => Customer::invoiceCodeFor($request->name)]);
     }
@@ -108,7 +108,7 @@ class CustomerController extends Controller
         $this->cleanInvoiceCode($request);
 
         $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:50',
             // The contact email is also the portal login, so it must be free.
             // The account itself must exist (ExistingMailbox), not just the domain.
             'email' => ['bail', 'required', 'email:rfc,filter,dns', 'max:255', 'unique:users,email', new ExistingMailbox],
@@ -124,7 +124,7 @@ class CustomerController extends Controller
             'subdivision' => 'nullable|string|max:255',
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
             ...AddressFormatter::PSGC_RULES,
-            'contact_person' => 'required|string|max:255',
+            'contact_person' => 'required|string|max:50',
             'notes' => 'nullable|string|max:1000',
             'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
@@ -228,7 +228,7 @@ class CustomerController extends Controller
         $changing = fn (string $field) => $request->exists($field) && ! $same($request->input($field), $customer->{$field});
 
         $request->validate([
-            'name' => 'sometimes|required|string|max:255',
+            'name' => 'sometimes|required|string|max:50',
             // A changed email must be an existing account, not another customer's email
             // and not another account's login. An unchanged one is not checked again.
             'email' => $changing('email')
@@ -248,7 +248,7 @@ class CustomerController extends Controller
             'subdivision' => 'nullable|string|max:255',
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
             ...AddressFormatter::PSGC_RULES,
-            'contact_person' => $changing('contact_person') ? 'required|string|max:255' : 'nullable|string|max:255',
+            'contact_person' => $changing('contact_person') ? 'required|string|max:50' : 'nullable|string|max:50',
             'notes' => 'nullable|string|max:1000',
             'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',

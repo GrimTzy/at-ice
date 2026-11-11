@@ -21,6 +21,7 @@ import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, MiniBars, StatusBreakdown } from "../../components/Insight";
 import { todayManila } from "../../lib/time";
 import { Icon } from "../../components/icons";
+import Req from "../../components/Req";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -54,7 +55,19 @@ function HolidayModal({ holiday, onClose, onSaved }) {
   const { form } = draft.values;
   const setForm = draft.set.form;
   const [busy, setBusy] = useState(false);
+  const [sameYear, setSameYear] = useState([]); // that year's holidays, for the one-per-date rule
   const { clear } = draft;
+
+  // The server allows one holiday per date; the form says so before saving
+  const pickedYear = form.date ? form.date.slice(0, 4) : "";
+  useEffect(() => {
+    if (!pickedYear) return undefined;
+    let alive = true;
+    api(`/api/holidays?year=${pickedYear}`).then((d) => { if (alive) setSameYear(d?.holidays || []); }).catch(() => {});
+    return () => { alive = false; };
+  }, [pickedYear]);
+  const taken = form.date ? sameYear.find((h) => h.date === form.date && h.id !== editing) : null;
+  const takenMsg = taken ? `${taken.name} is already on this date. Edit it instead.` : "";
   const close = useCallback(() => { clear(); onClose(); }, [clear, onClose]);
 
   useEffect(() => {
@@ -89,10 +102,12 @@ function HolidayModal({ holiday, onClose, onSaved }) {
         <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
         <div className="p-5 flex flex-col gap-3.5">
         <DraftHint draft={draft} onDiscard={onClose} />
-        <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Date</span>
-          <input name="date" type="date" required autoFocus value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inputCls} /></label>
-        <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Holiday name</span>
-          <input name="name" required maxLength={255} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Eid'l Adha" className={inputCls} /></label>
+        <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Date<Req /></span>
+          <input name="date" type="date" required autoFocus value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
+            ref={(el) => el?.setCustomValidity(takenMsg)} aria-invalid={!!taken || undefined} aria-describedby={taken ? "holiday-date-taken" : undefined} className={inputCls} />
+          {taken && <span id="holiday-date-taken" role="alert" className="text-[11px] text-red-600">{takenMsg}</span>}</label>
+        <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Holiday name<Req /></span>
+          <input name="name" required maxLength={50} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Eid'l Adha" className={inputCls} /></label>
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Type</span>
           <select name="type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={inputCls}>
             {TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}

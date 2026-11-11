@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import RoleShell from "../../components/RoleShell";
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import { StatusBadge, LoadingButton, BottomSheet, ActionBar, ErrorBanner, EmptyCard, CardSkeleton, SearchBar, Icon } from "../../components/MobileUi";
 import { CARD, FIELD, TEXTAREA, LABEL, matchesQuery } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
@@ -87,7 +89,7 @@ export default function MaintenanceProjectsPage() {
         <textarea id={`project-${key}`} rows={3} value={form[key]} placeholder={placeholder}
           onChange={(e) => { setForm({ ...form, [key]: e.target.value }); setErrors({}); }} className={TEXTAREA} />
       ) : (
-        <input id={`project-${key}`} value={form[key]} placeholder={placeholder}
+        <input id={`project-${key}`} value={form[key]} placeholder={placeholder} maxLength={key === "name" ? 50 : undefined}
           onChange={(e) => { setForm({ ...form, [key]: e.target.value }); setErrors({}); }} className={FIELD} />
       )}
       {errors[key] && <p className="text-[13px] text-rose-700 mt-1.5">{errors[key][0]}</p>}
@@ -100,23 +102,28 @@ export default function MaintenanceProjectsPage() {
     .filter((p) => matchesQuery(query, p.name, p.description, p.location, p.machine, p.truck, p.id))
     .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
 
+  // 10 a page like every list; the bar docks above the bottom navigation
+  const pager = usePagination(sorted);
+  const paged = status === "ready" && pager.total > PAGE_SIZES[0];
+
   return (
     <RoleShell
       role="maintenance"
       title="Projects"
-      actionBar={<ActionBar><LoadingButton disabled={timedIn === false} onClick={() => setShowForm(true)}><Icon name="plus" /> Log a repair job</LoadingButton></ActionBar>}
+      paged={paged}
+      actionBar={<ActionBar><LoadingButton disabled={timedIn === false} onClick={() => setShowForm(true)}><Icon name="plus" /> Log a Project</LoadingButton></ActionBar>}
     >
       <TimeInNotice timedIn={timedIn} />
       <SearchBar value={query} onChange={setQuery} placeholder="Search project, truck or machine" label="Search projects" />
       {status === "loading" && <CardSkeleton rows={3} />}
       {status === "error" && <ErrorBanner onRetry={load}>{loadError}</ErrorBanner>}
       {status === "ready" && sorted.length === 0 && (
-        <EmptyCard icon="clipboard" title={query ? "No match" : "No projects yet"}>{query ? "No project matches your search." : "Tap Log a repair job to add a job for Admin to schedule."}</EmptyCard>
+        <EmptyCard icon="clipboard" title={query ? "No match" : "No projects yet"}>{query ? "No project matches your search." : "Tap Log a Project to add a job for Admin to schedule."}</EmptyCard>
       )}
 
       {status === "ready" && (
         <div className="grid grid-cols-1 gap-3">
-          {sorted.map((p) => (
+          {pager.pageItems.map((p) => (
             <article key={p.id} className={`${CARD} ${p.status === "stuck" || p.overdue ? "border-rose-200" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <h2 className="text-[15px] font-semibold text-slate-900">{p.name}</h2>
@@ -136,10 +143,11 @@ export default function MaintenanceProjectsPage() {
         </div>
       )}
 
+      {paged && <Pagination pager={pager} fixed dock dockBottom="4rem" />}
       <BottomSheet
         open={showForm}
         onClose={() => !saving && setShowForm(false)}
-        title="Log a repair job"
+        title="Log a Project"
         footer={<LoadingButton type="submit" form="project-form" loading={saving} disabled={timedIn === false}>{saving ? "Saving…" : "Add project"}</LoadingButton>}
       >
         <form id="project-form" onSubmit={submit} className="space-y-4" noValidate>

@@ -15,10 +15,8 @@ export function isLocalTesting() {
 }
 
 // The public job application form that the QR code in HRIS > Interviews opens.
-// With an employee ID it is that employee's referral link
-// (/job-applications/EMP-0001): the applicant is recorded as referred by them.
-export function applyUrl(referrerId = "") {
-  const path = referrerId ? `/job-applications/${encodeURIComponent(referrerId)}` : "/apply";
+export function applyUrl() {
+  const path = "/apply";
   const lan = import.meta.env.VITE_LAN_HOST;
   if (lan && isLocalTesting()) {
     return `${window.location.protocol}//${lan}${window.location.port ? `:${window.location.port}` : ""}${path}`;
