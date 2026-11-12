@@ -265,7 +265,10 @@ class LiveFeed
                     return ['inventory', "Item {$m->name} limits set to min {$m->minimum_stock}, max {$m->maximum_stock}{$by}", ['employee:checker', 'employee:maintenance']];
                 }
 
-                return ['inventory', "Item {$m->name} {$verb}{$by}", ['employee:checker', 'employee:maintenance']];
+                // a new item still waits for its limits from the Admin
+                $needs = $a === 'created' && ! $m->limits_set_at ? '. Its limits still need to be set' : '';
+
+                return ['inventory', "Item {$m->name} {$verb}{$by}{$needs}", ['employee:checker', 'employee:maintenance']];
 
             case Models\InventoryAlert::class:
                 if ($a !== 'created') {

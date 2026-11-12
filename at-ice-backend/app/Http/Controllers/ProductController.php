@@ -63,6 +63,14 @@ class ProductController extends Controller
         return null;
     }
 
+    // The digit caps bind the Admin, who sets the limits. A Checker's form sends the
+    // saved limits back unchanged and they are ignored, so an old item over a cap
+    // must not block the Checker's edit.
+    private function limitRule(Request $request, int $cap): string
+    {
+        return 'nullable|integer|min:0'.($request->user()?->role === 'admin' ? "|max:{$cap}" : '');
+    }
+
     public function store(Request $request)
     {
         if ($locked = $this->stockLimitsLocked($request)) {
@@ -75,11 +83,13 @@ class ProductController extends Controller
             'category' => 'nullable|string|max:100',
             'unit' => 'nullable|string|max:50',
             'unit_price' => 'nullable|numeric|min:0',
-            'minimum_stock' => 'nullable|integer|min:0',
-            'maximum_stock' => 'nullable|integer|min:0',
+            'minimum_stock' => $this->limitRule($request, Product::MIN_LIMIT_CAP),
+            'maximum_stock' => $this->limitRule($request, Product::MAX_LIMIT_CAP),
             'description' => 'nullable|string|max:1000',
         ], [
             'name.unique' => 'An item with this name already exists.',
+            'minimum_stock.max' => 'Minimum stock can have at most 2 digits (up to '.Product::MIN_LIMIT_CAP.').',
+            'maximum_stock.max' => 'Maximum stock can have at most 5 digits (up to '.number_format(Product::MAX_LIMIT_CAP).').',
         ]);
 
         if (isset($validated['minimum_stock'], $validated['maximum_stock'])
@@ -94,11 +104,16 @@ class ProductController extends Controller
             $validated['product_code'] = $this->nextProductCode();
         }
 
-        // Blank limits (and every limit sent by a non-Admin) use the defaults.
+        // Blank limits (and every limit sent by a non-Admin) use the defaults and
+        // leave the item marked as still needing its limits.
         foreach (['minimum_stock', 'maximum_stock'] as $field) {
             if (($validated[$field] ?? null) === null || $request->user()?->role !== 'admin') {
                 unset($validated[$field]);
             }
+        }
+        $validated += ['minimum_stock' => Product::DEFAULT_MIN, 'maximum_stock' => Product::DEFAULT_MAX];
+        if ($request->user()?->role === 'admin' && $request->filled('minimum_stock') && $request->filled('maximum_stock')) {
+            $validated['limits_set_at'] = now();
         }
 
         // Stock always starts at zero; it is added through a confirmed Stock In.
@@ -131,11 +146,13 @@ class ProductController extends Controller
             'category' => 'nullable|string|max:100',
             'unit' => 'nullable|string|max:50',
             'unit_price' => 'nullable|numeric|min:0',
-            'minimum_stock' => 'nullable|integer|min:0',
-            'maximum_stock' => 'nullable|integer|min:0',
+            'minimum_stock' => $this->limitRule($request, Product::MIN_LIMIT_CAP),
+            'maximum_stock' => $this->limitRule($request, Product::MAX_LIMIT_CAP),
             'description' => 'nullable|string|max:1000',
         ], [
             'name.unique' => 'An item with this name already exists.',
+            'minimum_stock.max' => 'Minimum stock can have at most 2 digits (up to '.Product::MIN_LIMIT_CAP.').',
+            'maximum_stock.max' => 'Maximum stock can have at most 5 digits (up to '.number_format(Product::MAX_LIMIT_CAP).').',
         ]);
 
         foreach (['minimum_stock', 'maximum_stock'] as $field) {
@@ -151,6 +168,11 @@ class ProductController extends Controller
                 'message' => 'Maximum stock must be greater than or equal to the minimum stock.',
                 'errors' => ['maximum_stock' => ['Maximum stock must be greater than or equal to the minimum stock.']],
             ], 422);
+        }
+
+        // the Admin saving the limits is what clears "Needs limits"
+        if (array_key_exists('minimum_stock', $validated) || array_key_exists('maximum_stock', $validated)) {
+            $validated['limits_set_at'] = now();
         }
 
         $product->update($validated);

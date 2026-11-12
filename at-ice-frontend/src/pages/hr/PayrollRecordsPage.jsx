@@ -42,6 +42,13 @@ const peso = (v) => `₱${Number(v || 0).toLocaleString("en-PH", { minimumFracti
 const n = (v) => Number(v || 0);
 // gov_share is the part of the month's SSS, PhilHealth and Pag-IBIG taken this
 // pay day (HR > Rates > Payroll), not a share of the salary
+// Explains the column header: where the "50%" comes from (QA review, 2026-11-11).
+const govHelp = (strategy) => "Employee share only; the employer pays its own. Each is a monthly amount from the rates in HR > Rates (SSS by salary bracket, PhilHealth and Pag-IBIG as a percent of monthly pay with limits). "
+  + (strategy === "FIRST_PAYROLL_OF_MONTH"
+    ? "The whole month is deducted on the first pay day of the month."
+    : "The 50% is not a rate and not half of the salary: the month's amount is taken in two halves, on the 1st and 2nd pay days of the month, and none on a 3rd pay day.")
+  + " Change this in HR > Rates > Payroll.";
+
 const govShareText = (share) => {
   if (share == null) return "—";
   if (share >= 1) return "the whole month's contribution is deducted this pay day";
@@ -312,7 +319,7 @@ export default function PayrollRecordsPage() {
                       <th className="px-3 py-2.5 font-medium text-right">Basic</th>
                       <th className="px-3 py-2.5 font-medium text-right" title="Holiday pay, overtime and night differential">Holiday / OT / Night</th>
                       <th className="px-3 py-2.5 font-medium text-right">Late / absence / leave</th>
-                      <th className="px-3 py-2.5 font-medium text-right">SSS · PhilHealth · Pag-IBIG</th>
+                      <th className="px-3 py-2.5 font-medium text-right" title={govHelp(data?.gov_strategy)}>SSS · PhilHealth · Pag-IBIG</th>
                       <th className="px-3 py-2.5 font-medium text-right">Tax</th>
                       <th className="px-3 py-2.5 font-medium text-right">Earnings</th>
                       <th className="px-3 py-2.5 font-medium text-right">Net pay</th>
