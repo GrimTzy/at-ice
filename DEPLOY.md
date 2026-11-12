@@ -54,6 +54,29 @@ php artisan admin:create owner@example.com --name="Owner"
 
 It prints a one-time password. Running it again for the same email resets the password.
 
+## Android app
+
+The APK, the release key and the Firebase files are secrets or build output and are
+never in git. Hand them over outside git and chat.
+
+1. Set `APP_CLIENT_KEY` on the server. It must be the same value as
+   `VITE_APP_CLIENT_KEY` in `at-ice-frontend/.env.android-live` (see `ANDROID-APK.md`).
+   Without it every app sign-in is refused (401).
+2. Put the Firebase service account JSON in the `private-storage` volume as
+   `/var/www/html/storage/app/private/firebase-service-account.json` (from a terminal in
+   the `backend` container, or `docker cp`). Do not put it anywhere else under `storage/`:
+   only `private-storage` and `public-storage` survive a redeploy. The `backend`,
+   `worker` and `scheduler` containers all read it. Without it no phone notice is sent;
+   the app and the website keep working.
+3. Build the app with `npm run apk:live` (needs the release key and
+   `android/app/google-services.json`), then copy `AT-ICE.apk` and `app-version.json`
+   into the `app-downloads` volume (`/var/www/html/public/downloads/` in the `backend`
+   container). `GET /api/app-version` then returns the build number, the login page
+   offers the download (`/api/app-download`) and installed apps offer the update.
+   Until both files are there the API answers `{"build":0}` and the download is a 404.
+4. A website sign-in lasts `WEB_TOKEN_HOURS` (default 12); the app has no limit.
+   Changing the value does not shorten sign-ins that are already open.
+
 ## Backups
 
 A **scheduled task** (`mysql-backup`, container `mysql`) runs nightly at

@@ -57,7 +57,18 @@ services:
       PUSHER_APP_SECRET: ${PUSHER_APP_SECRET}
       PUSHER_APP_CLUSTER: ${PUSHER_APP_CLUSTER:-ap1}
       CORS_ALLOWED_ORIGINS: ${APP_URL:-https://www.atice.cloud}
-      SANCTUM_EXPIRATION: "1440"
+      # Android app (see DEPLOY.md, "Android app"). APP_CLIENT_KEY must be the
+      # same value the APK was built with (VITE_APP_CLIENT_KEY); empty means no
+      # app session is accepted. The Firebase service account file lives in the
+      # private-storage volume, so a redeploy keeps it.
+      APP_CLIENT_KEY: ${APP_CLIENT_KEY:-}
+      FIREBASE_CREDENTIALS: ${FIREBASE_CREDENTIALS:-/var/www/html/storage/app/private/firebase-service-account.json}
+      # How long a website sign-in lasts, and the idle limit per role (minutes).
+      # The Android app has neither limit.
+      WEB_TOKEN_HOURS: ${WEB_TOKEN_HOURS:-12}
+      IDLE_MINUTES_ADMIN: ${IDLE_MINUTES_ADMIN:-30}
+      IDLE_MINUTES_HR: ${IDLE_MINUTES_HR:-30}
+      IDLE_MINUTES_CUSTOMER: ${IDLE_MINUTES_CUSTOMER:-30}
       GROQ_API_KEY: ${GROQ_API_KEY}
       # Customer login emails and "Forgot password?" codes. "log" (default)
       # only writes them to the log; set the SMTP values to really send.
@@ -74,6 +85,9 @@ services:
       - public-storage:/var/www/html/storage/app/public
       # Private files that nginx must never serve (face pictures, applicants' resumes). Back it up too.
       - private-storage:/var/www/html/storage/app/private
+      # AT-ICE.apk and app-version.json (made by `npm run apk:live`, never in git).
+      # The API serves the file at /api/app-download; the volume keeps it across redeploys.
+      - app-downloads:/var/www/html/public/downloads
     depends_on:
       mysql:
         condition: service_healthy
@@ -93,6 +107,9 @@ services:
     environment:
       <<: *laravel-env
       RUN_MIGRATIONS: "false"
+    volumes:
+      # Phone notices are sent from here too, so it needs the Firebase file.
+      - private-storage:/var/www/html/storage/app/private
     depends_on:
       backend:
         condition: service_healthy
@@ -106,6 +123,10 @@ services:
     environment:
       <<: *laravel-env
       RUN_MIGRATIONS: "false"
+    volumes:
+      # Delay notices go out as phone notices from here, and archive expiry
+      # deletes private files, so it needs the same private storage.
+      - private-storage:/var/www/html/storage/app/private
     depends_on:
       backend:
         condition: service_healthy
@@ -145,5 +166,6 @@ services:
 volumes:
   public-storage:
   private-storage:
+  app-downloads:
   mysql-data:
   mysql-backups:
