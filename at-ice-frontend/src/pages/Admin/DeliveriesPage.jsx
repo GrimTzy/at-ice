@@ -536,6 +536,7 @@ export default function DeliveriesPage() {
                 type="button"
                 role="tab"
                 aria-selected={tab === t.value}
+                data-dest-trigger
                 onClick={() => setTab(t.value)}
                 className={`px-3 py-2.5 text-[12.5px] font-medium border-b-2 -mb-px whitespace-nowrap ${tab === t.value ? "border-cyan-500 text-cyan-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}
               >
