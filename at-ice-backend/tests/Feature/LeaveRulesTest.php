@@ -139,7 +139,7 @@ class LeaveRulesTest extends TestCase
 
         Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
         $this->putJson("/api/leave-requests/{$a->id}/status", ['status' => 'rejected'])
-            ->assertStatus(422)->assertJsonPath('errors.reject_reason.0', 'Give the reason for rejecting this leave.');
+            ->assertStatus(422)->assertJsonPath('errors.reject_reason.0', 'Give the reason for declining this leave.');
         $this->putJson("/api/leave-requests/{$a->id}/status", ['status' => 'rejected', 'reject_reason' => 'Peak delivery week'])->assertOk();
         $this->putJson("/api/leave-requests/{$b->id}/status", ['status' => 'approved'])->assertOk();
 

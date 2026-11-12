@@ -248,7 +248,7 @@ export default function LeaveRequestsPage() {
   const submitDecision = async () => {
     if (!decision) return;
     if (decision.status === "rejected" && rejectReason.trim().length < 3) {
-      setDecisionError("Give the reason for rejecting this leave.");
+      setDecisionError("Give the reason for declining this leave.");
       return;
     }
     setDeciding(true);

@@ -267,6 +267,11 @@ class DeliveryContractController extends Controller
         $contract->update(['status' => 'cancelled']);
         Audit::log('delivery_contract.cancelled', $contract, ['status' => $before], ['status' => 'cancelled', 'deliveries_cancelled' => $count]);
 
+        // A pending contract was never approved: Admin declined it (no deliveries exist yet).
+        if ($before === 'pending') {
+            return response()->json(['message' => "Contract {$contract->contract_no} declined. No deliveries were made."]);
+        }
+
         return response()->json(['message' => "Contract cancelled. {$count} upcoming deliveries were cancelled."]);
     }
 }

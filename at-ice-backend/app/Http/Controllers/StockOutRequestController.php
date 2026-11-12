@@ -180,13 +180,13 @@ class StockOutRequestController extends Controller
 
         if ($user->role !== 'admin') {
             return response()->json([
-                'message' => 'Only Admin can reject stock-out requests.',
+                'message' => 'Only Admin can decline stock-out requests.',
             ], 403);
         }
 
         if ($stockOutRequest->status !== 'pending') {
             return response()->json([
-                'message' => 'Only pending requests can be rejected.',
+                'message' => 'Only pending requests can be declined.',
             ], 422);
         }
 
@@ -202,7 +202,7 @@ class StockOutRequestController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Request rejected successfully.',
+            'message' => 'Request declined.',
             'request' => $stockOutRequest
                 ->fresh()
                 ->load(self::RELATIONS),

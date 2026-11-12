@@ -123,6 +123,11 @@ class LiveFeed
 
     private static function label(?string $v): string
     {
+        // A turned-down request is stored as "rejected" but shown as Declined.
+        if ($v === 'rejected') {
+            return 'Declined';
+        }
+
         return ucwords(str_replace('_', ' ', (string) $v));
     }
 
