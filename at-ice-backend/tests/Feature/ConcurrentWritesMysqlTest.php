@@ -149,8 +149,11 @@ class ConcurrentWritesMysqlTest extends TestCase
     {
         $e = $this->employee(1);
         $face = $this->face($e);
-        $now = now(config('atice.timezone'));
-        Attendance::create(['face_data_id' => $face->id, 'employee_id' => $e->id, 'date' => $now->toDateString(), 'time_in' => $now->copy()->subHours(3)->format('H:i:s'), 'status' => 'present']);
+        // date and time_in both come from the shift's own start, same as a real
+        // Time In would store them: close to midnight, "3 hours ago" can be
+        // yesterday's clock time, and date must agree with it.
+        $shiftStart = now(config('atice.timezone'))->subHours(3);
+        Attendance::create(['face_data_id' => $face->id, 'employee_id' => $e->id, 'date' => $shiftStart->toDateString(), 'time_in' => $shiftStart->format('H:i:s'), 'status' => 'present']);
 
         $results = $this->parallel(array_fill(0, 6, ['POST', 'api/attendances', ['face_data_id' => $face->id, 'type' => 'time_out'], '', $this->kioskToken]));
 

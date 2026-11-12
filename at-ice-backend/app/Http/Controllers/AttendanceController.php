@@ -255,15 +255,11 @@ class AttendanceController extends Controller
                 'Your start date is '.Carbon::parse($starts)->format('M j, Y').'. Time In opens on that day.');
         }
 
-        // Open record: today's, or yesterday's for a night shift. Locked for
-        // update so this read, inside the FaceData-locked critical section
-        // above, always sees the latest committed row instead of a snapshot
-        // taken before this transaction's turn.
+        // Open record: today's, or yesterday's for a night shift
         $open = Attendance::where('face_data_id', $faceData->id)
             ->whereNull('time_out')
             ->whereDate('date', '>=', $now->copy()->subDay()->toDateString())
             ->orderByDesc('date')
-            ->lockForUpdate()
             ->first();
 
         $openIn = null;
