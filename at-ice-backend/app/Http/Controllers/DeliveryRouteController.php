@@ -86,6 +86,9 @@ class DeliveryRouteController extends Controller
                 return response()->json(['message' => 'This stop is on another Driver\'s route. Change your Driver first.'], 403);
             }
         }
+        if ($delivery->isForLaterDay()) {
+            return response()->json(['message' => $delivery->laterDayMessage('marked Arrived')], 422);
+        }
         if ($delivery->status !== 'in_transit') {
             return response()->json(['message' => $delivery->status === 'pending'
                 ? 'The Driver has not started this delivery yet.'

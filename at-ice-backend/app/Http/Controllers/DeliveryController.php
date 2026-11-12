@@ -423,6 +423,10 @@ class DeliveryController extends Controller
             return response()->json(['message' => 'Only pending deliveries can be started.'], 422);
         }
 
+        if ($delivery->isForLaterDay()) {
+            return response()->json(['message' => $delivery->laterDayMessage('started')], 422);
+        }
+
         $delivery->update([
             'status' => 'in_transit',
             'dispatched_at' => now(),
