@@ -20,9 +20,22 @@ function lanAddress() {
   return found.find((ip) => ip.startsWith('192.168.')) || found[0] || ''
 }
 
+// The Android app file (public/downloads/AT-ICE.apk): without a type the phone's browser takes it
+// for a zip and saves AT-ICE.zip. A live web server must send this type for .apk as well.
+function apkHeader(req, res, next) {
+  if (/\.apk(\?|$)/i.test(req.url || '')) res.setHeader('Content-Type', 'application/vnd.android.package-archive')
+  next()
+}
+const apkType = {
+  name: 'apk-content-type',
+  configureServer(server) { server.middlewares.use(apkHeader) },
+  configurePreviewServer(server) { server.middlewares.use(apkHeader) },
+}
+
 export default defineConfig(({ command }) => ({
   plugins: [
     react(),
+    apkType,
     tailwindcss(),
   ],
   resolve: {

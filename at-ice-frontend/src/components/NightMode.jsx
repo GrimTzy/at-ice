@@ -60,6 +60,17 @@ export function ScopeStatusRow({ className = "mt-3" }) {
 const PULL_READY = 72;
 const PULL_MAX = 112;
 
+// A touch that starts on the map, on a page area marked data-no-pull, or inside a box that is
+// already scrolled down belongs to that box: a downward drag there scrolls it (or pans the map),
+// it must not reload the page.
+function inMapOrScroller(el) {
+  for (let n = el instanceof Element ? el : null; n && n !== document.body; n = n.parentElement) {
+    if (n.classList?.contains("leaflet-container") || n.hasAttribute?.("data-no-pull")) return true;
+    if (n !== document.documentElement && n.scrollTop > 0) return true;
+  }
+  return false;
+}
+
 function usePullToRefresh() {
   const [pull, setPull] = useState(0); // px pulled
   const [dragging, setDragging] = useState(false);
@@ -69,7 +80,7 @@ function usePullToRefresh() {
 
   useEffect(() => {
     const onStart = (e) => {
-      start.current = window.scrollY <= 0 && e.touches.length === 1
+      start.current = window.scrollY <= 0 && e.touches.length === 1 && !inMapOrScroller(e.target)
         ? { x: e.touches[0].clientX, y: e.touches[0].clientY, locked: null }
         : null;
     };

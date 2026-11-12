@@ -3,6 +3,8 @@
 // user's session can leak into the next one.
 
 import { clearAllDrafts } from "./useDraft";
+import { isMobileRole, isNativeApp } from "./native";
+import { removePushToken } from "./push";
 
 export const LOGIN_PATH = "/login";
 
@@ -22,6 +24,22 @@ export function saveSession(data) {
 }
 
 export function clearSession() {
+  // Ending the session on the server too: its token must stop working on this phone, and this
+  // phone stops getting notices for this person. A token the server no longer knows is refused,
+  // which is harmless here.
+  const bearer = localStorage.getItem("token");
+  if (bearer) {
+    removePushToken(bearer);
+    try {
+      fetch("/api/logout", {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: `Bearer ${bearer}` },
+        keepalive: true,
+      }).catch(() => {});
+    } catch {
+      // no network: the token is forgotten on this phone either way
+    }
+  }
   SESSION_KEYS.forEach((k) => localStorage.removeItem(k));
   // Unsaved form drafts (lib/useDraft.js) never outlive the session.
   clearAllDrafts();
@@ -43,6 +61,8 @@ const HOME_PATH_BY_SUB_ROLE = {
 // Where a user lands after login: their own dashboard. Returns null for an
 // employee with no known sub_role, or an unknown role.
 export function homePathFor(role, subRole) {
+  // the Android app only opens the four mobile roles
+  if (isNativeApp() && !isMobileRole(role, subRole)) return null;
   if (role === "employee") return HOME_PATH_BY_SUB_ROLE[subRole] || null;
   return HOME_PATH_BY_ROLE[role] || null;
 }

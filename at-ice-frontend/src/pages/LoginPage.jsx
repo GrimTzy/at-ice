@@ -6,11 +6,21 @@ import { PinEntry } from "../components/KioskScreens";
 import { RevealButton } from "../components/PasswordInput";
 import { useReveal } from "../lib/useReveal";
 import { clearSession, postLoginPath, saveSession } from "../lib/auth";
+import { isNativeApp } from "../lib/native";
+import { startPush } from "../lib/push";
 import { isBlockedDevice } from "../lib/kiosk";
 import { takeSessionExpiredNotice } from "../lib/sessionExpiry";
 import { clock, lockedEmail, useLoginLock } from "../lib/loginLock";
 import { playSplash } from "../lib/splash";
 import { Icon } from "../components/icons";
+
+// The AT-ICE app icon artwork shown in the download panel (public/download-poster.webp)
+const POSTER = "/download-poster.webp";
+
+// The Android app (APK) is served by the backend (same place as the API, so it works the same
+// on localhost and live, with the right file type). Set VITE_APK_URL to host it elsewhere.
+const APK_URL = import.meta.env.VITE_APK_URL || "/api/app-download";
+const LOGIN_TIMEOUT_MS = 15000;
 
 const MailIcon = () => (
   <Icon name="mail" size={18} strokeWidth={1.8} />
@@ -29,6 +39,7 @@ const fieldInput = "flex-1 bg-transparent text-[16px] text-slate-800 placeholder
 // panel never covers the form), how far the panel stops from the top when
 // open, and how much of it peeks when closed.
 const CARD_H = 560;
+const DOWNLOAD_H = 740; // least card height on a phone or tablet (taller download panel)
 const KIOSK_TOP = 64;
 const PEEK = 72;
 
@@ -52,14 +63,68 @@ export default function LoginPage() {
   const kiosk = mode === "kiosk";
   const [kioskBlocked, setKioskBlocked] = useState(false);
 
+  // Phones and tablets get "Download AT-ICE App" in place of the Attendance Station.
+  // Inside the app itself there is nothing to download, so the panel is left out.
+  const [phoneView, setPhoneView] = useState(() => isBlockedDevice());
+  useEffect(() => {
+    const onResize = () => setPhoneView(isBlockedDevice());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const native = isNativeApp();
+
+  const [dlBusy, setDlBusy] = useState(false);
+  const [dlError, setDlError] = useState("");
+  // Checks the file really is there first: a missing file would otherwise download the web page.
+  async function downloadApp() {
+    if (dlBusy) return;
+    setDlError("");
+    setDlBusy(true);
+    try {
+      // the backend says whether an app file is published (it also serves the file)
+      const res = await fetch("/api/app-version", { headers: { Accept: "application/json" } });
+      const info = res.ok ? await res.json().catch(() => null) : null;
+      if (!info || !(Number(info.build) > 0)) {
+        setDlError("The app file is not available yet. Please try again later or ask the Admin.");
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = APK_URL;
+      a.download = "AT-ICE.apk";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      setDlError("Network error. Please check your connection.");
+    } finally {
+      setDlBusy(false);
+    }
+  }
+
   // Bumped on every open so the PIN boxes start empty and take the focus.
   const [pinRun, setPinRun] = useState(0);
   const showKiosk = () => {
     if (kiosk) return;
     setKioskBlocked(isBlockedDevice());
+    setDlError("");
     setPinRun((n) => n + 1);
     setMode("kiosk");
+    if (isBlockedDevice()) followCardDown();
   };
+  // The download panel is taller than the screen: while the card grows, scroll
+  // along so the whole panel comes into view.
+  const cardRef = useRef(null);
+  function followCardDown() {
+    const start = performance.now();
+    const step = (now) => {
+      const el = cardRef.current;
+      if (!el) return;
+      const over = el.getBoundingClientRect().bottom + 24 - window.innerHeight;
+      if (over > 0) window.scrollBy(0, Math.min(over, 40));
+      if (now - start < 900) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
   const showLogin = () => setMode("login");
 
   useEffect(() => {
@@ -79,7 +144,9 @@ export default function LoginPage() {
       return;
     }
     let cancelled = false;
-    fetch("/api/me", { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } })
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
+    fetch("/api/me", { signal: controller.signal, headers: { Accept: "application/json", Authorization: `Bearer ${token}` } })
       .then((res) => {
         if (cancelled) return;
         const path = res.ok
@@ -99,9 +166,12 @@ export default function LoginPage() {
       })
       .catch(() => {
         if (!cancelled) setExisting(false);
-      });
+      })
+      .finally(() => clearTimeout(timer));
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      controller.abort();
     };
   }, []);
 
@@ -109,19 +179,26 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setNotice("");
-    if (lock.locked) return; // the server refuses it anyway; this just skips the call
+    if (loading || lock.locked) return; // the server refuses it anyway; this just skips the call
     if (!email.trim() || !password) {
       setError("Please enter your email and password.");
       return;
     }
     setLoading(true);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
     try {
       const res = await fetch("/api/login", {
+        signal: controller.signal,
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        // from the Android app the four mobile roles stay signed in (no session time limit)
+        headers: { "Content-Type": "application/json", Accept: "application/json", ...(isNativeApp() ? { "X-AT-ICE-App": "android" } : {}) },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      const data = await res.json().catch(() => null);
+      const data = await res.json().catch((err) => {
+        if (controller.signal.aborted) throw err;
+        return null;
+      });
       if (res.status === 429 && data?.retry_after_seconds) {
         lock.start(Number(data.retry_after_seconds));
         return;
@@ -139,16 +216,20 @@ export default function LoginPage() {
           method: "POST",
           headers: { Accept: "application/json", Authorization: `Bearer ${data.token}` },
         }).catch(() => {});
-        setError("Your account has no role assigned. Contact HR.");
+        setError(isNativeApp() && role ? "This app is for Driver, Checker, Salesman and Maintenance only. Please use the website." : "Your account has no role assigned. Contact HR.");
         return;
       }
 
       saveSession({ ...data, role });
+      startPush(data.token);
       playSplash();
       navigate(path, { replace: true });
     } catch {
-      setError("Network error. Please check your connection.");
+      setError(controller.signal.aborted
+        ? "Cannot reach the server. Check the server connection and try again. For USB testing, keep the USB connection active."
+        : "Network error. Please check your connection.");
     } finally {
+      clearTimeout(timer);
       setLoading(false);
     }
   }
@@ -159,12 +240,15 @@ export default function LoginPage() {
   useLayoutEffect(() => {
     const fit = () => {
       const el = formLayer.current;
-      if (el) setCardH(Math.max(CARD_H, el.scrollHeight + PEEK + 12));
+      // the download panel is taller than the PIN panel, so the card needs more room on phones
+      // closed it keeps the normal length; it only grows while the panel is open
+      const least = phoneView && !native && kiosk ? DOWNLOAD_H : CARD_H;
+      if (el) setCardH(Math.max(least, el.scrollHeight + PEEK + 12));
     };
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, [error, notice, existing]);
+  }, [error, notice, existing, phoneView, native, kiosk]);
 
   if (typeof existing === "string") return <Navigate to={existing} replace />;
   if (existing === null) {
@@ -195,7 +279,7 @@ export default function LoginPage() {
             peeks from the bottom. Clicking its title slides it up over the form
             and shows the HR PIN; clicking "Login" (or Esc, or Cancel) slides it
             back down. Only transform and opacity animate. */}
-        <div className="relative rounded-[28px] overflow-clip shadow-2xl shadow-black/40 bg-[var(--neu-bg)]"
+        <div ref={cardRef} className="relative rounded-[28px] overflow-clip shadow-2xl shadow-black/40 bg-[var(--neu-bg)] transition-[height] duration-[800ms] ease-in-out"
           style={{ height: cardH }}>
           {/* Base layer: sign in */}
           <div ref={formLayer} className="absolute inset-x-0 top-0 flex flex-col px-5 sm:px-8">
@@ -311,9 +395,10 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Sliding layer: Attendance Station */}
+          {/* Sliding layer: Attendance Station on a computer, Download AT-ICE App on a phone or tablet */}
+          {!native && (
           <div
-            className="neu-dark absolute inset-x-0 top-0 bg-[var(--neu-bg)] shadow-[0_-10px_24px_rgba(163,177,198,0.55)] transition-transform duration-[800ms] ease-in-out"
+            className="neu-dark absolute inset-x-0 top-0 bg-[var(--neu-bg)] shadow-[0_-10px_24px_rgba(163,177,198,0.55)] transition-[transform,height] duration-[800ms] ease-in-out"
             style={{
               height: cardH - KIOSK_TOP,
               // Curved top only, so no light corners show at the bottom of the card
@@ -325,15 +410,72 @@ export default function LoginPage() {
               type="button"
               onClick={showKiosk}
               tabIndex={kiosk ? -1 : 0}
-              className={`slide-title block mx-auto mt-3.5 text-[32px] font-bold text-white tracking-wide transition-transform duration-500 ease-in-out ${kiosk ? "scale-100 cursor-default" : "scale-[0.6] cursor-pointer hover:text-cyan-200"}`}
+              className={`slide-title block mx-auto mt-3.5 whitespace-nowrap outline-none ${phoneView ? "text-[26px]" : "text-[32px]"} font-bold text-white tracking-wide transition-transform duration-500 ease-in-out ${kiosk ? "scale-100 cursor-default" : "scale-[0.6] cursor-pointer hover:text-cyan-200"}`}
             >
-              Attendance Station
+              {phoneView ? (
+                <span className="inline-flex items-center">
+                  {/* The icon squeezes in from both sides and vanishes while the panel rises */}
+                  <span
+                    aria-hidden="true"
+                    className={`inline-flex origin-center overflow-hidden transition-[transform,width,margin,opacity] duration-[800ms] ease-in-out ${kiosk ? "w-0 mr-0 scale-x-0 opacity-0" : "w-8 mr-2 scale-x-100 opacity-100"}`}
+                  >
+                    <Icon name="download" size={30} strokeWidth={2} />
+                  </span>
+                  Download AT-ICE App
+                </span>
+              ) : (
+                "Attendance Station"
+              )}
             </button>
 
             <div
               inert={!kiosk}
               className={`px-6 sm:px-10 pt-3 pb-5 text-center transition-opacity duration-500 ${kiosk ? "opacity-100 delay-300" : "opacity-0"}`}
             >
+              {phoneView ? (
+                <>
+                  <img
+                    src={POSTER}
+                    alt="AT-ICE"
+                    className="mx-auto w-56 h-auto -mt-2"
+                    // the artwork's edges fade into the dark panel, as in the design
+                    style={{ WebkitMaskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 62%, transparent 100%)", maskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 62%, transparent 100%)" }}
+                  />
+                  <h2 className="mt-1 text-[22px] font-semibold text-white">AT-ICE ERP</h2>
+                  <p className="mt-2 text-[14px] leading-relaxed text-slate-300">
+                    The AT-ICE mobile app gives Bella Erin field staff quick and secure access to their daily work, anytime, anywhere.
+                  </p>
+                  {dlError && (
+                    <div role="alert" className="mt-3 text-[13px] text-red-300">{dlError}</div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={downloadApp}
+                    disabled={dlBusy}
+                    className="neu-raised-sm mt-4 w-full min-h-[52px] rounded-xl text-white hover:text-cyan-200 active:shadow-[var(--neu-inset-sm)] text-[17px] font-semibold cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <Icon name="download" size={22} strokeWidth={2} />
+                    {dlBusy ? "Checking…" : "Download AT-ICE ERP"}
+                  </button>
+                  <div className="neu-inset-sm mt-4 rounded-2xl p-4 text-left flex flex-col gap-4">
+                    <div className="flex gap-3">
+                      <span className="text-slate-200 flex-shrink-0 mt-0.5"><Icon name="smartphone" size={30} strokeWidth={1.6} /></span>
+                      <div>
+                        <div className="text-[14px] font-semibold text-white">What's Inside?</div>
+                        <p className="text-[13px] leading-snug text-slate-300">Deliveries and GPS routes, store checking, sales, and maintenance tasks, with the same account and data as the website.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="text-slate-200 flex-shrink-0 mt-0.5"><Icon name="users" size={30} strokeWidth={1.6} /></span>
+                      <div>
+                        <div className="text-[14px] font-semibold text-white">Who Can Use It?</div>
+                        <p className="text-[13px] leading-snug text-slate-300">Drivers, Checkers, Salesmen and Maintenance staff only. Admin, HR and Customer accounts are restricted from the app.</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+              <>
               <div className={`neu-raised-sm mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ${kioskBlocked ? "text-amber-300" : "text-cyan-300"}`}>
                 <LockIcon />
               </div>
@@ -360,8 +502,11 @@ export default function LoginPage() {
               >
                 Cancel
               </button>
+              </>
+              )}
             </div>
           </div>
+          )}
         </div>
 
         <p className="text-center text-[10px] text-white/30 mt-5 tracking-wide">© 2026 AT-ICE ERP</p>
