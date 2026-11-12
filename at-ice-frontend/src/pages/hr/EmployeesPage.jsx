@@ -705,7 +705,7 @@ export default function EmployeesPage() {
           <div className="flex-1" />
           <button
             type="button"
-            aria-pressed={unenrolledFirst}
+            data-dest-trigger aria-pressed={unenrolledFirst}
             onClick={() => setUnenrolledFirst((v) => !v)}
             title="Put employees with no enrolled face at the top of the list"
             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer ${
