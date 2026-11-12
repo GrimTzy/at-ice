@@ -16,8 +16,8 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string',
+            'email' => 'required|email|max:255',
+            'password' => 'required|string|max:255',
             'platform' => 'nullable|string|in:web,android',
         ]);
 
@@ -126,7 +126,7 @@ class AuthController extends Controller
         $firstLogin = (bool) $user->must_change_password;
 
         $validated = $request->validate([
-            'current_password' => $firstLogin ? 'nullable|string' : 'required|string',
+            'current_password' => $firstLogin ? 'nullable|string|max:255' : 'required|string|max:255',
             // At least 8 characters with uppercase, lowercase, a number and a special character.
             'password' => ['required', 'string', 'max:100', 'confirmed', 'different:current_password',
                 Password::min(8)->mixedCase()->numbers()->symbols()],

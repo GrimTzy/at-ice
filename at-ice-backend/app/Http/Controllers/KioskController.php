@@ -247,7 +247,7 @@ class KioskController extends Controller
     public function setHrOverridePin(Request $request)
     {
         $data = $request->validate([
-            'current_password' => 'required|string',
+            'current_password' => 'required|string|max:255',
             'override_pin' => ['required', 'string', 'regex:/^\d{4}$/', 'confirmed'],
         ], [
             'override_pin.regex' => 'The HR override PIN must be exactly 4 digits.',
@@ -270,7 +270,7 @@ class KioskController extends Controller
     public function update(Request $request)
     {
         $data = $request->validate([
-            'current_password' => 'required|string',
+            'current_password' => 'required|string|max:255',
             'pin' => ['required', 'string', 'regex:/^\d{4}$/', 'confirmed'],
         ], [
             'pin.regex' => 'The PIN must be exactly 4 digits.',
@@ -289,7 +289,7 @@ class KioskController extends Controller
     public function setAdminPin(Request $request)
     {
         $data = $request->validate([
-            'current_password' => 'required|string',
+            'current_password' => 'required|string|max:255',
             'admin_pin' => ['required', 'string', 'regex:/^\d{4}$/', 'confirmed'],
         ], [
             'admin_pin.regex' => 'The Admin override PIN must be exactly 4 digits.',

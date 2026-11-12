@@ -86,7 +86,7 @@ class SettingsController extends Controller
 
     private function save(Request $request, bool $admin)
     {
-        $request->validate(['key' => 'required|string', 'value' => 'present']);
+        $request->validate(['key' => 'required|string|max:100', 'value' => 'present']);
         $key = $request->input('key');
         if (Settings::isAdminKey($key) !== $admin) {
             return response()->json(['message' => $admin
