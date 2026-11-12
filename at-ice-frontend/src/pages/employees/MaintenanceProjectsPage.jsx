@@ -7,6 +7,7 @@ import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 
 const STATUS = { planned: "Planned", working: "Working on it", stuck: "Stuck", done: "Done" };
 const EMPTY = { name: "", description: "", location: "" };
@@ -20,6 +21,7 @@ export default function MaintenanceProjectsPage() {
   const [params, setParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | ready | error
+  useNoticeRecord(status === "ready"); // a phone notice about a project shows it
   const [loadError, setLoadError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY);
@@ -117,7 +119,7 @@ export default function MaintenanceProjectsPage() {
       {status === "ready" && (
         <div className="grid grid-cols-1 gap-3">
           {sorted.map((p) => (
-            <article key={p.id} className={`${CARD} ${p.status === "stuck" || p.overdue ? "border-rose-200" : ""}`}>
+            <article key={p.id} data-record={`project:${p.id}`} data-record-scroll className={`${CARD} ${p.status === "stuck" || p.overdue ? "border-rose-200" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <h2 className="text-[15px] font-semibold text-slate-900">{p.name}</h2>
                 <StatusBadge tone={p.overdue && p.status !== "done" ? "urgent" : undefined} status={p.status}>

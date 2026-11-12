@@ -18,6 +18,7 @@ import { pressArrived } from "../../lib/route";
 import { toast } from "../../lib/toast";
 import FilterSelect from "../../components/FilterSelect";
 import { Icon } from "../../components/icons";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 
 // Haversine formula, gives straight line distance in km between two lat/lng points
 function haversineDistanceKm(lat1, lon1, lat2, lon2) {
@@ -78,6 +79,7 @@ export function DeliveriesPage() {
   const [actionLoading, setActionLoading] = useState(null);
   const [salesmen, setSalesmen] = useState([]);
   const [radius, setRadius] = useState(150);
+  useNoticeRecord(!loading); // a phone notice about a delivery opens it
   const timedIn = useTimedIn();
   const watchIdRef = useRef(null);
 
@@ -268,6 +270,7 @@ export function DeliveriesPage() {
               <button
                 className="w-full text-left px-4 py-4 flex items-start gap-3 cursor-pointer active:bg-slate-50 transition-colors"
                 onClick={() => setExpanded(open ? null : d.id)}
+                data-record={`delivery:${d.id}`}
               >
                 <div className="mt-1 flex-shrink-0">
                   <span className={`w-2 h-2 rounded-full inline-block ${cfg.dot}`} />

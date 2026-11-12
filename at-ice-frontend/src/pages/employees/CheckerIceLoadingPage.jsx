@@ -6,6 +6,7 @@ import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 import { useMaxQuantity } from "../../lib/limits";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
@@ -35,6 +36,7 @@ export default function CheckerIceLoadingPage() {
   const [loadings, setLoadings] = useState([]);
   const [deliveries, setDeliveries] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | ready | error
+  useNoticeRecord(status === "ready"); // a phone notice about a delivery opens its count
   const [loadError, setLoadError] = useState("");
   const timedIn = useTimedIn();
   const [query, setQuery] = useState("");
@@ -157,7 +159,7 @@ export default function CheckerIceLoadingPage() {
             ) : (
               <div className="grid grid-cols-1 gap-3">
                 {shownDeliveries.map((d) => (
-                  <button key={d.id} type="button" onClick={() => openCount(d)} disabled={d.loaded}
+                  <button key={d.id} type="button" onClick={() => openCount(d)} disabled={d.loaded} data-record={`delivery:${d.id}`}
                     aria-label={`${d.delivery_no} ${d.customer || ""}${d.loaded ? ", counted" : ", tap to count"}`}
                     className={`${CARD_BUTTON} flex items-center gap-3 ${d.loaded ? "!opacity-100 border-emerald-200 bg-emerald-50/40" : ""}`}>
                     <span className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${d.loaded ? "bg-emerald-100 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>

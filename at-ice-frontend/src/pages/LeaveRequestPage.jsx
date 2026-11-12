@@ -24,6 +24,7 @@ import { UploadBar } from "../components/FileDropZone";
 import { sendForm } from "../lib/upload";
 import { confirmAction } from "../lib/confirm";
 import { PILL } from "../lib/statusTones";
+import { useNoticeRecord } from "../lib/noticeRecord";
 
 const TYPE_LABEL = {
   sick: "Sick Leave (SL)",
@@ -53,6 +54,7 @@ export default function LeaveRequestPage() {
   const [leaves, setLeaves] = useState([]);
   const [credits, setCredits] = useState(null); // { available, earned, used, probationary, hours_per_day, sl_filing_window_days, vl_notice_days }
   const [loading, setLoading] = useState(true);
+  useNoticeRecord(!loading); // a phone notice about a leave request shows it
   const [loadError, setLoadError] = useState("");
 
   // The form is kept as a draft once the employee changes something, so a
@@ -304,7 +306,7 @@ export default function LeaveRequestPage() {
         {!loading && !loadError && leaves.length === 0 && <EmptyState icon="calendar">No leave requests yet.</EmptyState>}
 
         {leaves.map((l) => (
-          <div key={l.id} className="bg-white border border-black/[0.09] rounded-xl p-4 flex flex-col gap-1.5">
+          <div key={l.id} data-record={`leave_request:${l.id}`} data-record-scroll className="bg-white border border-black/[0.09] rounded-xl p-4 flex flex-col gap-1.5">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[14px] font-bold text-slate-800">{TYPE_LABEL[l.leave_type] || l.leave_type}</span>

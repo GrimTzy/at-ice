@@ -7,6 +7,7 @@ import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import { formatDateTime } from "../../lib/time";
@@ -45,6 +46,7 @@ export default function CheckerInventoryManagementPage() {
   const [products, setProducts] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [status, setStatus] = useState("loading");
+  useNoticeRecord(status === "ready"); // a phone notice about an item or an alert shows it
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [showResolved, setShowResolved] = useState(false);
@@ -191,7 +193,7 @@ export default function CheckerInventoryManagementPage() {
                 </div>
                 <div className="flex items-center justify-between gap-3 mt-3">
                   <StatusBadge tone={p._s.tone}>{p._s.label}</StatusBadge>
-                  <button type="button" onClick={() => openEdit(p)} className="min-h-[44px] px-3 -mr-2 inline-flex items-center gap-1.5 rounded-xl text-[14px] font-semibold text-cyan-700 active:scale-[0.98] transition-transform">
+                  <button type="button" onClick={() => openEdit(p)} data-record={`product:${p.id}`} className="min-h-[44px] px-3 -mr-2 inline-flex items-center gap-1.5 rounded-xl text-[14px] font-semibold text-cyan-700 active:scale-[0.98] transition-transform">
                     <Icon name="edit" size={16} /> Edit details
                   </button>
                 </div>
@@ -212,7 +214,7 @@ export default function CheckerInventoryManagementPage() {
           ) : (
             <div className="grid grid-cols-1 gap-3">
               {visibleAlerts.map((a) => (
-                <article key={a.id} className={`${CARD} ${a.is_resolved ? "" : "border-rose-200"}`}>
+                <article key={a.id} data-record={`inventory_alert:${a.id}`} data-record-scroll className={`${CARD} ${a.is_resolved ? "" : "border-rose-200"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h2 className="text-[15px] font-semibold text-slate-900 truncate">{a.product?.name || "Unknown item"}</h2>

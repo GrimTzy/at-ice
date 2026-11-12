@@ -7,7 +7,7 @@ import { RevealButton } from "../components/PasswordInput";
 import { useReveal } from "../lib/useReveal";
 import { clearSession, postLoginPath, saveSession } from "../lib/auth";
 import { isNativeApp } from "../lib/native";
-import { startPush } from "../lib/push";
+import { startPush, appHeaders } from "../lib/push";
 import { isBlockedDevice } from "../lib/kiosk";
 import { takeSessionExpiredNotice } from "../lib/sessionExpiry";
 import { clock, lockedEmail, useLoginLock } from "../lib/loginLock";
@@ -192,7 +192,7 @@ export default function LoginPage() {
         signal: controller.signal,
         method: "POST",
         // from the Android app the four mobile roles stay signed in (no session time limit)
-        headers: { "Content-Type": "application/json", Accept: "application/json", ...(isNativeApp() ? { "X-AT-ICE-App": "android" } : {}) },
+        headers: { "Content-Type": "application/json", Accept: "application/json", ...appHeaders() },
         body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await res.json().catch((err) => {

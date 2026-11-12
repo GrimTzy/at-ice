@@ -8,6 +8,7 @@ import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 import AddressFields from "../../components/AddressFields";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
@@ -24,6 +25,7 @@ export default function CheckerSupplierManagementPage() {
   const token = localStorage.getItem("token");
   const [suppliers, setSuppliers] = useState([]);
   const [status, setStatus] = useState("loading");
+  useNoticeRecord(status === "ready"); // a phone notice about a supplier shows it
   const [loadError, setLoadError] = useState("");
   const [formError, setFormError] = useState("");
   const [query, setQuery] = useState("");
@@ -149,7 +151,7 @@ export default function CheckerSupplierManagementPage() {
       {status === "ready" && (
         <div className="grid grid-cols-1 gap-3">
           {visible.map((s) => (
-            <article key={s.id} className={CARD}>
+            <article key={s.id} data-record={`supplier:${s.id}`} data-record-scroll className={CARD}>
               <h2 className="text-[15px] font-semibold text-slate-900">{s.name}</h2>
               <div className="text-[13px] text-slate-400 font-mono">{s.supplier_code}</div>
               {s.contact_person && <div className="text-[14px] text-slate-600 mt-1">{s.contact_person}</div>}

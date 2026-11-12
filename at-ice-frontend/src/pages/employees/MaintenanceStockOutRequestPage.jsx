@@ -12,6 +12,7 @@ import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import FilterSelect from "../../components/FilterSelect";
 import { QTY_CEILING, QTY_INPUT_PROPS, cleanQty, qtyWasCapped } from "../../lib/quantity";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 
 const STATUS_LABEL = { pending: "Pending", approved: "Approved", released: "Released", rejected: "Rejected" };
 const FILTERS = [["all", "All"], ["pending", "Pending"], ["approved", "Approved"], ["released", "Released"], ["rejected", "Rejected"]];
@@ -48,6 +49,7 @@ export default function MaintenanceStockOutRequestPage() {
   const [items, setItems] = useState([]);
   const [itemsError, setItemsError] = useState("");
   const [projects, setProjects] = useState([]);
+  useNoticeRecord(true); // a phone notice about a stock-out request shows it
   const [notice, setNotice] = useState("");
 
   const [requests, setRequests] = useState([]);
@@ -192,7 +194,7 @@ export default function MaintenanceStockOutRequestPage() {
       {!loading && !loadError && (
         <div className="grid grid-cols-1 gap-3">
           {visible.map((req) => (
-            <article key={req.id} className={CARD}>
+            <article key={req.id} data-record={`stock_out_request:${req.id}`} data-record-scroll className={CARD}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-[15px] font-semibold text-slate-900">{req.product?.name || req.item_name}</h2>

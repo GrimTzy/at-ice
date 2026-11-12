@@ -6,6 +6,7 @@ import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import { formatDateTime } from "../../lib/time";
@@ -30,6 +31,7 @@ export default function CheckerStockMovementsPage() {
   const [movements, setMovements] = useState([]);
   const [products, setProducts] = useState([]);
   const [status, setStatus] = useState("loading");
+  useNoticeRecord(status === "ready"); // a phone notice about a movement shows it
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("pending");
   const [query, setQuery] = useState("");
@@ -146,7 +148,7 @@ export default function CheckerStockMovementsPage() {
       {status === "ready" && (
         <div className="grid grid-cols-1 gap-3">
           {visible.map((m) => (
-            <article key={m.id} className={`${CARD} ${m.status === "confirmed" ? "border-emerald-200" : ""}`}>
+            <article key={m.id} data-record={`stock_movement:${m.id}`} data-record-scroll className={`${CARD} ${m.status === "confirmed" ? "border-emerald-200" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-[15px] font-semibold text-slate-900 truncate">{m.product?.name || "Unknown item"}</h2>

@@ -86,7 +86,11 @@ function run(cmd, args, opts = {}) {
 // server's is higher.
 const BUILD = Math.floor(Date.now() / 1000);
 const BUILD_NAME = new Date().toISOString().slice(0, 16).replace("T", " ");
-const env = { ...process.env, VITE_API_BASE: apiBase, VITE_BACKEND_URL: apiBase, VITE_APP_BUILD: String(BUILD) };
+// The app's key (VITE_APP_CLIENT_KEY in .env.android): the server accepts the app's logins and phone
+// addresses only with it. It must equal APP_CLIENT_KEY in the backend .env.
+const appKey = readEnvFile(path.join(ROOT, ".env.android")).VITE_APP_CLIENT_KEY || "";
+if (!appKey) fail("no VITE_APP_CLIENT_KEY in .env.android (copy the APP_CLIENT_KEY of at-ice-backend/.env).");
+const env = { ...process.env, VITE_API_BASE: apiBase, VITE_BACKEND_URL: apiBase, VITE_APP_BUILD: String(BUILD), VITE_APP_CLIENT_KEY: appKey };
 run("npx", ["vite", "build", "--mode", "android"], { env });
 // public/downloads holds the APK itself (for the website button): it must not be packed into the app,
 // or each build would carry the one before and grow.
