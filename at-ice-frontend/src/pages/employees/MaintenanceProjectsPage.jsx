@@ -10,6 +10,8 @@ import { useLiveTick } from "../../lib/live";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import { useNoticeRecord } from "../../lib/noticeRecord";
+import { NameHelp } from "../../components/FieldError";
+import { LIMITS, nameError } from "../../lib/textRules";
 
 const STATUS = { planned: "Planned", working: "Working on it", stuck: "Stuck", done: "Done" };
 const EMPTY = { name: "", description: "", location: "" };
@@ -60,6 +62,7 @@ export default function MaintenanceProjectsPage() {
     if (!form.name.trim()) local.name = ["Enter the project name."];
     if (!form.description.trim()) local.description = ["Describe the job."];
     if (!form.location.trim()) local.location = ["Enter where the job is."];
+    if (!local.name && nameError(form.name, "name", LIMITS.STORE, "Project name")) local.name = [nameError(form.name, "name", LIMITS.STORE, "Project name")];
     if (Object.keys(local).length) return setErrors(local);
     setSaving(true);
     try {
@@ -87,13 +90,14 @@ export default function MaintenanceProjectsPage() {
     <div>
       <label htmlFor={`project-${key}`} className={LABEL}>{label} *</label>
       {multiline ? (
-        <textarea id={`project-${key}`} rows={3} value={form[key]} placeholder={placeholder}
+        <textarea id={`project-${key}`} rows={3} maxLength={2000} value={form[key]} placeholder={placeholder}
           onChange={(e) => { setForm({ ...form, [key]: e.target.value }); setErrors({}); }} className={TEXTAREA} />
       ) : (
-        <input id={`project-${key}`} value={form[key]} placeholder={placeholder} maxLength={key === "name" ? 50 : undefined}
+        <input id={`project-${key}`} maxLength={key === "name" ? LIMITS.STORE : LIMITS.ADDRESS} value={form[key]} placeholder={placeholder}
           onChange={(e) => { setForm({ ...form, [key]: e.target.value }); setErrors({}); }} className={FIELD} />
       )}
-      {errors[key] && <p className="text-[13px] text-rose-700 mt-1.5">{errors[key][0]}</p>}
+      {errors[key] ? <p className="text-[13px] text-rose-700 mt-1.5">{errors[key][0]}</p>
+        : key === "name" && <NameHelp value={form.name} max={LIMITS.STORE} error={nameError(form.name, "name", LIMITS.STORE, "Project name")} />}
     </div>
   );
 

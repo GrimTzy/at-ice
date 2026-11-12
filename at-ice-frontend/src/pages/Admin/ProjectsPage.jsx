@@ -10,6 +10,8 @@ import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { initialsOf } from "../../lib/initials";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { NameHelp } from "../../components/FieldError";
+import { LIMITS, nameError } from "../../lib/textRules";
 
 // Admin > Projects: a monday.com-style board of maintenance and plant jobs.
 // Groups by status, a colored status and priority cell per project, a
@@ -169,6 +171,7 @@ export default function ProjectsPage() {
     if (form.start_date && form.due_date && form.due_date < form.start_date) {
       return setFormErrors({ due_date: ["The due date cannot be before the start date."] });
     }
+    if (nameError(form.owner, "person", LIMITS.FULL, "Owner")) return; // shown under the field
     // Name, description and location are Maintenance's and are not sent.
     const body = JSON.stringify({
       status: form.status,
@@ -351,9 +354,11 @@ export default function ProjectsPage() {
                     min={type === "number" ? 0 : key === "due_date" ? form.start_date || undefined : undefined}
                     onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
                     placeholder={ph}
+                    maxLength={type === "text" ? LIMITS.FULL : undefined}
                     className="px-2.5 py-2 border border-black/[0.09] rounded-md text-[13px] outline-none focus:border-cyan-400"
                   />
-                  {formErrors[key] && <span className="text-[10px] text-red-500">{formErrors[key][0]}</span>}
+                  {formErrors[key] ? <span className="text-[10px] text-red-500">{formErrors[key][0]}</span>
+                    : key === "owner" && <NameHelp value={form.owner} max={LIMITS.FULL} error={nameError(form.owner, "person", LIMITS.FULL, "Owner")} />}
                 </label>
               ))}
               {[["status", "Status", STATUS], ["priority", "Priority", PRIORITY]].map(([key, label, opts]) => (

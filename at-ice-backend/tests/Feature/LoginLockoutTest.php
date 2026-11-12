@@ -47,7 +47,7 @@ class LoginLockoutTest extends TestCase
     public function test_the_fifth_wrong_password_starts_a_three_minute_lockout(): void
     {
         foreach (range(1, 4) as $i) {
-            $this->login('ana@atice.cloud', 'wrong')->assertStatus(401)->assertExactJson(['message' => 'Invalid credentials.']);
+            $this->login('ana@atice.cloud', 'wrong')->assertStatus(401)->assertExactJson(['message' => 'The email address or password is not correct. Check them and try again.']);
         }
 
         $this->login('ana@atice.cloud', 'wrong')

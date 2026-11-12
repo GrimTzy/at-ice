@@ -8,6 +8,7 @@ use App\Support\Audit;
 use App\Support\DeliveryDispatch;
 use App\Support\DriverAvailability;
 use App\Support\RouteCapacity;
+use App\Support\TextRules;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +37,7 @@ class DeliveryContractController extends Controller
     public function nextNumber(Request $request)
     {
         $data = $request->validate([
-            'chain' => 'nullable|string|max:50',
+            'chain' => ['nullable', ...TextRules::store(TextRules::NAME)],
             'store_ids' => 'required|array|min:1',
             'store_ids.*' => 'integer|exists:customers,id',
         ]);
@@ -47,8 +48,8 @@ class DeliveryContractController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name' => 'required|string|max:50',
-            'chain' => 'nullable|string|max:50',
+            'name' => ['required', ...TextRules::store(TextRules::STORE, 'Contract name')],
+            'chain' => ['nullable', ...TextRules::store(TextRules::NAME)],
             'store_ids' => 'required|array|min:1',
             'store_ids.*' => 'integer|distinct|exists:customers,id',
             'start_date' => 'required|date|after_or_equal:'.DriverAvailability::today(),
@@ -61,7 +62,7 @@ class DeliveryContractController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|distinct|in:bags,small_sack,big_sack',
             'items.*.quantity' => 'required|integer|min:1|max:'.config('atice.max_product_quantity'),
-            'notes' => 'nullable|string|max:1000',
+            'notes' => ['nullable', ...TextRules::note()],
         ], [
             'store_ids.required' => 'Pick at least one store.',
             'delivery_days.required' => 'Pick at least one delivery day.',
@@ -198,7 +199,7 @@ class DeliveryContractController extends Controller
         }
 
         $data = $request->validate([
-            'name' => 'required|string|max:50',
+            'name' => ['required', ...TextRules::store(TextRules::STORE, 'Contract name')],
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date|before_or_equal:'.now(config('atice.timezone'))->addYear()->toDateString(),
             'delivery_days' => 'required|array|min:1',
@@ -209,7 +210,7 @@ class DeliveryContractController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|distinct|in:bags,small_sack,big_sack',
             'items.*.quantity' => 'required|integer|min:1|max:'.config('atice.max_product_quantity'),
-            'notes' => 'nullable|string|max:1000',
+            'notes' => ['nullable', ...TextRules::note()],
         ], [
             'delivery_days.required' => 'Pick at least one delivery day.',
             'end_date.before_or_equal' => 'A contract can run for at most one year.',

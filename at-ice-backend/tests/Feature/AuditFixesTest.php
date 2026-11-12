@@ -91,8 +91,8 @@ class AuditFixesTest extends TestCase
         $unknown = $this->postJson('/api/login', ['email' => 'nobody@example.com', 'password' => 'Wrong#12345']);
         $wrong = $this->postJson('/api/login', ['email' => 'known@example.com', 'password' => 'Wrong#12345']);
 
-        $unknown->assertStatus(401)->assertJsonPath('message', 'Invalid credentials.');
-        $wrong->assertStatus(401)->assertJsonPath('message', 'Invalid credentials.');
+        $unknown->assertStatus(401)->assertJsonPath('message', 'The email address or password is not correct. Check them and try again.');
+        $wrong->assertStatus(401)->assertJsonPath('message', 'The email address or password is not correct. Check them and try again.');
         $this->assertSame($unknown->json('attempts_remaining'), $wrong->json('attempts_remaining'));
 
         $this->postJson('/api/login', ['email' => 'known@example.com', 'password' => 'Correct#123'])->assertOk()->assertJsonStructure(['token']);

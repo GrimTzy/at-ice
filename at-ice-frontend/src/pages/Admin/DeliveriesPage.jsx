@@ -751,7 +751,7 @@ export default function DeliveriesPage() {
                         </div>
                         <div>
                           <label htmlFor={`delivery-${block.key}-notes`} className="text-[11px] text-slate-500 mb-1 block">Notes</label>
-                          <textarea id={`delivery-${block.key}-notes`} name="notes"
+                          <textarea id={`delivery-${block.key}-notes`} name="notes" maxLength={500}
                             rows={3}
                             value={block.notes}
                             onChange={(e) => updateBlock(bi, { notes: e.target.value })}
@@ -928,7 +928,7 @@ export default function DeliveriesPage() {
                   This delivery is in transit. It can only be cancelled for a real emergency.
                 </p>
                 <label htmlFor="delivery-issue" className="text-[11px] text-slate-500 mb-1 block">What happened? *</label>
-                <textarea id="delivery-issue" name="cancel_reason"
+                <textarea id="delivery-issue" name="cancel_reason" maxLength={200}
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   rows={2}
@@ -938,7 +938,7 @@ export default function DeliveriesPage() {
             ) : (
               <div className="mb-4">
                 <label htmlFor="cancel-reason" className="text-[11px] text-slate-500 mb-1 block">Reason (optional)</label>
-                <input id="cancel-reason" name="cancel_reason"
+                <input id="cancel-reason" name="cancel_reason" maxLength={200}
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"

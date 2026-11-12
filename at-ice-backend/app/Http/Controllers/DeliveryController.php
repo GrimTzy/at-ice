@@ -14,6 +14,7 @@ use App\Support\DeliveryAdjust;
 use App\Support\DeliveryDispatch;
 use App\Support\DriverAvailability;
 use App\Support\RouteCapacity;
+use App\Support\TextRules;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -105,7 +106,7 @@ class DeliveryController extends Controller
     {
         $data = $request->validate([
             'driver_id' => ['nullable', Rule::exists('users', 'id')->where('role', 'driver')],
-            'notes' => 'nullable|string|max:1000',
+            'notes' => ['nullable', ...TextRules::note()],
             'deliver_by' => 'sometimes|required|date_format:H:i',
             // when the time window opens; empty: Deliver by only
             'deliver_from' => 'sometimes|nullable|date_format:H:i',
@@ -225,7 +226,7 @@ class DeliveryController extends Controller
             'deliver_by' => 'required_if:delivery_type,outbound|nullable|date_format:H:i',
             // when its time window opens (optional)
             'deliver_from' => 'nullable|date_format:H:i',
-            'notes' => 'nullable|string|max:1000',
+            'notes' => ['nullable', ...TextRules::note()],
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|in:bags,small_sack,big_sack',
             'items.*.quantity_ordered' => 'required|integer|min:1|max:'.config('atice.max_product_quantity'),
@@ -381,7 +382,7 @@ class DeliveryController extends Controller
     // the reason written down (audited).
     public function cancel(Request $request, $id)
     {
-        $request->validate(['reason' => 'nullable|string|max:255'], ['reason.max' => 'The reason can be at most 255 characters.']);
+        $request->validate(['reason' => 'nullable|string|max:200'], ['reason.max' => 'The reason can be at most 200 characters.']);
         $reason = trim((string) $request->input('reason', ''));
 
         // Locked so a cancel cannot cross a Salesman confirmation in progress

@@ -11,11 +11,12 @@ class Holiday extends Model
 {
     public const TYPES = ['REGULAR', 'SPECIAL_NON_WORKING', 'SPECIAL_WORKING'];
 
-    protected $fillable = ['date', 'name', 'type', 'is_double', 'year', 'created_by'];
+    protected $fillable = ['date', 'name', 'type', 'is_double', 'repeats_yearly', 'year', 'created_by'];
 
     protected $casts = [
         'date' => 'date:Y-m-d',
         'is_double' => 'boolean',
+        'repeats_yearly' => 'boolean',
     ];
 
     protected static function booted(): void

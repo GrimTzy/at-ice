@@ -31,6 +31,8 @@ import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, StatusBreakdown } from "../../components/Insight";
 import { Icon } from "../../components/icons";
+import { NameHelp } from "../../components/FieldError";
+import { LIMITS, nameError } from "../../lib/textRules";
 
 const SearchIcon  = () => <Icon name="search" size={13} />;
 const PlusIcon    = () => <Icon name="plus" size={13} strokeWidth={2.2} />;
@@ -374,6 +376,7 @@ export default function InterviewsPage() {
     e.preventDefault();
     setFormError("");
     if (!form.name.trim()) return setFormError("Enter the applicant's name.");
+    if (nameError(form.name, "person", LIMITS.FULL, "Full name")) return; // shown under the field
     if (!form.position_applied.trim()) return setFormError("Choose the position applied for.");
     if (form.phone && !MOBILE_REGEX.test(form.phone)) return setFormError(MOBILE_MESSAGE);
     if ((isNew || scheduleChanged) && form.interview_date && form.interview_date <= nowInputValue()) {
@@ -690,7 +693,8 @@ export default function InterviewsPage() {
               </div>
             ) : null}
             <Field label="Full Name">
-              <input name="name" type="text" maxLength={50} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Juan Dela Cruz" />
+              <input name="name" type="text" maxLength={LIMITS.FULL} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Juan Dela Cruz" />
+              <NameHelp value={form.name} max={LIMITS.FULL} error={nameError(form.name, "person", LIMITS.FULL, "Full name")} />
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -783,7 +787,7 @@ export default function InterviewsPage() {
             <Field label="HR Notes (optional)">
               <textarea name="notes"
                 rows={3}
-                maxLength={1000}
+                maxLength={LIMITS.NOTE}
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 className={`${inputClass} resize-y`}

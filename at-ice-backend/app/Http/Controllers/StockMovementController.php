@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\InventoryAlert;
 use App\Models\Product;
 use App\Models\StockMovement;
+use App\Support\TextRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -25,9 +26,9 @@ class StockMovementController extends Controller
             'product_id' => 'required|exists:products,id',
             'type' => 'required|in:stock_in,stock_out,adjustment',
             'quantity' => 'required|integer|min:1|max:'.config('atice.max_stock_quantity'),
-            'reference_no' => 'nullable|string|max:255',
-            'source' => 'nullable|string|max:255',
-            'reason' => 'nullable|string|max:1000',
+            'reference_no' => 'nullable|string|max:50',
+            'source' => ['nullable', ...TextRules::store()],
+            'reason' => ['nullable', ...TextRules::note()],
         ]);
 
         $product = Product::findOrFail($validated['product_id']);
@@ -147,8 +148,8 @@ class StockMovementController extends Controller
         $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1|max:'.config('atice.max_stock_quantity'),
-            'reason' => 'required|string|max:1000',
-            'reference_no' => 'nullable|string|max:255',
+            'reason' => ['required', ...TextRules::note()],
+            'reference_no' => 'nullable|string|max:50',
         ]);
 
         $product = Product::findOrFail($validated['product_id']);

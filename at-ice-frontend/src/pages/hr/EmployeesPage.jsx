@@ -31,6 +31,8 @@ import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { roleBadge, shiftBadge } from "../../lib/roleColors";
 import { Icon } from "../../components/icons";
+import { LIMITS, SHORT_WORD, nameError } from "../../lib/textRules";
+import { NameHelp } from "../../components/FieldError";
 
 const API_BASE = "/api";
 
@@ -423,12 +425,15 @@ export default function EmployeesPage() {
     if (s === 0) {
       if (!form.first_name.trim()) bad.first_name = ["Enter the first name."];
       if (!form.last_name.trim()) bad.last_name = ["Enter the last name."];
+      for (const f of ["first_name", "last_name"]) if (!bad[f] && nameError(form[f], "person", LIMITS.PERSON, f === "first_name" ? "First name" : "Last name")) bad[f] = [nameError(form[f], "person", LIMITS.PERSON, f === "first_name" ? "First name" : "Last name")];
     }
     if (s === 1) {
       if (form.phone && !MOBILE_REGEX.test(form.phone)) bad.phone = [MOBILE_MESSAGE];
       if (form.emergency_phone && !MOBILE_REGEX.test(form.emergency_phone)) bad.emergency_phone = [MOBILE_MESSAGE];
       if (addressRequired) for (const f of ["street", "barangay", "city", "province"]) if (!String(form[f] || "").trim()) bad[f] = ["Required."];
       if (form.postal_code && !/^\d{4}$/.test(form.postal_code)) bad.postal_code = ["Postal code must be 4 digits."];
+      if (nameError(form.emergency_name, "person", LIMITS.FULL, "Emergency contact name")) bad.emergency_name = [nameError(form.emergency_name, "person", LIMITS.FULL, "Emergency contact name")];
+      if (nameError(form.emergency_relationship, "name", LIMITS.NAME, "Relationship")) bad.emergency_relationship = [nameError(form.emergency_relationship, "name", LIMITS.NAME, "Relationship")];
     }
     if (s === 2) {
       for (const g of GOV_IDS) if (!govComplete(g, form[g.key])) bad[g.key] = [`Enter all digits (${g.placeholder}).`];
@@ -442,6 +447,13 @@ export default function EmployeesPage() {
         if (licenseError(form.license_number)) bad.license_number = [licenseError(form.license_number)];
         if (!editingId && expiryError(form.license_expiry)) bad.license_expiry = [expiryError(form.license_expiry)];
       }
+    }
+    if (s === 4) {
+      for (const f of ["school", "course"]) if (nameError(form[f], "name", LIMITS.STORE, f === "school" ? "School" : "Course or strand")) bad[f] = [nameError(form[f], "name", LIMITS.STORE, f === "school" ? "School" : "Course or strand")];
+      (form.work_history || []).forEach((w, i) => {
+        if (nameError(w.company, "name", LIMITS.STORE, "Company")) bad[`work_history.${i}.company`] = [nameError(w.company, "name", LIMITS.STORE, "Company")];
+        if (nameError(w.position, "name", LIMITS.NAME, "Position", SHORT_WORD)) bad[`work_history.${i}.position`] = [nameError(w.position, "name", LIMITS.NAME, "Position", SHORT_WORD)];
+      });
     }
     return bad;
   };
@@ -920,7 +932,8 @@ export default function EmployeesPage() {
                   <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number, address, birthday, sex, civil status, emergency contact, highest attainment, school and work history" />
                   <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
                     <Field label="First Name" required error={formErrors.first_name}>
-                      <input name="first_name" required maxLength={50} value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
+                      <input name="first_name" required maxLength={LIMITS.PERSON} value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
+                      <NameHelp value={form.first_name} max={LIMITS.PERSON} />
                     </Field>
                     <Field label="M.I." error={formErrors.middle_initial}>
                       <input name="middle_initial" value={form.middle_initial} onChange={(e) => setForm((f) => ({ ...f, middle_initial: cleanInitial(e.target.value) }))}
@@ -929,7 +942,8 @@ export default function EmployeesPage() {
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
                     <Field label="Last Name" required error={formErrors.last_name}>
-                      <input name="last_name" required maxLength={50} value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
+                      <input name="last_name" required maxLength={LIMITS.PERSON} value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
+                      <NameHelp value={form.last_name} max={LIMITS.PERSON} />
                     </Field>
                     <Field label="Suffix" error={formErrors.suffix}>
                       <select name="suffix" value={form.suffix} onChange={handleChange("suffix")} aria-label="Name suffix" className={inputCls}>
@@ -995,10 +1009,12 @@ export default function EmployeesPage() {
                   <div className="text-[12px] font-semibold text-slate-700 mt-1">Emergency contact</div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Field label="Name" error={formErrors.emergency_name}>
-                      <input name="emergency_name" value={form.emergency_name} onChange={handleChange("emergency_name")} maxLength={50} className={inputCls} />
+                      <input name="emergency_name" value={form.emergency_name} onChange={handleChange("emergency_name")} maxLength={LIMITS.FULL} className={inputCls} />
+                      <NameHelp value={form.emergency_name} max={LIMITS.FULL} />
                     </Field>
                     <Field label="Relationship" error={formErrors.emergency_relationship}>
-                      <input name="emergency_relationship" value={form.emergency_relationship} onChange={handleChange("emergency_relationship")} maxLength={40} placeholder="e.g. Mother" className={inputCls} />
+                      <input name="emergency_relationship" value={form.emergency_relationship} onChange={handleChange("emergency_relationship")} maxLength={LIMITS.NAME} placeholder="e.g. Mother" className={inputCls} />
+                      <NameHelp value={form.emergency_relationship} max={LIMITS.NAME} />
                     </Field>
                     <Field label="Mobile Number" error={formErrors.emergency_phone}>
                       <PhoneInput value={form.emergency_phone} onChange={(emergency_phone) => setForm((f) => ({ ...f, emergency_phone }))} className={inputCls}
@@ -1116,7 +1132,7 @@ export default function EmployeesPage() {
                           <input name="shift_effective_date" required type="date" value={form.shift_effective_date} onChange={handleChange("shift_effective_date")} className={inputCls} />
                         </Field>
                         <Field label="Reason for the Change" error={formErrors.shift_reason}>
-                          <input name="shift_reason" maxLength={255} value={form.shift_reason} onChange={handleChange("shift_reason")} placeholder="e.g. Moved to the night crew" className={inputCls} />
+                          <input name="shift_reason" maxLength={200} value={form.shift_reason} onChange={handleChange("shift_reason")} placeholder="e.g. Moved to the night crew" className={inputCls} />
                         </Field>
                       </>
                     )}
@@ -1157,7 +1173,7 @@ export default function EmployeesPage() {
                         </div>
                       </Field>
                       <Field label="Vehicle Plate Number" error={formErrors.vehicle_plate}>
-                        <input name="vehicle_plate" value={form.vehicle_plate} onChange={handleChange("vehicle_plate")} placeholder="e.g. V7824" className={inputCls} />
+                        <input name="vehicle_plate" maxLength={20} value={form.vehicle_plate} onChange={handleChange("vehicle_plate")} placeholder="e.g. V7824" className={inputCls} />
                         <span className="text-[10px] text-slate-400 mt-0.5 block">Optional. Shown to customers beside the driver's name.</span>
                       </Field>
                     </>
@@ -1181,10 +1197,12 @@ export default function EmployeesPage() {
                         onChange={handleChange("year_graduated")} placeholder="e.g. 2016" className={inputCls} />
                     </Field>
                     <Field label="School" error={formErrors.school}>
-                      <input name="school" value={form.school} onChange={handleChange("school")} maxLength={160} className={inputCls} />
+                      <input name="school" value={form.school} onChange={handleChange("school")} maxLength={LIMITS.STORE} className={inputCls} />
+                      <NameHelp value={form.school} max={LIMITS.STORE} />
                     </Field>
                     <Field label="Course or Strand" error={formErrors.course}>
-                      <input name="course" value={form.course} onChange={handleChange("course")} maxLength={160} className={inputCls} />
+                      <input name="course" value={form.course} onChange={handleChange("course")} maxLength={LIMITS.STORE} className={inputCls} />
+                      <NameHelp value={form.course} max={LIMITS.STORE} />
                     </Field>
                   </div>
                   <div className="flex items-center justify-between mt-1">
@@ -1201,8 +1219,8 @@ export default function EmployeesPage() {
                       // Company and position on one row, the dates and Remove under them,
                       // so long names and month names are never cut off
                       <div key={i} className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg border border-black/[0.09] p-2.5">
-                        <Field label="Company" error={formErrors[`work_history.${i}.company`]}><input name="company" value={w.company} onChange={set("company")} title={w.company} className={inputCls} /></Field>
-                        <Field label="Position"><input name="position" value={w.position} onChange={set("position")} title={w.position} className={inputCls} /></Field>
+                        <Field label="Company" error={formErrors[`work_history.${i}.company`]}><input name="company" value={w.company} maxLength={LIMITS.STORE} onChange={set("company")} title={w.company} className={inputCls} /><NameHelp value={w.company} max={LIMITS.STORE} /></Field>
+                        <Field label="Position" error={formErrors[`work_history.${i}.position`]}><input name="position" value={w.position} maxLength={LIMITS.NAME} onChange={set("position")} title={w.position} className={inputCls} /><NameHelp value={w.position} max={LIMITS.NAME} /></Field>
                         <div className="sm:col-span-2 grid grid-cols-1 min-[420px]:grid-cols-[1fr_1fr_auto] gap-2 items-end">
                           <Field label="From"><input name="from" type="month" value={w.from} onChange={set("from")} className={inputCls} /></Field>
                           <Field label="To"><input name="to" type="month" value={w.to} onChange={set("to")} className={inputCls} /></Field>

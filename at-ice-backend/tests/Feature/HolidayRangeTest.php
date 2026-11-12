@@ -4,12 +4,16 @@ namespace Tests\Feature;
 
 use App\Models\Holiday;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
-// Add holiday with a date range (QA flag): one row per date, each date checked
-// for an existing holiday, at most 31 days.
+// A holiday is one date (owner, 2026-11-12: Proclamation No. 1006 lists every
+// holiday as a single date). Ranges are refused. A declared multi-day event
+// (e.g. APEC 2015, Nov 18 and 19) is added a day at a time: the same name is
+// allowed again only on the day right before or after a holiday with that
+// name, and only when both are Special (non-working).
 class HolidayRangeTest extends TestCase
 {
     use RefreshDatabase;
@@ -17,53 +21,59 @@ class HolidayRangeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->travelTo(Carbon::parse('2028-01-05 09:00', 'Asia/Manila'));
         Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
     }
 
-    public function test_a_range_makes_one_holiday_per_date(): void
+    public function test_a_range_is_refused(): void
     {
         $this->postJson('/api/holidays', ['date' => '2028-04-10', 'end_date' => '2028-04-14', 'name' => 'Plant maintenance break', 'type' => 'SPECIAL_NON_WORKING'])
-            ->assertCreated()
-            ->assertJsonPath('message', 'Plant maintenance break was added for 5 days.')
-            ->assertJsonCount(5, 'holidays');
+            ->assertUnprocessable()->assertJsonValidationErrors(['end_date' => 'A holiday is one date. Add each day on its own.']);
+        $this->assertSame(0, Holiday::where('year', 2028)->count());
 
-        $this->assertSame(
-            ['2028-04-10', '2028-04-11', '2028-04-12', '2028-04-13', '2028-04-14'],
-            Holiday::where('name', 'Plant maintenance break')->orderBy('date')->pluck('date')->map(fn ($d) => substr((string) $d, 0, 10))->all()
-        );
-        $this->assertSame(2028, Holiday::forDate('2028-04-12')->year);
-    }
-
-    public function test_one_date_still_works_as_before(): void
-    {
-        $this->postJson('/api/holidays', ['date' => '2028-05-01', 'name' => 'Labor Day', 'type' => 'REGULAR'])
-            ->assertCreated()->assertJsonPath('name', 'Labor Day');
-        $this->postJson('/api/holidays', ['date' => '2028-05-02', 'end_date' => '2028-05-02', 'name' => 'Extra', 'type' => 'REGULAR'])
-            ->assertCreated()->assertJsonPath('name', 'Extra');
-    }
-
-    public function test_a_range_with_a_date_already_taken_saves_nothing(): void
-    {
-        Holiday::create(['date' => '2028-04-12', 'year' => 2028, 'name' => 'Existing', 'type' => 'REGULAR']);
-
-        $this->postJson('/api/holidays', ['date' => '2028-04-10', 'end_date' => '2028-04-14', 'name' => 'Break', 'type' => 'REGULAR'])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['date' => 'There is already a holiday on Apr 12, 2028. Edit it instead, or pick other dates.']);
-        $this->assertSame(0, Holiday::where('name', 'Break')->count());
-
-        // the start date taken: the usual one-date message
-        $this->postJson('/api/holidays', ['date' => '2028-04-12', 'end_date' => '2028-04-13', 'name' => 'Break', 'type' => 'REGULAR'])
-            ->assertUnprocessable()->assertJsonValidationErrors('date');
-    }
-
-    public function test_a_range_longer_than_31_days_or_backwards_is_refused(): void
-    {
-        $this->postJson('/api/holidays', ['date' => '2028-01-01', 'end_date' => '2028-02-01', 'name' => 'Too long', 'type' => 'REGULAR'])
-            ->assertUnprocessable()->assertJsonValidationErrors(['end_date' => 'A holiday range can be at most 31 days (32 days chosen).']);
-        $this->postJson('/api/holidays', ['date' => '2028-01-01', 'end_date' => '2028-01-31', 'name' => 'Exactly 31', 'type' => 'REGULAR'])
-            ->assertCreated()->assertJsonCount(31, 'holidays');
-        $this->postJson('/api/holidays', ['date' => '2028-03-10', 'end_date' => '2028-03-09', 'name' => 'Backwards', 'type' => 'REGULAR'])
+        $h = $this->postJson('/api/holidays', ['date' => '2028-04-10', 'name' => 'Plant Day', 'type' => 'REGULAR'])->assertCreated();
+        $this->putJson('/api/holidays/'.$h->json('id'), ['date' => '2028-04-10', 'end_date' => '2028-04-11', 'name' => 'Plant Day', 'type' => 'REGULAR'])
             ->assertUnprocessable()->assertJsonValidationErrors('end_date');
-        $this->assertSame(0, Holiday::whereIn('name', ['Too long', 'Backwards'])->count());
+
+        // one holiday per date still holds
+        $this->postJson('/api/holidays', ['date' => '2028-04-10', 'name' => 'Another', 'type' => 'REGULAR'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['date' => 'There is already a holiday on this date. Edit it instead.']);
+    }
+
+    public function test_a_declared_special_event_may_use_the_next_and_previous_days(): void
+    {
+        $add = fn ($date, $type = 'SPECIAL_NON_WORKING', $name = 'APEC Summit') => $this->postJson('/api/holidays', ['date' => $date, 'name' => $name, 'type' => $type]);
+
+        $add('2028-11-18')->assertCreated();
+        $add('2028-11-19')->assertCreated();                  // the day after
+        $add('2028-11-17')->assertCreated();                  // the day before
+        $add('2028-11-16', 'SPECIAL_NON_WORKING', 'apec summit.')->assertCreated();   // written differently
+        Holiday::where('date', '2028-11-16')->delete();
+        $add('2028-11-21')->assertUnprocessable()             // not next to one
+            ->assertJsonValidationErrors(['name' => '"APEC Summit" is already a holiday in 2028 (Nov 17 to Nov 19). Edit that one instead.']);
+        $add('2028-11-20', 'REGULAR')->assertUnprocessable()->assertJsonValidationErrors('name');   // the new one is not Special
+        $this->assertSame(3, Holiday::where('year', 2028)->count());
+    }
+
+    public function test_regular_or_special_working_days_with_the_same_name_stay_blocked(): void
+    {
+        $this->postJson('/api/holidays', ['date' => '2028-06-12', 'name' => 'Independence Day', 'type' => 'REGULAR'])->assertCreated();
+        foreach (['REGULAR', 'SPECIAL_NON_WORKING', 'SPECIAL_WORKING'] as $i => $type) {
+            $this->postJson('/api/holidays', ['date' => '2028-06-1'.(3 + $i), 'name' => 'Independence Day', 'type' => $type])->assertUnprocessable()->assertJsonValidationErrors('name');
+        }
+        $this->postJson('/api/holidays', ['date' => '2028-08-21', 'name' => 'Plant Day', 'type' => 'SPECIAL_WORKING'])->assertCreated();
+        $this->postJson('/api/holidays', ['date' => '2028-08-22', 'name' => 'Plant Day', 'type' => 'SPECIAL_WORKING'])->assertUnprocessable()->assertJsonValidationErrors('name');
+    }
+
+    public function test_holidays_check_lists_multi_day_holidays(): void
+    {
+        foreach (['2028-04-10', '2028-04-11', '2028-04-12'] as $d) {
+            Holiday::create(['date' => $d, 'year' => 2028, 'name' => 'Holy Week Break', 'type' => 'REGULAR']);
+        }
+        $this->artisan('holidays:check')
+            ->expectsOutputToContain('Multi-day holidays (consecutive days with one name')
+            ->expectsOutputToContain('Holy Week Break')
+            ->assertSuccessful();
+        $this->assertSame(3, Holiday::where('year', 2028)->count());
     }
 }

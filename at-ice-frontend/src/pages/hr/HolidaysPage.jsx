@@ -5,7 +5,15 @@
 // change every year and can be declared on short notice. The 2026 list is
 // seeded from Proclamation No. 1006 and No. 1189 (verify against the latest).
 // Adding and editing happen in a modal (the "Add holiday" button); the bar
-// above the table only filters the list.
+// above the table only filters the list. A holiday is one date (owner,
+// 2026-11-12: Proclamation No. 1006 lists every holiday as a single date);
+// a declared multi-day event is added one day at a time as Special
+// (non-working) days with the same name.
+// Dates (owner, 2026-11-12): a new holiday is today or later (Manila), and a
+// holiday dated before today has no Edit or Remove (attendance and payroll
+// already counted it; the server refuses too). "Generate 2027 holidays" opens
+// a preview of next year's repeating holidays (NextYearModal); nothing is
+// saved until HR presses Save.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import HrLayout from "../../components/HrLayout";
@@ -22,12 +30,19 @@ import { ActivityFeed, MiniBars, StatusBreakdown } from "../../components/Insigh
 import { todayManila } from "../../lib/time";
 import { Icon } from "../../components/icons";
 import Req from "../../components/Req";
+import { NameHelp } from "../../components/FieldError";
+import { LIMITS, SHORT_WORD, nameError } from "../../lib/textRules";
+import { holidayNameCheck } from "../../lib/holidayNames";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
   const res = await fetch(url, { ...options, headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token()}` } });
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.errors ? Object.values(data.errors).flat()[0] : data?.message || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const err = new Error(data?.errors ? Object.values(data.errors).flat()[0] : data?.message || `Request failed (${res.status})`);
+    err.field = data?.errors ? Object.keys(data.errors)[0] : null; // shown under that field
+    throw err;
+  }
   return data;
 }
 
@@ -39,10 +54,9 @@ const TYPES = [
 const typeOf = (t) => TYPES.find(([k]) => k === t) || [t, t, "bg-slate-50 text-slate-600 border-slate-200"];
 const inputCls = "px-2.5 py-1.5 border border-slate-300 rounded-md text-xs text-slate-700 bg-white focus:outline-none focus:border-cyan-400";
 const labelCls = "text-[10px] font-semibold uppercase tracking-wider text-slate-500";
-const EMPTY = { date: "", name: "", type: "REGULAR", is_double: false };
-const MAX_RANGE_DAYS = 31;
-const daysBetween = (from, to) => Math.round((new Date(`${to}T00:00:00`) - new Date(`${from}T00:00:00`)) / 86400000) + 1;
-const NO_FILTER ={ q: "", month: "", date: "", type: "" };
+const EMPTY = { date: "", name: "", type: "REGULAR", is_double: false, repeats_yearly: true };
+const PAST_DATE = "Holiday date must be today or later.";
+const NO_FILTER = { q: "", month: "", date: "", type: "" };
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const fmt = (d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 
@@ -52,30 +66,35 @@ function HolidayModal({ holiday, onClose, onSaved }) {
   const editing = holiday?.id || null;
   // Unsaved inputs survive a refresh (per holiday); closing forgets them.
   const draft = useDraft(`holidays:form:${editing || "new"}`, {
-    form: holiday ? { date: holiday.date, name: holiday.name, type: holiday.type, is_double: !!holiday.is_double } : EMPTY,
+    form: holiday ? { date: holiday.date, name: holiday.name, type: holiday.type, is_double: !!holiday.is_double, repeats_yearly: holiday.repeats_yearly !== false } : EMPTY,
   });
   const { form } = draft.values;
   const setForm = draft.set.form;
+  const today = todayManila();
+  // a new date (or a changed one) must be today or later
+  const dateError = form.date && form.date < today && form.date !== holiday?.date ? PAST_DATE : "";
   const [busy, setBusy] = useState(false);
-  const [sameYear, setSameYear] = useState([]); // that year's holidays, for the one-per-date rule
-  const { clear } = draft;
-
-  // The server allows one holiday per date; the form says so before saving
-  const pickedYear = form.date ? form.date.slice(0, 4) : "";
+  // the server's message for the name (e.g. already a holiday this year), until it is changed
+  const [serverNameError, setServerNameError] = useState("");
+  // The other holidays of the year being added to, to catch a repeated name
+  // while typing (lib/holidayNames.js): a sure repeat is refused (red), a
+  // name 1 or 2 letters away gets a soft "Did you mean" note.
+  const year = String(form.date || todayManila()).slice(0, 4);
+  const [yearList, setYearList] = useState({ year: null, holidays: [] });
   useEffect(() => {
-    if (!pickedYear) return undefined;
-    let alive = true;
-    api(`/api/holidays?year=${pickedYear}`).then((d) => { if (alive) setSameYear(d?.holidays || []); }).catch(() => {});
-    return () => { alive = false; };
-  }, [pickedYear]);
-  const taken = form.date ? sameYear.find((h) => h.date === form.date && h.id !== editing) : null;
-  const takenMsg = taken ? `${taken.name} is already on this date. Edit it instead.` : "";
-  const endDate = !editing && form.end_date && form.end_date !== form.date ? form.end_date : "";
-  const rangeDays = endDate && form.date ? daysBetween(form.date, endDate) : 1;
-  const rangeError = endDate && form.date
-    ? (rangeDays < 1 ? "The end date must be on or after the start date." : rangeDays > MAX_RANGE_DAYS ? `A holiday range can be at most ${MAX_RANGE_DAYS} days (${rangeDays} days chosen).` : "")
-    : "";
+    let cancelled = false;
+    api(`/api/holidays?year=${year}`).then((d) => { if (!cancelled) setYearList({ year, holidays: d?.holidays || [] }); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [year]);
+  // the holiday being edited is not "another" holiday
+  const others = yearList.year === year ? yearList.holidays.filter((h) => h.id !== editing) : [];
+  const repeat = holidayNameCheck(form.name, others, year, form.date, form.type);
+  const nameMsg = nameError(form.name, "name", LIMITS.HOLIDAY, "Holiday name", SHORT_WORD) || serverNameError || repeat.block || "";
+  const { clear } = draft;
   const close = useCallback(() => { clear(); onClose(); }, [clear, onClose]);
+  // One holiday per date: the form says so before saving (the server refuses too)
+  const taken = form.date ? others.find((h) => h.date === form.date) : null;
+  const takenMsg = taken ? `${taken.name} is already on this date. Edit it instead.` : "";
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") close(); };
@@ -85,17 +104,19 @@ function HolidayModal({ holiday, onClose, onSaved }) {
 
   const save = async (e) => {
     e.preventDefault();
-    if (rangeError) return toast.error(rangeError);
+    if (dateError) return toast.error(dateError);
+    if (takenMsg || nameMsg) return;
     setBusy(true);
     try {
-      const { end_date: _end, ...fields } = form;
-      const body = editing ? fields : { ...fields, end_date: endDate || null };
+      // a draft saved before holidays became one date may still have end_date
+      const { end_date: _end, ...body } = form;
       const res = await api(editing ? `/api/holidays/${editing}` : "/api/holidays", { method: editing ? "PUT" : "POST", body: JSON.stringify(body) });
       toast.success(editing ? `${form.name} was updated.` : res?.message || `${form.name} was added.`);
       draft.clear();
       onSaved(form.date);
     } catch (err) {
-      toast.error(err.message);
+      if (err.field === "name") setServerNameError(err.message);
+      else toast.error(err.message);
     } finally {
       setBusy(false);
     }
@@ -112,29 +133,26 @@ function HolidayModal({ holiday, onClose, onSaved }) {
         <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
         <div className="p-5 flex flex-col gap-3.5">
         <DraftHint draft={draft} onDiscard={onClose} />
-        <div className="flex flex-col gap-1">
-          <div className={editing ? "" : "grid grid-cols-2 gap-2"}>
-            <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">{editing ? "Date" : "From"}<Req /></span>
-              <input name="date" type="date" required autoFocus value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
-                ref={(el) => el?.setCustomValidity(takenMsg)} aria-invalid={!!taken || undefined} aria-describedby={taken ? "holiday-date-taken" : undefined} className={inputCls} />
-              {taken && <span id="holiday-date-taken" role="alert" className="text-[11px] text-red-600">{takenMsg}</span>}</label>
-            {!editing && (
-              <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">To (optional)</span>
-                <input name="end_date" type="date" min={form.date || undefined} value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value })} className={inputCls} /></label>
-            )}
-          </div>
-          {!editing && (
-            <span className={`text-[11px] ${rangeError ? "text-red-600" : "text-slate-500"}`}>
-              {rangeError || (endDate ? `${rangeDays} days: one holiday is added for each date.` : `Leave "To" empty for one day. Up to ${MAX_RANGE_DAYS} days.`)}
-            </span>
-          )}
-        </div>
+        <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Date<Req /></span>
+          <input name="date" type="date" required autoFocus min={today} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
+            aria-invalid={dateError || takenMsg ? true : undefined} className={inputCls} />
+          {(dateError || takenMsg) && <span role="alert" className="text-[11px] text-red-600">{dateError || takenMsg}</span>}</label>
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Holiday name<Req /></span>
-          <input name="name" required maxLength={50} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Eid'l Adha" className={inputCls} /></label>
+          <input name="name" required maxLength={LIMITS.HOLIDAY} value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setServerNameError(""); }} placeholder="e.g. Eid'l Adha"
+            aria-invalid={nameMsg ? true : undefined} aria-describedby={nameMsg ? "holiday-name-error" : undefined} className={inputCls} />
+          <NameHelp id="holiday-name-error" value={form.name} max={LIMITS.HOLIDAY} error={nameMsg} />
+          {!nameMsg && repeat.warn && (
+            <p role="status" className="mt-0.5 px-2.5 py-1.5 rounded-md bg-amber-50 border border-amber-200 text-[11.5px] leading-snug text-amber-800 break-words">{repeat.warn}</p>
+          )}</label>
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Type</span>
           <select name="type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={inputCls}>
             {TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select></label>
+        <label className="flex items-start gap-2 text-xs text-slate-700">
+          <input name="repeats_yearly" type="checkbox" data-native className="mt-0.5" checked={form.repeats_yearly !== false} onChange={(e) => setForm({ ...form, repeats_yearly: e.target.checked })} />
+          <span>Repeats every year
+            <span className="block text-[11px] text-slate-500">Untick for a one-time declared day. Only repeating holidays are carried over by Generate {Number(today.slice(0, 4)) + 1} holidays.</span></span>
+        </label>
         </div>
         </div>
         <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] flex justify-end gap-2">
@@ -144,6 +162,141 @@ function HolidayModal({ holiday, onClose, onSaved }) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+const RULE_LABEL = { fixed: "Same date", easter: "From Easter", heroes: "Last Monday of August", moving: "Moving date" };
+
+// Next year's holidays (App\Support\HolidayYear on the server): a preview of
+// the holidays marked "Repeats every year". HR can change any date or untick
+// any row; rows already in next year are shown and skipped. Nothing is saved
+// until Save.
+function NextYearModal({ onClose, onSaved }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [rows, setRows] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState({ index: null, message: "" });
+
+  useEffect(() => {
+    api("/api/holidays/next-year").then((d) => {
+      setData(d);
+      // ticked when it has a date and is not skipped; moving ones are ticked once a date is set
+      setRows(d.rows.map((r) => ({ ...r, picked: !r.skip && !!r.date })));
+    }).catch((e) => setError(e.message));
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const year = data?.year;
+  const setDate = (i, date) => setRows((rs) => rs.map((r, j) => (j !== i ? r : {
+    ...r, date, picked: date ? true : r.picked,
+  })));
+  const toggle = (i) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, picked: !r.picked } : r)));
+
+  // problems with a ticked row, shown under it
+  const problem = (r, i) => {
+    if (!r.picked) return "";
+    if (!r.date) return "Set the date, or untick this holiday.";
+    if (String(r.date).slice(0, 4) !== String(year)) return `The date must be in ${year}.`;
+    const clash = rows.findIndex((o, j) => j !== i && o.picked && o.date && o.date === r.date);
+    if (clash !== -1) return `${rows[clash].name} is on the same date. Change one date.`;
+    return "";
+  };
+  const picked = rows.filter((r) => r.picked);
+  const problems = rows.map(problem);
+  const blocked = problems.some(Boolean);
+
+  const save = async () => {
+    if (blocked || !picked.length) return;
+    setBusy(true);
+    setSaveError({ index: null, message: "" });
+    try {
+      const sent = rows.filter((r) => r.picked);
+      const res = await api("/api/holidays/next-year", { method: "POST", body: JSON.stringify({
+        holidays: sent.map((r) => ({ name: r.name, type: r.type, is_double: r.is_double, date: r.date })),
+      }) });
+      toast.success(res.message);
+      onSaved(res.year);
+    } catch (err) {
+      // "holidays.3.date": point at that row
+      const m = /^holidays\.(\d+)\./.exec(err.field || "");
+      const sentIndex = m ? Number(m[1]) : null;
+      const index = sentIndex === null ? null : rows.indexOf(rows.filter((r) => r.picked)[sentIndex]);
+      setSaveError({ index, message: err.message });
+      if (index === null) toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={`Generate ${year || ""} holidays`} onClick={(e) => e.stopPropagation()}
+        className="modal-shell bg-white rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="shrink-0 px-5 py-4 border-b border-black/[0.09]">
+          <div className="text-[15px] font-semibold text-slate-800">Generate {year || ""} holidays</div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            From the {data?.from_year || ""} holidays marked &quot;Repeats every year&quot;. Check each date against the official proclamation, change any date or untick a row. Nothing is saved until you press Save.
+          </div>
+        </div>
+        <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          {error ? <div className="px-5 py-8 text-center text-[12px] text-red-600">{error}</div>
+            : !data ? <div className="p-5"><SkeletonList /></div>
+            : rows.length === 0 ? <div className="px-5 py-8 text-center text-[12px] text-slate-400">No holidays in {data.from_year} are marked &quot;Repeats every year&quot;.</div>
+            : (
+            <table className="w-full text-xs">
+              <thead><tr className="text-left text-slate-400 border-b border-black/[0.09]">
+                <th className="pl-5 pr-2 py-2.5 font-medium w-8"><span className="sr-only">Add</span></th>
+                <th className="px-2 py-2.5 font-medium">Holiday</th>
+                <th className="px-2 py-2.5 font-medium">Date in {year}</th>
+                <th className="px-2 pr-5 py-2.5 font-medium">How</th>
+              </tr></thead>
+              <tbody>
+                {rows.map((r, i) => {
+                  const skipped = r.skip === "duplicate";
+                  const msg = problems[i] || (saveError.index === i ? saveError.message : "");
+                  return (
+                    <tr key={r.from} className={`border-b border-black/[0.06] last:border-b-0 align-top ${skipped ? "bg-slate-50 text-slate-400" : ""}`}>
+                      <td className="pl-5 pr-2 py-2.5">
+                        <input type="checkbox" data-native aria-label={`Add ${r.name}`} disabled={skipped} checked={!skipped && r.picked} onChange={() => toggle(i)} />
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <div className={`font-medium break-words ${skipped ? "" : "text-slate-800"}`}>{r.name}</div>
+                        <div className="mt-0.5"><span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-semibold ${typeOf(r.type)[2]}`}>{typeOf(r.type)[1]}</span></div>
+                      </td>
+                      <td className="px-2 py-2.5 whitespace-nowrap">
+                        {skipped ? <span>—</span> : (
+                          <input type="date" aria-label={`Date of ${r.name}`} value={r.date || ""} min={`${year}-01-01`} max={`${year}-12-31`}
+                            onChange={(e) => setDate(i, e.target.value)} aria-invalid={msg ? true : undefined} className={inputCls} />
+                        )}
+                      </td>
+                      <td className="px-2 pr-5 py-2.5">
+                        <div className="text-slate-600">{RULE_LABEL[r.rule] || r.rule}</div>
+                        <div className={`text-[11px] mt-0.5 ${r.skip === "taken" || r.rule === "moving" ? "text-amber-700" : "text-slate-500"}`}>{r.note}</div>
+                        {msg && <div role="alert" className="text-[11px] text-red-600 mt-0.5">{msg}</div>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] flex items-center justify-end gap-2">
+          <span className="mr-auto text-[11px] text-slate-500">{picked.length} holiday{picked.length === 1 ? "" : "s"} will be added</span>
+          <button type="button" onClick={onClose} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-xs text-slate-600 hover:bg-slate-50 cursor-pointer">Cancel</button>
+          <button type="button" onClick={save} disabled={busy || blocked || !picked.length} className="px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold disabled:opacity-50 cursor-pointer">
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -158,6 +311,9 @@ export default function HolidaysPage({ admin = false }) {
   const { modal } = modalDraft.values;
   const setModal = modalDraft.set.modal;
   const [filter, setFilter] = useState(NO_FILTER);
+  const [generating, setGenerating] = useState(false);
+  const today = todayManila();
+  const nextYear = Number(today.slice(0, 4)) + 1;
 
   const load = useCallback(() => {
     api(`/api/holidays?year=${year}`).then((d) => { setError(""); setData(d); }).catch((e) => setError(e.message));
@@ -224,6 +380,9 @@ export default function HolidaysPage({ admin = false }) {
             <div className="text-[11px] text-slate-500 mt-0.5">On these dates no one is marked absent or late, and leave cannot be filed. Pay follows Admin › Settings › Holiday pay.</div>
           </div>
           <div className="flex-1" />
+          <button type="button" onClick={() => setGenerating(true)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-cyan-300 text-cyan-700 hover:bg-cyan-50 text-xs font-semibold cursor-pointer">
+            Generate {nextYear} holidays
+          </button>
           <button type="button" onClick={() => setModal("add")} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold cursor-pointer">
             <span aria-hidden="true" className="text-[15px] leading-none">+</span> Add holiday
           </button>
@@ -269,13 +428,17 @@ export default function HolidaysPage({ admin = false }) {
               {pager.pageItems.map((h) => (
                 <tr key={h.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                   <td className="px-[18px] py-2.5 whitespace-nowrap text-slate-700">{fmt(h.date)}</td>
-                  <td className="px-3 py-2.5 text-slate-800 font-medium">{h.name}{h.is_double && <span className="cell-note text-[9px] font-bold text-red-600">DOUBLE</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-800 font-medium max-w-[260px] break-words">{h.name}{h.is_double && <span className="cell-note text-[9px] font-bold text-red-600">DOUBLE</span>}</td>
                   <td className="px-3 py-2.5"><span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-semibold ${typeOf(h.type)[2]}`}>{typeOf(h.type)[1]}</span></td>
                   <td className="px-3 py-2.5">
+                    {h.date < today ? (
+                      <div className="text-right text-[11px] text-slate-400" title="Holidays before today cannot be changed: attendance and payroll have already counted them.">Past</div>
+                    ) : (
                     <div className="flex justify-end gap-1.5">
                       <button onClick={() => setModal(h)} className="px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 cursor-pointer">Edit</button>
                       <button data-no-confirm onClick={() => remove(h)} className="px-2.5 py-1 border border-red-200 rounded-md text-[11px] text-red-600 cursor-pointer">Remove</button>
                     </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -302,7 +465,8 @@ export default function HolidaysPage({ admin = false }) {
         />
       </aside>
       </div>
-      {modal &&<HolidayModal holiday={modal === "add" ? null : modal} onClose={closeModal} onSaved={saved} />}
+      {modal && (modal === "add" || modal.date >= today) && <HolidayModal holiday={modal === "add" ? null : modal} onClose={closeModal} onSaved={saved} />}
+      {generating && <NextYearModal onClose={() => setGenerating(false)} onSaved={(y) => { setGenerating(false); if (y !== year) setYear(y); else load(); }} />}
     </Layout>
   );
 }

@@ -10,6 +10,7 @@ use App\Support\DriverAvailability;
 use App\Support\PayPeriod;
 use App\Support\PerformanceHistory;
 use App\Support\PerformanceScore;
+use App\Support\TextRules;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -105,7 +106,7 @@ class PerformanceController extends Controller
         $data = $request->validate([
             'final_rating' => 'nullable|numeric|between:1,5',
             'goal_target' => 'nullable|integer|min:1|max:100000',
-            'remarks' => 'nullable|string|max:2000',
+            'remarks' => ['nullable', ...TextRules::note()],
             'publish' => 'sometimes|boolean',
         ]);
         $period = $this->period($request);

@@ -1,0 +1,70 @@
+<?php
+
+// Plain-words validation messages (owner, 2026-11-12), following the GOV.UK
+// pattern: name the field, say what is wrong and how to fix it. Laravel's own
+// messages are used for the rules not listed here (this file is merged over
+// them). Messages set in a controller or App\Support\TextRules win over these.
+return [
+    'required' => 'Enter the :attribute.',
+    'required_if' => 'Enter the :attribute.',
+    'required_with' => 'Enter the :attribute.',
+    'max' => [
+        'string' => ':Attribute must be :max characters or fewer.',
+        'numeric' => ':Attribute must be :max or less.',
+        'array' => 'Choose :max or fewer for :attribute.',
+        'file' => ':Attribute must be smaller than :max KB.',
+    ],
+    'min' => [
+        'string' => ':Attribute must be :min characters or more.',
+        'numeric' => ':Attribute must be :min or more.',
+        'array' => 'Choose at least :min for :attribute.',
+    ],
+    'email' => 'Enter an email address in the correct format, like name@example.com.',
+    'date' => 'Enter a real date for the :attribute.',
+    'date_format' => 'Enter the :attribute in the format :format.',
+    'after_or_equal' => ':Attribute must be the same as or after :date.',
+    'before_or_equal' => ':Attribute must be the same as or before :date.',
+    'after' => ':Attribute must be after :date.',
+    'before' => ':Attribute must be before :date.',
+    'numeric' => ':Attribute must be a number.',
+    'integer' => ':Attribute must be a whole number.',
+    'in' => 'Select the :attribute from the list.',
+    'exists' => 'Select the :attribute from the list.',
+    'unique' => 'There is already one with this :attribute. Enter a different :attribute.',
+    'distinct' => 'Each :attribute can only be added once.',
+    'regex' => 'Enter the :attribute in the correct format.',
+    'confirmed' => ':Attribute and its confirmation must match.',
+    'boolean' => 'Choose yes or no for :attribute.',
+    'image' => ':Attribute must be a picture (JPG or PNG).',
+    'mimes' => ':Attribute must be a :values file.',
+
+    // Field names as people see them on the page
+    'attributes' => [
+        'name' => 'name',
+        'first_name' => 'first name',
+        'last_name' => 'last name',
+        'middle_initial' => 'middle initial',
+        'contact_person' => 'contact person',
+        'contact_number' => 'contact number',
+        'email' => 'email address',
+        'street' => 'street',
+        'barangay' => 'barangay',
+        'city' => 'city',
+        'province' => 'province',
+        'block_lot' => 'house number, block and lot',
+        'subdivision' => 'subdivision',
+        'postal_code' => 'postal code',
+        'notes' => 'notes',
+        'reason' => 'reason',
+        'remarks' => 'remarks',
+        'purpose' => 'purpose',
+        'date' => 'date',
+        'end_date' => 'end date',
+        'start_date' => 'start date',
+        'phone' => 'mobile number',
+        'reference_no' => 'reference number',
+        'quantity' => 'quantity',
+        'daily_rate' => 'daily rate',
+        'date_hired' => 'hire date',
+    ],
+];

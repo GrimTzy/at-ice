@@ -32,6 +32,7 @@ class AuditLabels
         'memo.approved' => 'Approved memo',
         'memo.returned' => 'Returned memo to HR',
         'memo.announcement_sent' => 'Sent announcement',
+        'customer.updated' => 'Edited customer details',
         'holiday.added' => 'Added holiday',
         'holiday.changed' => 'Changed holiday',
         'holiday.removed' => 'Removed holiday',

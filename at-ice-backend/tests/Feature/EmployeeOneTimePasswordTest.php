@@ -59,13 +59,13 @@ class EmployeeOneTimePasswordTest extends TestCase
     public function test_every_account_gets_a_different_password(): void
     {
         $seen = [];
-        foreach (range(1, 8) as $i) {
+        foreach (['Ana', 'Ben', 'Cora', 'Dan', 'Ella', 'Fe', 'Gil', 'Hana'] as $first) {
             $seen[] = $this->createEmployee([
-                'first_name' => "Emp{$i}", 'last_name' => 'Jayco', 'phone' => '09171234550',
+                'first_name' => $first, 'last_name' => 'Jayco', 'phone' => '09171234550',
             ])->json('password');
         }
 
-        $this->assertCount(8, array_unique($seen), 'same name and phone, still different passwords');
+        $this->assertCount(8, array_unique($seen), 'same last name and phone, still different passwords');
     }
 
     public function test_the_account_works_with_it_and_must_change_it_on_first_login(): void

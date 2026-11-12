@@ -11,6 +11,8 @@ import { CIVIL_STATUSES, EDUCATION_LEVELS, RESTRICTIONS, SEXES } from "../lib/bi
 import { UploadBar } from "../components/FileDropZone";
 import { sendForm } from "../lib/upload";
 import { formatLicense, licenseError, expiryError, tomorrowStr } from "../lib/license";
+import { LIMITS, SHORT_WORD, nameError } from "../lib/textRules";
+import { NameHelp } from "../components/FieldError";
 
 // Public job application / digital biodata (owner, 2026-10-20), opened by
 // scanning the hiring QR code HR prints from HRIS > Interviews. Mobile first:
@@ -116,6 +118,14 @@ export default function ApplyPage() {
     const errs = {};
     if (!consent) errs.consent = ["Agree to the data privacy consent to send your application."];
     if (form.name.trim().length < 3) errs.name = ["Enter your full name."];
+    else if (nameError(form.name, "person", LIMITS.FULL, "Full name")) errs.name = [nameError(form.name, "person", LIMITS.FULL, "Full name")];
+    if (nameError(form.emergency_name, "person", LIMITS.FULL, "Emergency contact name")) errs.emergency_name = [nameError(form.emergency_name, "person", LIMITS.FULL, "Emergency contact name")];
+    if (nameError(form.emergency_relationship, "name", LIMITS.NAME, "Relationship")) errs.emergency_relationship = [nameError(form.emergency_relationship, "name", LIMITS.NAME, "Relationship")];
+    for (const f of ["school", "course"]) if (nameError(form[f], "name", LIMITS.STORE, f === "school" ? "School" : "Course or strand")) errs[f] = [nameError(form[f], "name", LIMITS.STORE, f === "school" ? "School" : "Course or strand")];
+    (form.work_history || []).forEach((w, i) => {
+      if (nameError(w.company, "name", LIMITS.STORE, "Company")) errs[`work_history.${i}.company`] = [nameError(w.company, "name", LIMITS.STORE, "Company")];
+      if (nameError(w.position, "name", LIMITS.NAME, "Position", SHORT_WORD)) errs[`work_history.${i}.position`] = [nameError(w.position, "name", LIMITS.NAME, "Position", SHORT_WORD)];
+    });
     if (!MOBILE_REGEX.test(form.phone)) errs.phone = [form.phone ? MOBILE_MESSAGE : "Enter your mobile number so HR can contact you."];
     if (form.emergency_phone && !MOBILE_REGEX.test(form.emergency_phone)) errs.emergency_phone = [MOBILE_MESSAGE];
     if (!form.position_applied) errs.position_applied = ["Choose the position you are applying for."];
@@ -251,7 +261,8 @@ export default function ApplyPage() {
                 <Section n={1} title="Personal information">
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Full Name *</span>
-                    <input name="name" value={form.name} onChange={set("name")} autoComplete="name" maxLength={50} placeholder="Juan Dela Cruz" className={fieldCls} />
+                    <input name="name" value={form.name} onChange={set("name")} autoComplete="name" maxLength={LIMITS.FULL} placeholder="Juan Dela Cruz" className={fieldCls} />
+                    <NameHelp value={form.name} max={LIMITS.FULL} />
                     {err("name")}
                   </label>
                   <label className="flex flex-col gap-2">
@@ -309,8 +320,11 @@ export default function ApplyPage() {
                     <AddressFields value={form} onChange={handleAddress} errors={errors} inputClassName={fieldCls} labelClassName="text-[12px] text-[var(--neu-muted)]" />
                   </div>
                   <div className={labelCls}>In case of emergency</div>
-                  <input name="emergency_name" value={form.emergency_name} onChange={set("emergency_name")} maxLength={50} placeholder="Name" aria-label="Emergency contact name" className={fieldCls} />
-                  <input name="emergency_relationship" value={form.emergency_relationship} onChange={set("emergency_relationship")} maxLength={40} placeholder="Relationship (e.g. Mother)" aria-label="Emergency contact relationship" className={fieldCls} />
+                  <input name="emergency_name" value={form.emergency_name} onChange={set("emergency_name")} maxLength={LIMITS.FULL} placeholder="Name" aria-label="Emergency contact name" className={fieldCls} />
+                  <NameHelp value={form.emergency_name} max={LIMITS.FULL} />
+                  <input name="emergency_relationship" value={form.emergency_relationship} onChange={set("emergency_relationship")} maxLength={LIMITS.NAME} placeholder="Relationship (e.g. Mother)" aria-label="Emergency contact relationship" className={fieldCls} />
+                  <NameHelp value={form.emergency_relationship} max={LIMITS.NAME} />
+                  {err("emergency_name") || err("emergency_relationship")}
                   <PhoneInput value={form.emergency_phone} onChange={(emergency_phone) => setForm((f) => ({ ...f, emergency_phone }))} className={fieldCls}
                     invalid={!!form.emergency_phone && !MOBILE_REGEX.test(form.emergency_phone)} aria-label="Emergency contact mobile number" name="emergency_phone" />
                   {err("emergency_phone") || liveStart(form.emergency_phone)}
@@ -352,17 +366,23 @@ export default function ApplyPage() {
                       {EDUCATION_LEVELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                     </select>
                   </label>
-                  <input name="school" value={form.school} onChange={set("school")} maxLength={160} placeholder="School" aria-label="School" className={fieldCls} />
+                  <input name="school" value={form.school} onChange={set("school")} maxLength={LIMITS.STORE} placeholder="School" aria-label="School" className={fieldCls} />
+                  <NameHelp value={form.school} max={LIMITS.STORE} />
+                  {err("school")}
                   <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
-                    <input name="course" value={form.course} onChange={set("course")} maxLength={160} placeholder="Course or strand" aria-label="Course or strand" className={fieldCls} />
+                    <input name="course" value={form.course} onChange={set("course")} maxLength={LIMITS.STORE} placeholder="Course or strand" aria-label="Course or strand" className={fieldCls} />
                     <input name="year_graduated" type="number" inputMode="numeric" value={form.year_graduated} onChange={set("year_graduated")} placeholder="Year" aria-label="Year graduated" className={fieldCls} />
                   </div>
-                  {err("year_graduated")}
+                  <NameHelp value={form.course} max={LIMITS.STORE} />
+                  {err("course") || err("year_graduated")}
                   <div className={labelCls}>Work experience</div>
                   {work.map((w, i) => (
                     <div key={i} className="neu-inset rounded-2xl p-3 flex flex-col gap-3">
-                      <input name="company" value={w.company} onChange={setWork(i, "company")} placeholder="Company" aria-label="Company" className={fieldCls} />
-                      <input name="position" value={w.position} onChange={setWork(i, "position")} placeholder="Position" aria-label="Position" className={fieldCls} />
+                      <input name="company" value={w.company} maxLength={LIMITS.STORE} onChange={setWork(i, "company")} placeholder="Company" aria-label="Company" className={fieldCls} />
+                      <NameHelp value={w.company} max={LIMITS.STORE} />
+                      <input name="position" value={w.position} maxLength={LIMITS.NAME} onChange={setWork(i, "position")} placeholder="Position" aria-label="Position" className={fieldCls} />
+                      <NameHelp value={w.position} max={LIMITS.NAME} />
+                      {err(`work_history.${i}.company`) || err(`work_history.${i}.position`)}
                       <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                         <input name="from" type="month" value={w.from} onChange={setWork(i, "from")} aria-label="From" className={fieldCls} />
                         <input name="to" type="month" value={w.to} onChange={setWork(i, "to")} aria-label="To (blank: present)" className={fieldCls} />
@@ -380,7 +400,7 @@ export default function ApplyPage() {
                   )}
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Message to HR (optional)</span>
-                    <textarea name="notes" value={form.notes} onChange={set("notes")} rows={3} maxLength={1000} placeholder="e.g. when you can start" className={`${fieldCls} resize-y`} />
+                    <textarea name="notes" value={form.notes} onChange={set("notes")} rows={3} maxLength={LIMITS.NOTE} placeholder="e.g. when you can start" className={`${fieldCls} resize-y`} />
                   </label>
                 </Section>
 

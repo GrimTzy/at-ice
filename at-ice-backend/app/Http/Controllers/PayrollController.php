@@ -10,6 +10,7 @@ use App\Support\PayPeriod;
 use App\Support\PayrollCalculator;
 use App\Support\PayrollCalendar;
 use App\Support\Settings;
+use App\Support\TextRules;
 use App\Support\ThirteenthMonth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -81,7 +82,7 @@ class PayrollController extends Controller
     public function addAdjustment(Request $request, $id)
     {
         $data = $request->validate([
-            'label' => 'required|string|max:100',
+            'label' => ['required', ...TextRules::name()],
             'amount' => 'required|numeric|min:0.01|max:1000000',
             'taxable' => 'required|boolean',
         ]);

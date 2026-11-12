@@ -224,7 +224,7 @@ export default function CheckerStockMovementsPage() {
           </div>
           <div>
             <label htmlFor="mv-notes" className={LABEL}>Notes</label>
-            <textarea id="mv-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Delivered by supplier, DR no. 1234" className={TEXTAREA} />
+            <textarea id="mv-notes" rows={2} maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Delivered by supplier, DR no. 1234" className={TEXTAREA} />
           </div>
         </form>
       </BottomSheet>

@@ -304,6 +304,7 @@ export default function StockOutApprovalPage() {
                       {rejectingId === req.id ? (
                         <div className="flex flex-col gap-2">
                           <textarea name="rejection_reason"
+                            maxLength={500}
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
                             placeholder="Reason for rejection..."

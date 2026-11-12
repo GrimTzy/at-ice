@@ -7,6 +7,7 @@ use App\Services\AddressFormatter;
 use App\Services\PhoneFormatter;
 use App\Support\Audit;
 use App\Support\StoredFiles;
+use App\Support\TextRules;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -183,13 +184,13 @@ class ApplicantController extends Controller
         $request->merge(['email' => Applicant::normalizeEmail($request->input('email'))]);
 
         $request->validate([
-            'name' => 'required|string|max:50',
+            'name' => ['required', ...TextRules::person(TextRules::FULL, 'Full name')],
             'email' => ['bail', 'nullable', Rule::unique('applicants', 'email')->ignore($id ?? null), 'email:rfc,filter,dns', 'max:255'],
             'phone' => ['nullable', 'regex:'.self::PHONE_REGEX],
-            'position_applied' => 'required|string|max:255',
+            'position_applied' => ['required', ...TextRules::name()],
             'interview_date' => 'nullable|date',
             'interview_minutes' => ['nullable', 'integer', 'in:'.implode(',', Applicant::INTERVIEW_MINUTES)],
-            'notes' => 'nullable|string|max:1000',
+            'notes' => ['nullable', ...TextRules::note()],
             'resume' => Applicant::RESUME_RULE,
         ] + AddressFormatter::OPTIONAL_RULES, [
             'phone.regex' => self::PHONE_MESSAGE,
@@ -249,13 +250,13 @@ class ApplicantController extends Controller
         $request->merge(['email' => Applicant::normalizeEmail($request->input('email'))]);
 
         $request->validate([
-            'name' => 'sometimes|required|string|max:50',
+            'name' => ['sometimes', 'required', ...TextRules::person(TextRules::FULL, 'Full name')],
             'email' => ['bail', 'nullable', Rule::unique('applicants', 'email')->ignore($id ?? null), 'email:rfc,filter,dns', 'max:255'],
             'phone' => ['nullable', 'regex:'.self::PHONE_REGEX],
-            'position_applied' => 'sometimes|required|string|max:255',
+            'position_applied' => ['sometimes', 'required', ...TextRules::name()],
             'interview_date' => 'nullable|date',
             'interview_minutes' => ['nullable', 'integer', 'in:'.implode(',', Applicant::INTERVIEW_MINUTES)],
-            'notes' => 'nullable|string|max:1000',
+            'notes' => ['nullable', ...TextRules::note()],
             'resume' => Applicant::RESUME_RULE,
             // HR removes the saved resume (ignored when a new one replaces it)
             'remove_resume' => 'sometimes|boolean',

@@ -22,6 +22,8 @@ import { focusRecord } from "../../lib/destination";
 import { plural } from "../../lib/plural";
 import { ContractForm, StoreContracts } from "./deliveries/StoreContracts";
 import { todayStr, daysLabel } from "./deliveries/utils";
+import FieldError, { NameHelp } from "../../components/FieldError";
+import { LIMITS, nameError } from "../../lib/textRules";
 
 const API_BASE = "/api";
 
@@ -269,6 +271,7 @@ export default function CustomersPage() {
       setFormError("Postal code must be 4 digits.");
       return;
     }
+    if (nameError(form.name, "store", LIMITS.STORE, "Business name") || nameError(form.contact_person, "person", LIMITS.FULL, "Contact person")) return; // shown under the field
 
     setSaving(true);
     try {
@@ -585,7 +588,6 @@ export default function CustomersPage() {
                 <div className="col-span-2">
                   <Field
                     label="Branch / Business Name"
-                    maxLength={50}
                     value={form.name}
                     onChange={(v) => setForm((f) => {
                       // The type follows the name while it is blank or still
@@ -597,6 +599,9 @@ export default function CustomersPage() {
                     })}
                     placeholder="e.g. Alfamart Muzon"
                     required
+                    maxLength={LIMITS.STORE}
+                    counter
+                    error={nameError(form.name, "store", LIMITS.STORE, "Business name")}
                   />
                 </div>
                 <div className="col-span-2">
@@ -634,7 +639,8 @@ export default function CustomersPage() {
                     Customer Code and Branch Code are generated when you save.
                   </p>
                 )}
-                <Field label="Contact Person" maxLength={50} value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required={need("contact_person")} />
+                <Field label="Contact Person" value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required={need("contact_person")}
+                  maxLength={LIMITS.FULL} counter error={nameError(form.contact_person, "person", LIMITS.FULL, "Contact person")} />
                 <div>
                   <label htmlFor="customer-contact-number" className="text-[11px] text-slate-500 mb-1 block">Contact Number{need("contact_number") && <Req />}</label>
                   <PhoneInput
@@ -701,7 +707,7 @@ export default function CustomersPage() {
                   inputClassName="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
                 />
                 <div className="col-span-2">
-                  <Field label="Notes" multiline placeholder="Delivery instructions, landmarks, contact hours…" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
+                  <Field label="Notes" multiline maxLength={LIMITS.NOTE} placeholder="Delivery instructions, landmarks, contact hours…" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
                 </div>
               </div>
               </div>
@@ -819,7 +825,7 @@ export default function CustomersPage() {
   );
 }
 
-function Field({ label, value, onChange, required, disabled, placeholder, inputMode, maxLength, type = "text", multiline = false }) {
+function Field({ label, value, onChange, required, disabled, placeholder, inputMode, maxLength, type = "text", multiline = false, error = "", counter = false }) {
   const Tag = multiline ? "textarea" : "input";
   const id = useId();
   return (
@@ -836,9 +842,12 @@ function Field({ label, value, onChange, required, disabled, placeholder, inputM
         disabled={disabled}
         placeholder={placeholder}
         inputMode={inputMode}
-        maxLength={maxLength}
+        maxLength={maxLength ?? (multiline ? LIMITS.NOTE : type === "email" ? 255 : LIMITS.ADDRESS)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
         className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
       />
+      {counter ? <NameHelp id={`${id}-error`} value={value} max={maxLength} error={error} /> : <FieldError id={`${id}-error`}>{error}</FieldError>}
     </div>
   );
 }
@@ -901,6 +910,7 @@ function MapLinkField({ value, onChange, onPlace, onName }) {
       <label htmlFor="customer-map-link" className="text-[11px] text-slate-500 mb-1 block">Map Link</label>
       <input id="customer-map-link" name="map_link"
         type="text"
+        maxLength={2000}
         value={value}
         onChange={(e) => typed(e.target.value)}
         placeholder="Google Maps link or coordinates"

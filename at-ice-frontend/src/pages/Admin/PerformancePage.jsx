@@ -312,7 +312,7 @@ function ReviewModal({ row, period, onClose, onSaved }) {
         </div>
         <div>
           <label className="text-[11px] text-slate-500 mb-1 block" htmlFor="perf-remarks">Appraisal remarks</label>
-          <textarea id="perf-remarks" rows={3} maxLength={2000} value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })}
+          <textarea id="perf-remarks" rows={3} maxLength={500} value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })}
             placeholder="Strengths, areas to improve and agreed next steps" className={inputCls} />
         </div>
 

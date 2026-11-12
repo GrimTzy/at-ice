@@ -15,6 +15,7 @@ use App\Support\Biodata;
 use App\Support\Lateness;
 use App\Support\Rates;
 use App\Support\Settings;
+use App\Support\TextRules;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -125,7 +126,7 @@ class EmployeeController extends Controller
             'shift_end' => 'nullable|date_format:H:i|different:shift_start',
             // Schedule change (HR > Employees): when it starts and why
             'shift_effective_date' => 'nullable|date',
-            'shift_reason' => 'nullable|string|max:255',
+            'shift_reason' => ['nullable', ...TextRules::note(200)],
         ];
     }
 
@@ -242,19 +243,19 @@ class EmployeeController extends Controller
         $noAccount = in_array($request->position, self::NO_ACCOUNT_POSITIONS, true);
 
         $request->validate($this->nameRules() + $this->workRules() + [
-            'first_name' => 'required|string|max:50',
-            'last_name' => 'required|string|max:50',
+            'first_name' => ['required', ...TextRules::person()],
+            'last_name' => ['required', ...TextRules::person()],
             // The login email is made by the server (employeeEmail), never sent.
             // No password from HR either: the server makes a random one-time
             // password (oneTimePassword). The phone is required for an account so
             // HR can reach the employee.
             'phone' => [$noAccount ? 'nullable' : 'required', 'regex:'.self::PHONE_REGEX],
-            'street' => 'required|string|max:255',
-            'barangay' => 'required|string|max:255',
-            'city' => 'required|string|max:255',
-            'province' => 'required|string|max:255',
-            'block_lot' => 'nullable|string|max:255',
-            'subdivision' => 'nullable|string|max:255',
+            'street' => ['required', ...TextRules::address()],
+            'barangay' => ['required', ...TextRules::address()],
+            'city' => ['required', ...TextRules::address()],
+            'province' => ['required', ...TextRules::address()],
+            'block_lot' => ['nullable', ...TextRules::address()],
+            'subdivision' => ['nullable', ...TextRules::address()],
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
             ...AddressFormatter::PSGC_RULES,
             'position' => ['required', Rule::in(array_keys(self::POSITION_ROLES))],
@@ -459,15 +460,15 @@ class EmployeeController extends Controller
             : 'nullable|string|max:255|required_with:block_lot,street,subdivision,barangay,city,province,postal_code';
 
         $request->validate($this->nameRules() + $this->workRules() + [
-            'first_name' => 'sometimes|required|string|max:50',
-            'last_name' => 'sometimes|required|string|max:50',
+            'first_name' => ['sometimes', 'required', ...TextRules::person()],
+            'last_name' => ['sometimes', 'required', ...TextRules::person()],
             'phone' => ['nullable', 'regex:'.self::PHONE_REGEX],
             'street' => $addressRule,
             'barangay' => $addressRule,
             'city' => $addressRule,
             'province' => $addressRule,
-            'block_lot' => 'nullable|string|max:255',
-            'subdivision' => 'nullable|string|max:255',
+            'block_lot' => ['nullable', ...TextRules::address()],
+            'subdivision' => ['nullable', ...TextRules::address()],
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
             ...AddressFormatter::PSGC_RULES,
             'vehicle_plate' => 'nullable|string|max:20',

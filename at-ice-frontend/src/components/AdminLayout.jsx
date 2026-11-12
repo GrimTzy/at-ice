@@ -6,13 +6,13 @@ import { NightStyle, NightToggle } from "./NightMode";
 import { ambientStyle, useNightMode } from "../lib/theme";
 import { useLogoutConfirm } from "../lib/useLogoutConfirm";
 import HeaderAvatar from "./HeaderAvatar";
-import NoticeBell from "./NoticeBell";
 import SidebarSignOut from "./SidebarSignOut";
 import LiveClock from "./LiveClock";
 import { initialsOf } from "../lib/initials";
 import SideNav from "./SideNav";
 import { useNavCounts } from "../lib/navCounts";
 import Rail from "./Rail";
+import NotificationBell from "./NotificationBell";
 import { ADMIN_NAV } from "../lib/nav";
 import { Icon } from "./icons";
 
@@ -21,7 +21,7 @@ const MenuIcon = () => <Icon name="menu" size={20} />;
 const XIcon = () => <Icon name="x" size={18} />;
 
 export default function AdminLayout({ pageTitle, breadcrumb, headerActions, children }) {
-  const navCounts = useNavCounts("admin");
+  const navCounts = useNavCounts();
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [dark, setDark] = useNightMode();
@@ -102,7 +102,7 @@ export default function AdminLayout({ pageTitle, breadcrumb, headerActions, chil
           </div>
           <div className="flex-1" />
           {headerActions}
-          <NoticeBell />
+          <NotificationBell />
           <NightToggle dark={dark} onToggle={() => setDark((d) => !d)} />
           <LiveClock compact />
           <HeaderAvatar initials={initials} name={user?.name || "Admin"} subtitle="System Administrator" onSignOut={askLogout} settingsPath="/admin/settings" />

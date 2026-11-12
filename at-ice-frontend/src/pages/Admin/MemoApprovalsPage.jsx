@@ -117,7 +117,7 @@ function ApprovalPanel({ memo, onDone, onClose }) {
         {returning && (
           <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
             <div className="text-[12px] font-medium text-amber-800">Why does this memo go back to HR? (required)</div>
-            <textarea name="return_reason" rows={2} value={reason} maxLength={1000} onChange={(e) => { setReason(e.target.value); setError(""); }} placeholder="e.g. Attach the supervisor's incident report first" className={`${inputCls} resize-y`} />
+            <textarea name="return_reason" rows={2} value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); setError(""); }} placeholder="e.g. Attach the supervisor's incident report first" className={`${inputCls} resize-y`} />
             <div className="flex flex-wrap gap-2">
               <button type="button" disabled={busy === "return"} onClick={sendBack} title="Send the memo back to HR as a draft" className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-amber-600 hover:bg-amber-700 text-white cursor-pointer disabled:opacity-50">
                 {busy === "return" ? "Returning…" : "Return to HR"}

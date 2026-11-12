@@ -77,7 +77,7 @@ class EmployeeMemoController extends Controller
             'violation' => ['required', Rule::in(array_keys(EmployeeMemo::VIOLATIONS))],
             'level' => ['nullable', Rule::in(array_keys(EmployeeMemo::LEVELS))],
             'incident_date' => 'required|date|before_or_equal:'.DriverAvailability::today(),
-            'subject' => 'required|string|max:255',
+            'subject' => 'required|string|max:120',
             'body' => 'required|string|min:20|max:10000',
             'send' => 'boolean',
             'endorse' => 'boolean',
@@ -138,7 +138,7 @@ class EmployeeMemoController extends Controller
     public function storeAnnouncement(Request $request)
     {
         $data = $request->validate([
-            'subject' => 'required|string|max:255',
+            'subject' => 'required|string|max:120',
             'body' => 'required|string|min:20|max:10000',
             'mode' => ['required', Rule::in(['employees', 'group', 'all'])],
             'employee_ids' => 'required_if:mode,employees|array|max:500',
@@ -233,7 +233,7 @@ class EmployeeMemoController extends Controller
         }
         $data = $request->validate([
             'level' => ['sometimes', Rule::in(array_keys(EmployeeMemo::LEVELS))],
-            'subject' => 'sometimes|string|max:255',
+            'subject' => 'sometimes|string|max:120',
             'body' => 'sometimes|string|min:20|max:10000',
             'incident_date' => 'sometimes|date|before_or_equal:'.DriverAvailability::today(),
         ]);
@@ -321,7 +321,7 @@ class EmployeeMemoController extends Controller
     public function returnToHr(Request $request, EmployeeMemo $memo)
     {
         $data = $request->validate(
-            ['reason' => 'required|string|min:5|max:1000'],
+            ['reason' => 'required|string|min:5|max:500'],
             ['reason.required' => 'Write why the memo goes back to HR.', 'reason.min' => 'Write why the memo goes back to HR (at least 5 characters).']
         );
         if ($memo->status !== 'for_approval') {
@@ -348,7 +348,7 @@ class EmployeeMemoController extends Controller
     // stand (kiosk down, wrong person); it no longer counts as an offense
     public function cancel(Request $request, EmployeeMemo $memo)
     {
-        $data = $request->validate(['reason' => 'required|string|min:5|max:1000']);
+        $data = $request->validate(['reason' => 'required|string|min:5|max:500']);
         if (! in_array($memo->status, ['draft', 'for_approval', 'approved', 'sent', 'awaiting_physical'], true)) {
             return response()->json(['message' => 'An acknowledged or archived memo cannot be cancelled.'], 422);
         }
@@ -416,7 +416,7 @@ class EmployeeMemoController extends Controller
     // employee is no longer "Pending Investigation"
     public function closeInvestigation(Request $request, EmployeeMemo $memo)
     {
-        $data = $request->validate(['outcome' => 'required|string|min:5|max:2000']);
+        $data = $request->validate(['outcome' => 'required|string|min:5|max:500']);
         $employee = $memo->employee;
         if (! $employee || ! $employee->investigation_status) {
             return response()->json(['message' => 'This employee has no open investigation.'], 422);
