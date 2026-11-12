@@ -8,7 +8,7 @@ class LiveEvent extends Model
 {
     const UPDATED_AT = null;
 
-    protected $fillable = ['module', 'action', 'message', 'roles', 'user_ids', 'actor_id'];
+    protected $fillable = ['module', 'action', 'message', 'roles', 'user_ids', 'actor_id', 'subject_type', 'subject_id'];
 
     protected $casts = [
         'roles' => 'array',

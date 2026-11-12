@@ -9,6 +9,7 @@ import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 
 const STATUS = { planned: "Planned", working: "Working on it", stuck: "Stuck", done: "Done" };
 const EMPTY = { name: "", description: "", location: "" };
@@ -104,6 +105,12 @@ export default function MaintenanceProjectsPage() {
 
   // 10 a page like every list; the bar docks above the bottom navigation
   const pager = usePagination(sorted);
+  useNoticeRecord(status === "ready", (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "project") return;
+    setQuery("");
+    pager.reveal((row) => String(row.id) === id);
+  });
   const paged = status === "ready" && pager.total > PAGE_SIZES[0];
 
   return (
@@ -124,7 +131,7 @@ export default function MaintenanceProjectsPage() {
       {status === "ready" && (
         <div className="grid grid-cols-1 gap-3">
           {pager.pageItems.map((p) => (
-            <article key={p.id} className={`${CARD} ${p.status === "stuck" || p.overdue ? "border-rose-200" : ""}`}>
+            <article key={p.id} data-record={`project:${p.id}`} data-record-scroll className={`${CARD} ${p.status === "stuck" || p.overdue ? "border-rose-200" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <h2 className="text-[15px] font-semibold text-slate-900">{p.name}</h2>
                 <StatusBadge tone={p.overdue && p.status !== "done" ? "urgent" : undefined} status={p.status}>

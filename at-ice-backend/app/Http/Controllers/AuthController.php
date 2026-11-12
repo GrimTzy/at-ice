@@ -62,7 +62,7 @@ class AuthController extends Controller
         // The Android app stays signed in (no idle or absolute limit); a browser
         // gets the idle limit of its role and a token that ends after
         // atice.web_token_hours. The flag only sets session length, never access.
-        $apk = SessionIdle::isApkLogin($request);
+        $apk = \App\Support\AppClient::verified($request) && $user->usesMobileApp();
         $newToken = $user->createToken(
             $apk ? SessionIdle::APK_TOKEN : 'auth_token',
             ['*'],

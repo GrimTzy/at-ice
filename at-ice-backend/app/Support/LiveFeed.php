@@ -4,8 +4,10 @@ namespace App\Support;
 
 use App\Models;
 use App\Models\LiveEvent;
+use App\Support\Push\PushNotifier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 // Realtime pop-up notices for every flow, module by module.
@@ -80,14 +82,20 @@ class LiveFeed
                 return;
             }
 
-            LiveEvent::create([
+            $event = LiveEvent::create([
                 'module' => $n[0],
                 'action' => $action,
                 'message' => mb_substr($n[1], 0, 255),
                 'roles' => array_values($n[2] ?? []),
                 'user_ids' => array_values(array_unique(array_filter($n[3] ?? []))),
                 'actor_id' => auth()->id(),
+                'subject_type' => self::subjectOf($m)[0],
+                'subject_id' => self::subjectOf($m)[1],
             ]);
+
+            // The same notice to the phones of the people it is addressed to, sent after the
+            // response (no queue worker needed).
+            app()->terminating(fn () => PushNotifier::forLiveEvent($event));
 
             // keep the table small: drop rows older than a week now and then (the
             // Admin dashboard lists the latest ones)
@@ -97,6 +105,20 @@ class LiveFeed
         } catch (Throwable $e) {
             Log::warning('LiveFeed: '.$e->getMessage());
         }
+    }
+
+    /** The record a notice is about: [kind, id]. A delivery's child record (proof, arrival, crew...) is the delivery. */
+    public static function subjectOf(Model $m): array
+    {
+        if ($m instanceof Models\Delivery) {
+            return ['delivery', $m->getKey()];
+        }
+        $deliveryId = $m->getAttribute('delivery_id');
+        if ($deliveryId) {
+            return ['delivery', $deliveryId];
+        }
+
+        return [Str::snake(class_basename($m)), $m->getKey()];
     }
 
     private static function label(?string $v): string

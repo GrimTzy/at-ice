@@ -85,6 +85,13 @@ class User extends Authenticatable
         return $this->role === 'employee' && $this->sub_role === $subRole;
     }
 
+    // The four roles the Android app is for: Driver, Checker, Salesman, Maintenance.
+    public function usesMobileApp(): bool
+    {
+        return $this->role === 'driver'
+            || ($this->role === 'employee' && in_array($this->sub_role, ['checker', 'salesman', 'maintenance'], true));
+    }
+
     // True when this account must not be used: the login itself is disabled,
     // or it belongs to an employee HR has deactivated. The second case covers
     // accounts deactivated before deactivation also disabled the login (their
@@ -105,6 +112,12 @@ class User extends Authenticatable
     }
 
     // RELATIONSHIPS
+    // The phones this account is signed in on for push notifications (the Android app).
+    public function deviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
+
     public function employee()
     {
         return $this->hasOne(Employee::class);

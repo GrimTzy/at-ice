@@ -4,6 +4,7 @@ import RoleShell from "../../components/RoleShell";
 import { StatusBadge, LoadingButton, ActionBar, ErrorBanner, EmptyCard, CardSkeleton, SearchBar, Icon, BottomSheet } from "../../components/MobileUi";
 import { CARD, matchesQuery } from "../../lib/mobileUi";
 import { useLiveTick } from "../../lib/live";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 import { printDeliveryConfirmation } from "../../lib/printDelivery";
 import { formatDateTime } from "../../lib/time";
 import { useTimedIn } from "../../lib/timeIn";
@@ -73,6 +74,12 @@ export default function SalesmanDashboard() {
   const visible = (delivered ? done : stops).filter((d) =>
     matchesQuery(query, d.customer?.name, d.store_name, d.customer?.address, d.address, d.customer?.city, d.delivery_no));
   const pager = usePagination(visible, { initialSize: 10 });
+  useNoticeRecord(status === "ready", (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "delivery") return;
+    setQuery("");
+    pager.reveal((row) => String(row.id) === id);
+  });
   const selected = visible.find((d) => d.id === selectedId) || null;
   const crew = route.crew;
 
@@ -171,7 +178,7 @@ export default function SalesmanDashboard() {
             const isSel = selectedId === d.id;
             return (
               <article key={d.id} data-selected={isSel || undefined} className={`${CARD} !p-0 overflow-hidden`}>
-                <button type="button" onClick={() => setSelectedId(isSel ? null : d.id)} aria-expanded={isSel}
+                <button type="button" onClick={() => setSelectedId(isSel ? null : d.id)} aria-expanded={isSel} data-record={`delivery:${d.id}`}
                   className="w-full text-left p-4 active:scale-[0.98] transition-transform">
                   {!delivered && <StopMeta delivery={d} className="mb-2" />}
                   <div className="flex items-start justify-between gap-3">

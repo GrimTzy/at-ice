@@ -10,6 +10,7 @@ import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 import AddressFields from "../../components/AddressFields";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
@@ -128,6 +129,12 @@ export default function CheckerSupplierManagementPage() {
   const visible = q ? suppliers.filter((s) => `${s.name} ${s.supplier_code} ${s.contact_person || ""} ${s.city || ""}`.toLowerCase().includes(q)) : suppliers;
   // 10 a page like every list; the bar docks above the bottom navigation
   const pager = usePagination(visible);
+  useNoticeRecord(status === "ready", (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "supplier") return;
+    setQuery("");
+    pager.reveal((row) => String(row.id) === id);
+  });
   const paged = status === "ready" && pager.total > PAGE_SIZES[0];
 
   return (
@@ -155,7 +162,7 @@ export default function CheckerSupplierManagementPage() {
       {status === "ready" && (
         <div className="grid grid-cols-1 gap-3">
           {pager.pageItems.map((s) => (
-            <article key={s.id} className={CARD}>
+            <article key={s.id} data-record={`supplier:${s.id}`} data-record-scroll className={CARD}>
               <h2 className="text-[15px] font-semibold text-slate-900">{s.name}</h2>
               <div className="text-[13px] text-slate-400 font-mono">{s.supplier_code}</div>
               {s.contact_person && <div className="text-[14px] text-slate-600 mt-1">{s.contact_person}</div>}

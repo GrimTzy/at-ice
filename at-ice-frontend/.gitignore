@@ -27,3 +27,9 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# built Android app (made by npm run apk, copied for the website download button)
+public/downloads/*.apk
+
+# Firebase config for the Android app (from the Firebase console). Not a secret, but project-specific: never committed.
+android/app/google-services.json

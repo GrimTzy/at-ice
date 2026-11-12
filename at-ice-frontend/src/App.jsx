@@ -5,6 +5,7 @@ import { NightScope } from './components/NightMode'
 import MobileAppShell from './components/MobileAppShell'
 import LightOnly from './components/LightOnly'
 import SplashScreen from './components/SplashScreen'
+import AppUpdatePrompt from './components/AppUpdatePrompt'
 import SoftPickers from './components/SoftPickers'
 import Toaster from './components/Toaster'
 import ActionGuard from './components/ActionGuard'
@@ -86,6 +87,7 @@ function App() {
       <SplashScreen />
       <SoftPickers />
       <Toaster />
+      <AppUpdatePrompt />
       <ActionGuard />
       <AttachmentViewer />
       <OverflowTitle />

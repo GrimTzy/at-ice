@@ -18,6 +18,7 @@ import { pressArrived } from "../../lib/route";
 import { toast } from "../../lib/toast";
 import FilterSelect from "../../components/FilterSelect";
 import { Icon } from "../../components/icons";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 
 // Haversine formula, gives straight line distance in km between two lat/lng points
 function haversineDistanceKm(lat1, lon1, lat2, lon2) {
@@ -170,6 +171,12 @@ export function DeliveriesPage() {
   const visible = (filter === "all" ? deliveries : deliveries.filter((d) => d.status === filter)).filter((d) =>
     matchesQuery(query, d.delivery_no, d.customer?.name, d.customer?.address, d.customer?.city, d.customer?.province));
   const pager = usePagination(visible, { initialSize: 10 });
+  useNoticeRecord(!loading, (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "delivery") return;
+    setQuery(""); setFilter("all");
+    pager.reveal((row) => String(row.id) === id);
+  });
 
   // I am at the store: the server checks the phone is near the store pin
   async function arrive(d) {
@@ -269,6 +276,7 @@ export function DeliveriesPage() {
               <button
                 className="w-full text-left px-4 py-4 flex items-start gap-3 cursor-pointer active:bg-slate-50 transition-colors"
                 onClick={() => setExpanded(open ? null : d.id)}
+                data-record={`delivery:${d.id}`}
               >
                 <div className="mt-1 flex-shrink-0">
                   <span className={`w-2 h-2 rounded-full inline-block ${cfg.dot}`} />

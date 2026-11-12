@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNoticeRecord } from "../lib/noticeRecord";
 import Pagination from "./Pagination";
 import { PAGE_SIZES, usePagination } from "../lib/usePagination";
 import { BottomSheet, StatusBadge } from "./MobileUi";
@@ -80,7 +81,7 @@ function MemoCard({ memo, onAcknowledged }) {
   };
 
   return (
-    <div className={`rounded-xl border p-3 space-y-2 ${isUrgentMemo(memo) ? "border-rose-300 bg-rose-50/60" : "border-slate-200 bg-white"}`}>
+    <div data-record={`employee_memo:${memo.id}`} data-record-scroll className={`rounded-xl border p-3 space-y-2 ${isUrgentMemo(memo) ? "border-rose-300 bg-rose-50/60" : "border-slate-200 bg-white"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${level.cls}`}>{level.label}</span>
         <StatusBadge tone={needsAck(memo) ? "pending" : memo.status === "awaiting_physical" ? "urgent" : "done"}>{memo.kind === "announcement" ? (memo.acknowledged_at ? "Acknowledged" : "New announcement") : status.label}</StatusBadge>
@@ -125,7 +126,24 @@ export function MyMemosButton({ compact = false, variant = "icon", onActivate })
   const { memos, loading, error, load, setMemos } = useMyMemos();
   const [open, setOpen] = useState(false);
   const pending = memos.filter((m) => needsAck(m) || m.status === "awaiting_physical").length;
+
+  // A phone notice about a memo opens this sheet (lib/push.js sets the flag or sends the event).
+  useEffect(() => {
+    const openNow = () => setOpen(true);
+    if (sessionStorage.getItem("open_memos")) {
+      sessionStorage.removeItem("open_memos");
+      openNow();
+    }
+    window.addEventListener("atice:open-memos", openNow);
+    return () => window.removeEventListener("atice:open-memos", openNow);
+  }, []);
   const pager = usePagination(memos);
+  useNoticeRecord(open && !loading, (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "employee_memo") return;
+
+    pager.reveal((row) => String(row.id) === id);
+  });
 
   return (
     <>

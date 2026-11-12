@@ -16,6 +16,8 @@ class PublicRoutesTest extends TestCase
     private const PUBLIC = [
         'POST api/login', 'POST api/forgot-password', 'POST api/verify-reset-code', 'POST api/reset-password',
         'POST api/apply',
+        // Public app update metadata and APK download; protected device routes remain guarded.
+        'GET api/app-version', 'GET api/app-download',
         // the Attendance Station: unlock/override by PIN, the rest by kiosk token
         'POST api/kiosk/unlock', 'GET api/kiosk/lock-state', 'POST api/kiosk/override',
         'GET api/kiosk/status', 'GET api/face-descriptors', 'POST api/attendances',

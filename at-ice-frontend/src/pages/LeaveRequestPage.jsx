@@ -26,6 +26,7 @@ import { UploadBar } from "../components/FileDropZone";
 import { sendForm } from "../lib/upload";
 import { confirmAction } from "../lib/confirm";
 import { PILL } from "../lib/statusTones";
+import { useNoticeRecord } from "../lib/noticeRecord";
 
 const TYPE_LABEL = {
   sick: "Sick Leave (SL)",
@@ -218,6 +219,12 @@ export default function LeaveRequestPage() {
   const inputCls = "w-full px-3 py-2.5 text-[13px] bg-slate-50 border border-black/[0.09] rounded-lg focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20";
 
   const pager = usePagination(leaves);
+  useNoticeRecord(!loading, (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "leave_request") return;
+
+    pager.reveal((row) => String(row.id) === id);
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -363,7 +370,7 @@ export default function LeaveRequestPage() {
         {!loading && !loadError && leaves.length === 0 && <EmptyState icon="calendar">No leave requests yet.</EmptyState>}
 
         {pager.pageItems.map((l) => (
-          <div key={l.id} className="bg-white border border-black/[0.09] rounded-xl p-4 flex flex-col gap-1.5">
+          <div key={l.id} data-record={`leave_request:${l.id}`} data-record-scroll className="bg-white border border-black/[0.09] rounded-xl p-4 flex flex-col gap-1.5">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[14px] font-bold text-slate-800">{TYPE_LABEL[l.leave_type] || l.leave_type}</span>

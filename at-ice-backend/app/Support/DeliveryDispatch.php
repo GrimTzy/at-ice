@@ -305,7 +305,7 @@ class DeliveryDispatch
             ->get();
 
         foreach ($late as $d) {
-            $by = $d->due_at->format('g:i A');
+            $by = $d->due_at->copy()->setTimezone(DriverAvailability::tz())->format('g:i A');
             self::tellStore($d, 'overdue', "Your delivery {$d->delivery_no} was due by {$by} and is running late. We are on it and will let you know when it arrives.");
             LiveEvent::create([
                 'module' => 'deliveries',
