@@ -164,7 +164,9 @@ export default function MemoApprovalsPage() {
   const live = useLiveTick(["memos"]);
   useEffect(() => { load(); }, [load, live]);
 
-  const pager = usePagination(data.memos);
+  const [kind, setKind] = useState(""); // "" all, "nte", "final"
+  const shown = kind === "nte" ? data.memos.filter((m) => m.level === "nte") : kind === "final" ? data.memos.filter((m) => m.level !== "nte") : data.memos;
+  const pager = usePagination(shown);
   const current = data.memos.find((m) => m.id === selected);
   const nte = data.memos.filter((m) => m.level === "nte").length;
 
@@ -180,9 +182,9 @@ export default function MemoApprovalsPage() {
   return (
     <AdminLayout pageTitle="Memo Approvals" breadcrumb="HRIS / Memo Approvals">
       <KpiGrid cols={3}>
-        <KpiCard label="Waiting for you" icon="clock" tone="amber" value={data.memos.length} sub="Endorsed by HR" live={data.memos.length > 0} />
-        <KpiCard label="Notices to Explain" icon="alert" tone="rose" value={nte} sub="Open an investigation once released" />
-        <KpiCard label="Final written" icon="file" tone="violet" value={data.memos.length - nte} sub="Final warnings and zero tolerance" />
+        <KpiCard label="Waiting for you" icon="clock" tone="amber" value={data.memos.length} sub="Endorsed by HR" live={data.memos.length > 0} onClick={() => setKind("")} active={kind === ""} />
+        <KpiCard label="Notices to Explain" icon="alert" tone="rose" value={nte} sub="Open an investigation once released" onClick={() => setKind((k) => (k === "nte" ? "" : "nte"))} active={kind === "nte"} />
+        <KpiCard label="Final written" icon="file" tone="violet" value={data.memos.length - nte} sub="Final warnings and zero tolerance" onClick={() => setKind((k) => (k === "final" ? "" : "final"))} active={kind === "final"} />
       </KpiGrid>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
@@ -224,6 +226,7 @@ export default function MemoApprovalsPage() {
                         <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{formatDateTime(m.endorsed_at, { year: false })}</td>
                       </tr>
                     ))}
+                    {shown.length === 0 && <tr><td colSpan={4} className="px-4 py-6 text-center text-[12px] text-slate-400">No memos in this group.</td></tr>}
                   </tbody>
                 </table>
               </div>

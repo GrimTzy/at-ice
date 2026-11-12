@@ -230,9 +230,27 @@ function waitForDestination(id, done) {
   return cleanup;
 }
 
+// Shared rule: a button that changes what the list shows (a tab or view switch in
+// a data-fx-tabs group, or any button marked data-dest-trigger such as a Previous /
+// Next pay period) scrolls to the list and replays its rows, like a hero card.
+// Not inside a dialog or form, and not on the nav of the Settings pages
+// (data-no-dest turns it off for one button).
+const TRIGGER = "main [data-fx-tabs]:not(nav) button, main button[data-dest-trigger]";
+function onTriggerClick(e) {
+  const b = e.target instanceof Element ? e.target.closest("button") : null;
+  if (!b || b.disabled || !b.matches(TRIGGER) || b.closest("[data-no-dest], [role='dialog'], .modal-shell, form")) return;
+  focusDestination();
+}
+
 export function DestinationWatcher() {
   const location = useLocation();
   const dest = location.state?.dest;
+
+  useEffect(() => {
+    // capture phase: the page may swap the button for a new one while it re-renders
+    document.addEventListener("click", onTriggerClick, true);
+    return () => document.removeEventListener("click", onTriggerClick, true);
+  }, []);
 
   useEffect(() => {
     if (!dest) return;
