@@ -24,11 +24,11 @@ class DeliveryDelayNotice extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "AT Ice: delivery {$this->deliveryNo} is running late");
+        return new Envelope(subject: config('mail.from.name').": delivery {$this->deliveryNo} is running late");
     }
 
     public function content(): Content
     {
-        return new Content(view: 'emails.delivery-delay');
+        return new Content(view: 'emails.delivery-delay', text: 'emails.delivery-delay-text');
     }
 }

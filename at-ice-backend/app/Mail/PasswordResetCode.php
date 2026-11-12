@@ -23,11 +23,12 @@ class PasswordResetCode extends Mailable implements ShouldBeEncrypted, ShouldQue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "Your AT Ice password reset code: {$this->code}");
+        // The code and the word "password" stay out of the subject: spam filters weigh them.
+        return new Envelope(subject: 'Verification request for your '.config('mail.from.name').' account');
     }
 
     public function content(): Content
     {
-        return new Content(view: 'emails.password-reset-code');
+        return new Content(view: 'emails.password-reset-code', text: 'emails.password-reset-code-text');
     }
 }

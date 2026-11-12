@@ -342,7 +342,7 @@ class DeliveryDispatch
             $channels[] = 'portal';
         }
 
-        if ($customer->email) {
+        if ($customer->email && Settings::get('delivery.email_delay_notices') && ! MailGuard::isUndeliverable($customer->email)) {
             try {
                 Mail::to($customer->email)->send(new DeliveryDelayNotice($customer->name, $d->delivery_no, $message));
                 $channels[] = 'email';

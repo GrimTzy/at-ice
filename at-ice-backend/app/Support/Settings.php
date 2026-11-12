@@ -59,6 +59,7 @@ class Settings
         'delivery.allow_rolling_stock_fifo' => [true, 'bool', 'Keep the ice left on each truck as dated loads and deliver the oldest load first (FIFO). Off: loads and deliveries are not tracked per truck'],
         'delivery.auto_queue_on_trip_completion' => [true, 'bool', 'Give queued deliveries on their own to the Driver who finished their list first. Off: Admin picks a Driver for each queued delivery'],
         'delivery.max_transit_hours_before_alert' => [4, 'int', 'Hours a delivery may stay In transit before Admin is alerted (0 = no alert)'],
+        'delivery.email_delay_notices' => [false, 'bool', 'Also email the store when its delivery is moved or may be late (off: customer portal only). Addresses ending in .invalid never get email'],
         // Support tickets (SupportMessageController)
         'support.overdue_hours' => [24, 'int', 'Hours an open support ticket may wait before it is marked Overdue'],
         'support.max_open_tickets' => [5, 'int', 'Most open or in-progress tickets a customer may have at once (Emergency Ice Shortage is never blocked)'],
