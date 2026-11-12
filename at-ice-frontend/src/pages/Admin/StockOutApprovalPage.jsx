@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { SkeletonList } from "../../components/Skeleton";
@@ -159,6 +161,7 @@ export default function StockOutApprovalPage() {
   const filtered = activeTab === 'all'
     ? requests
     : requests.filter((r) => r.status === activeTab);
+  const pager = usePagination(filtered);
 
   // Summary for the KPI cards and side panels
   const countOf = (s) => requests.filter((r) => r.status === s).length;
@@ -242,7 +245,7 @@ export default function StockOutApprovalPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map((req) => {
+            {pager.pageItems.map((req) => {
               const notEnough = req.product && req.product.current_stock < req.quantity;
               return (
                 <div
@@ -395,6 +398,7 @@ export default function StockOutApprovalPage() {
                 </div>
               );
             })}
+            {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} />}
           </div>
         )}
       </div>

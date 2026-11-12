@@ -34,8 +34,8 @@ class LeaveBuilder
             return $d->toDateString();
         };
         $f35 = $future(35);
-        // Two leave days with no rest day or holiday inside the range (the app
-        // counts weekends as leave days, defect D3; only L-16 shows that on purpose).
+        // Two leave days with no rest day or holiday inside the range (L-16 spans
+        // a weekend on purpose: only its work days count, defect D3 fixed).
         $open = fn (string $ymd) => $c->isWorkDay($ymd) && ! $c->isHoliday($ymd);
         $twoDays = function (string $first) use ($c, $open) {
             $next = $c->date($first)->addDay()->toDateString();
@@ -138,7 +138,7 @@ class LeaveBuilder
             }
             if ($status === 'approved') {
                 // the app's rule at approval: paid from the credits on the start date
-                $available = LeaveCredits::for($employee, $start)['available'];
+                $available = LeaveCredits::for($employee, $start)[LeaveCredits::pool($type) ?? 'vacation']['available'];
                 $paid = ! empty($opt['unpaid']) ? 0 : min($days, $available);
                 $row['paid_days'] = round($paid, 2);
                 $row['unpaid_days'] = round($days - $paid, 2);
@@ -150,13 +150,13 @@ class LeaveBuilder
         }
     }
 
-    // Same rule as LeaveRequestController::computeDays: every day of the
-    // range except holidays (weekends included; reported as defect D3).
+    // Same rule as LeaveRequestController::computeDays: the work days of the
+    // range, without holidays (defect D3, weekends counted, was fixed 2026-11-11).
     private function countDays(string $start, string $end): float
     {
         $n = 0;
         foreach (CarbonPeriod::create($start, $end) as $d) {
-            if (! $this->c->isHoliday($d->toDateString())) {
+            if ($this->c->isWorkDay($d->toDateString()) && ! $this->c->isHoliday($d->toDateString())) {
                 $n++;
             }
         }

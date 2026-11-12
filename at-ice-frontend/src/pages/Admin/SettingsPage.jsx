@@ -14,7 +14,7 @@ import { formatDateTime } from "../../lib/time";
 const PAGES = [
   { key: "account", label: "Account", hint: "Your name, login email and password." },
   // Moved from HR > Rates and rules (owner, 2026-11-10)
-  { key: "deliveries", label: "Deliveries", hint: "FIFO dispatch, ice left on the trucks (rolling stock), alerts, delay notices, top-ups and the plant location." },
+  { key: "deliveries", label: "Deliveries", hint: "FIFO dispatch, ice left on the trucks (rolling stock), alerts, delay notices and the plant location." },
   { key: "support", label: "Support tickets", hint: "When a ticket is overdue and how many a customer may have open." },
   { key: "admin-pin", label: "Admin PIN", hint: "The 4-digit PIN that unlocks a locked Attendance Station kiosk." },
   { key: "old-records", label: "Old records", hint: "Inactive employees and old attendance past the retention period." },

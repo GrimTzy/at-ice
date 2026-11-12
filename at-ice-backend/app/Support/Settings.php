@@ -45,8 +45,8 @@ class Settings
         'kiosk.max_wrong_pins' => [5, 'int', 'Wrong PINs in a row that lock a kiosk until Admin unlocks it'],
         'kiosk.max_wrong_pins_per_ip' => [10, 'int', 'Wrong PINs from one network address in an hour (any kiosk) before that address is blocked for the hour'],
         // Leave
-        'leave.credits_per_cutoff' => [0.5, 'number', 'Leave credits (days) earned each pay period once regular'],
-        'leave.credits_cap' => [15, 'number', 'Most leave credits an employee can hold'],
+        'leave.vl_days_per_year' => [15, 'number', 'Vacation leave days a year once regular, earned a share each pay period (emergency leave uses these)'],
+        'leave.sl_days_per_year' => [15, 'number', 'Sick leave days a year once regular, earned a share each pay period'],
         'leave.sl_filing_window_days' => [1, 'int', 'Days after returning that sick leave can still be filed'],
         'leave.vl_notice_days' => [14, 'int', 'Days ahead that vacation leave must be filed'],
         // Deliveries (App\Support\DeliveryDispatch)
@@ -55,7 +55,6 @@ class Settings
         'plant.latitude' => [14.8031, 'number', 'Plant location (latitude): each route lists the stores nearest to the plant first'],
         'plant.longitude' => [121.0515, 'number', 'Plant location (longitude)'],
         'delivery.not_timed_in_minutes' => [60, 'int', 'Minutes after their shift starts that a Driver with no Time In counts as absent and their pending deliveries today are reassigned'],
-        'delivery.max_top_ups_per_day' => [3, 'int', 'Most urgent top-ups one store can get after one delivery in a day'],
         // FIFO and rolling stock (owner, 2026-11-10; DeliveryDispatch, TruckStock)
         'delivery.allow_rolling_stock_fifo' => [true, 'bool', 'Keep the ice left on each truck as dated loads and deliver the oldest load first (FIFO). Off: loads and deliveries are not tracked per truck'],
         'delivery.auto_queue_on_trip_completion' => [true, 'bool', 'Give queued deliveries on their own to the Driver who finished their list first. Off: Admin picks a Driver for each queued delivery'],
@@ -77,9 +76,11 @@ class Settings
         'performance.goal_maintenance' => [8, 'int', 'Maintenance goal per pay period: parts requests and projects filed'],
         // 13th month
         'thirteenth.credit_date' => ['12-01', 'month-day', 'Date the 13th month pay is credited (MM-DD; legal deadline 12-24)'],
-        // Retention (nothing is deleted on its own; Admin reviews)
-        'archive.expiry_action' => ['REVIEW', 'enum:REVIEW,ANONYMIZE,PURGE', 'What happens each day to inactive employees past the retention period: Admin reviews them, or they are anonymized or deleted'],
-        'retention.years' => [2, 'int', 'Years inactive employees and old timesheets are kept before Admin reviews them'],
+        // Retention (QA review, 2026-11-11): personal data goes a month after
+        // deactivation; the records DOLE needs stay 3 years, then are anonymized
+        'archive.expiry_action' => ['ANONYMIZE', 'enum:REVIEW,ANONYMIZE,PURGE', 'What happens each day to inactive employees past the retention period: anonymized, reviewed by Admin, or deleted'],
+        'retention.years' => [3, 'int', 'Years the records of inactive employees and old timesheets are kept (DOLE: at least 3)'],
+        'retention.personal_purge_days' => [30, 'int', 'Days after deactivation that the login, face, documents, contact and biodata are deleted (data privacy); attendance, leave and payroll stay'],
     ];
 
     public static function get(string $key): mixed

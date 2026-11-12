@@ -42,6 +42,16 @@ const TOPIC_TONES = ["cyan", "amber", "violet", "emerald", "rose", "slate"];
 const isActive = (t) => t.status === "open" || t.status === "in_progress";
 const isEscalated = (t) => Boolean(t.escalated_at) && isActive(t);
 
+// Last thing the customer did: the ticket itself or their latest reply.
+// The reply time comes from a DB aggregate (UTC, no zone), so it is read as UTC.
+const utc = (v) => (v ? new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(v) ? v : `${String(v).replace(" ", "T")}Z`).getTime() : 0);
+const lastActivity = (t) => Math.max(utc(t.created_at), utc(t.last_customer_reply_at));
+
+
+const NewPill = () => (
+  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap bg-cyan-50 text-cyan-800 border-cyan-200">New</span>
+);
+
 const EscalatedPill = () => (
   <span className="px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap bg-rose-50 text-rose-800 border-rose-200">Escalated</span>
 );
@@ -83,6 +93,8 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
   const [busy, setBusy] = useState("");
   const [escalating, setEscalating] = useState(false);
   const [reason, setReason] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const [showDetails, setShowDetails] = useState(true);
 
   const load = useCallback(async () => {
     setError("");
@@ -102,6 +114,7 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
     setResolving(false);
     setEscalating(false);
     setReason("");
+    setShowAll(false);
     load();
   }, [load]);
 
@@ -179,6 +192,14 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
       </div>
 
       <div className="px-5 py-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Details</div>
+          <button type="button" data-no-confirm onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}
+            className="text-[12px] font-medium text-cyan-700 hover:underline cursor-pointer">
+            {showDetails ? "Hide details" : "Show details"}
+          </button>
+        </div>
+        {showDetails && (
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-[12px]">
           <div className="min-w-0">
             <div className="text-[11px] text-slate-400">Customer</div>
@@ -214,6 +235,7 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
             </select>
           </label>
         </div>
+        )}
 
         {t.escalated_at && (
           <div className="rounded-lg border border-rose-200 bg-rose-50/60 px-3 py-2">
@@ -231,7 +253,13 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
               <div className="text-[11px] text-slate-400">{t.customer?.name || "Customer"} · {formatDateTime(t.created_at, { year: false })}</div>
               <div className="text-[13px] text-slate-800 whitespace-pre-wrap break-words">{t.message}</div>
             </div>
-            {(t.replies || []).map((r) => (
+            {/* a long thread shows the last two messages; the rest open on click */}
+            {(t.replies || []).length > 3 && !showAll && (
+              <button type="button" onClick={() => setShowAll(true)} className="text-[12px] font-medium text-cyan-700 hover:underline">
+                Show {t.replies.length - 2} earlier message{t.replies.length - 2 === 1 ? "" : "s"}
+              </button>
+            )}
+            {(t.replies || []).slice((t.replies || []).length > 3 && !showAll ? -2 : 0).map((r) => (
               <div key={r.id} className={`border-l-2 pl-3 ${r.kind === "note" ? "border-amber-300 bg-amber-50/50 py-1 rounded-r" : r.kind === "customer" ? "border-slate-300" : "border-cyan-400"}`}>
                 <div className="text-[11px] text-slate-400">
                   {r.kind === "customer"
@@ -241,6 +269,9 @@ function TicketPanel({ id, assignees, overdueHours, onChanged, onClose }) {
                 <div className="text-[13px] text-slate-800 whitespace-pre-wrap break-words">{r.body}</div>
               </div>
             ))}
+            {showAll && (t.replies || []).length > 3 && (
+              <button type="button" onClick={() => setShowAll(false)} className="text-[12px] font-medium text-cyan-700 hover:underline">Show fewer</button>
+            )}
             {t.resolution_note && (
               <div className="border-l-2 border-emerald-400 pl-3">
                 <div className="text-[11px] text-slate-400">
@@ -365,7 +396,19 @@ export default function SupportInboxPage() {
   const [overdueHours, setOverdueHours] = useState(24);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelectedId] = useState(null);
+  const [sort, setSort] = useState("newest");
+  // tickets opened in this visit, before the list reloads with their read_at
+  const [opened, setOpened] = useState({});
+
+  // A ticket counts as New until this Admin opens it after the customer's last
+  // message (read_at is saved on the server when the ticket is opened)
+  const isNew = useCallback((t) => isActive(t) && t.id !== selected
+    && lastActivity(t) > Math.max(utc(t.read_at), opened[t.id] || 0), [opened, selected]);
+  const setSelected = useCallback((id) => {
+    setSelectedId(id);
+    if (id != null) setOpened((prev) => ({ ...prev, [id]: Date.now() }));
+  }, []);
 
   const load = useCallback(async () => {
     setError("");
@@ -388,6 +431,11 @@ export default function SupportInboxPage() {
   useEffect(() => {
     load();
   }, [load, live]);
+
+  // the ticket open in the panel stays read when the customer writes meanwhile
+  useEffect(() => {
+    if (selected != null) setSelected(selected);
+  }, [all, selected, setSelected]);
 
   const now = Date.now();
   const isOverdue = useCallback((t) => isActive(t) && now - new Date(t.created_at) > overdueHours * 3600000, [now, overdueHours]);
@@ -421,13 +469,14 @@ export default function SupportInboxPage() {
       })
       .filter((t) => priority === "all" || t.priority === priority)
       .filter((t) => !q || [t.ticket_no, t.customer?.name, t.topic_label].some((v) => (v || "").toLowerCase().includes(q)))
-      // active tickets: highest priority first, then oldest first; others newest first
+      // Newest: latest customer activity on top, so a new Medium ticket is not
+      // buried under an older High one. Priority: High first, then oldest first.
       .sort((a, b) =>
-        isActive(a) && isActive(b)
+        sort === "priority"
           ? (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1) || new Date(a.created_at) - new Date(b.created_at)
-          : isActive(b) - isActive(a) || new Date(b.created_at) - new Date(a.created_at)
+          : lastActivity(b) - lastActivity(a)
       );
-  }, [all, filter, priority, search, isOverdue]);
+  }, [all, filter, priority, search, isOverdue, sort]);
 
   const pager = usePagination(rows);
 
@@ -473,6 +522,8 @@ export default function SupportInboxPage() {
               onChange={setPriority}
               options={[{ value: "all", label: "All", count: all.filter(isActive).length }, ...Object.entries(PRIORITY).map(([k, p]) => ({ value: k, label: p.label, count: all.filter((t) => t.priority === k && isActive(t)).length }))]}
             />
+            <FilterSelect label="Sort" value={sort} onChange={setSort}
+              options={[{ value: "newest", label: "Newest first" }, { value: "priority", label: "Priority (High first)" }]} />
             <input name="search"
               type="search"
               value={search}
@@ -517,7 +568,10 @@ export default function SupportInboxPage() {
                           aria-selected={selected === t.id}
                           className={`border-t border-black/[0.06] cursor-pointer hover:bg-slate-50 ${selected === t.id ? "bg-cyan-50/60" : ""}`}
                         >
-                          <td className="px-[18px] py-2.5 font-mono text-[12px] text-slate-700 whitespace-nowrap">{t.ticket_no}</td>
+                          <td className="px-[18px] py-2.5 font-mono text-[12px] text-slate-700 whitespace-nowrap">
+                            {t.ticket_no}
+                            {isNew(t) && <span className="cell-note font-sans"><NewPill /></span>}
+                          </td>
                           <td className="px-[18px] py-2.5 text-slate-800">{t.customer?.name || "Customer"}</td>
                           <td className="px-[18px] py-2.5 text-slate-600">{t.topic_label}</td>
                           <td className="px-[18px] py-2.5"><Pill map={PRIORITY} value={t.priority} /></td>

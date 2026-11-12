@@ -8,11 +8,30 @@ import { removePushToken } from "./push";
 
 export const LOGIN_PATH = "/login";
 
-const SESSION_KEYS = ["token", "role", "sub_role", "user", "must_change_password"];
+// Last time the person did something, in ms. In localStorage so every open tab
+// of the same sign-in shares it (see components/IdleGuard.jsx).
+export const ACTIVITY_KEY = "last_activity";
+// Last real mouse/key/touch input. A page left open untouched is signed out
+// after OPEN_TAB_LIMIT_MS of this (see components/IdleGuard.jsx).
+export const INPUT_KEY = "last_input";
+
+const SESSION_KEYS = ["token", "role", "sub_role", "user", "must_change_password", "idle_minutes", ACTIVITY_KEY, INPUT_KEY];
 
 // Saves the response of POST /api/login.
 export function saveSession(data) {
   localStorage.setItem("token", data.token);
+  // Minutes of inactivity before sign-out for this role; no value = no limit
+  // (the employees on their phones: nothing about idle is stored or tracked for
+  // them). The server enforces the same limit.
+  if (data.idle_minutes > 0) {
+    localStorage.setItem("idle_minutes", String(data.idle_minutes));
+    localStorage.setItem(ACTIVITY_KEY, String(Date.now()));
+    localStorage.setItem(INPUT_KEY, String(Date.now()));
+  } else {
+    localStorage.removeItem("idle_minutes");
+    localStorage.removeItem(ACTIVITY_KEY);
+    localStorage.removeItem(INPUT_KEY);
+  }
   localStorage.setItem("role", data.role || data.user?.role || "");
   localStorage.setItem("sub_role", data.sub_role || "");
   localStorage.setItem("user", JSON.stringify(data.user || {}));

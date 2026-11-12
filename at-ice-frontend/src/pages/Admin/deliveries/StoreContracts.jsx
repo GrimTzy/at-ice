@@ -1,47 +1,47 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Pagination from "../../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../../lib/usePagination";
 import { toast } from "../../../lib/toast";
 import { useMaxQuantity } from "../../../lib/limits";
 import { QTY_INPUT_PROPS, cleanQty } from "../../../lib/quantity";
 import TimeSelect from "../../../components/TimeSelect";
 import { api, todayStr, shortDate, timeOf, DAYS, daysLabel, PRODUCT_TYPES, productLabel, storeName, ymd, inputCls, labelCls, btnPrimary, btnGhost } from "./utils";
-import { Modal } from "./shared";
+import { Modal, PlusIcon } from "./shared";
 import Req from "../../../components/Req";
 
 const CONTRACT_BADGE = {
   pending: "bg-amber-50 text-amber-700 border-amber-200",
   approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  ended: "bg-slate-100 text-slate-500 border-slate-200",
   cancelled: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
-// Contracts: one delivery schedule per store, a date range and delivery days.
-// Approving it makes every daily delivery, so nobody fills in a form each day.
-// A contract is made from its store's row (CRM > Customers > Contract), so
-// this tab only lists, approves and cancels them (owner, 2026-11-10).
-// The page toolbar passes `search`, `type` (customer type) and `status`.
-export default function ContractsTab({ live, onChanged, search = "", type = "", status = "all", onLoaded }) {
-  const [contracts, setContracts] = useState([]);
-  const [loading, setLoading] = useState(true);
+// An approved contract past its end date shows as ended
+const shownStatus = (c) => (c.status === "approved" && c.end_date < todayStr() ? "ended" : c.status);
+
+// Every contract a store has had, opened from its name (CRM > Customers),
+// newest first. A store has one contract at a time, approved when it is saved
+// (owner, 2026-11-11), so from here Admin edits or cancels that one, or makes
+// a new one once nothing is running. Ended and cancelled ones stay as history.
+// An older contract still pending can be approved here.
+export function StoreContracts({ store, contract: running = null, onClose, onChanged = () => {} }) {
+  const [contracts, setContracts] = useState(null);
+  const [making, setMaking] = useState(false);
   const [confirm, setConfirm] = useState(null); // { contract, action }
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
-      setContracts(await api("delivery-contracts"));
+      const list = await api("delivery-contracts");
+      setContracts(list
+        .filter((c) => (c.stores || []).some((s) => s.id === store.id))
+        .sort((a, b) => (b.start_date || "").localeCompare(a.start_date || "") || b.id - a.id));
     } catch (err) {
       toast.error(err.message);
-    } finally {
-      setLoading(false);
+      setContracts([]);
     }
-  }, []);
-  useEffect(() => { load(); }, [load, live]);
-  useEffect(() => { onLoaded?.(contracts); }, [contracts, onLoaded]);
-
-  const shown = contracts.filter((c) =>
-    (status === "all" || c.status === status)
-    && (!type || (c.stores || []).some((s) => (s.customer_type || "dealer") === type))
-    && (!search || `${c.name} ${c.contract_no} ${c.chain || ""} ${(c.stores || []).map((s) => s.name).join(" ")}`.toLowerCase().includes(search)));
-  const narrowed = !!(search || type || status !== "all");
+  }, [store.id]);
+  useEffect(() => { load(); }, [load]);
 
   async function act() {
     const { contract, action } = confirm;
@@ -59,71 +59,86 @@ export default function ContractsTab({ live, onChanged, search = "", type = "", 
     }
   }
 
-  return (
-    <div className="p-[18px] flex flex-col gap-3">
-      <p className="text-[12px] text-slate-500 max-w-2xl">
-        One schedule per store with a date range and delivery days. Make one from the store's Contract button in CRM &gt; Customers. Once Admin approves it here, the daily deliveries are made automatically and go to the store's assigned driver (Driver Stores tab).
-      </p>
+  const pager = usePagination(contracts || []);
 
-      <div className="overflow-x-auto lg:overflow-visible rounded-xl border border-black/[0.09]">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="text-left text-slate-400 text-[11px] uppercase tracking-widest">
-              <th className="px-3 py-2.5 font-medium">Contract</th>
-              <th className="px-3 py-2.5 font-medium">Stores</th>
-              <th className="px-3 py-2.5 font-medium">Dates</th>
-              <th className="px-3 py-2.5 font-medium">Days</th>
-              <th className="px-3 py-2.5 font-medium">Items per store</th>
-              <th className="px-3 py-2.5 font-medium">Deliveries</th>
-              <th className="px-3 py-2.5 font-medium">Status</th>
-              <th className="px-3 py-2.5 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && contracts.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">Loading…</td></tr>}
-            {!loading && shown.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">{narrowed && contracts.length ? "No contracts match this filter." : "No contracts yet. Make one with a store's Contract button in CRM > Customers."}</td></tr>}
-            {shown.map((c) => (
-              <tr key={c.id} className="border-t border-black/[0.06] align-top">
-                <td className="px-3 py-2.5">
-                  <div className="text-slate-800 font-medium">{c.name}</div>
-                  <div className="text-[11px] text-slate-400 font-mono">{c.contract_no}{c.chain ? ` · ${c.chain}` : ""}</div>
-                </td>
-                <td className="px-3 py-2.5 text-slate-600" title={(c.stores || []).map((s) => s.name).join("\n")}>
-                  {(c.stores || []).length}
-                </td>
-                <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{shortDate(c.start_date)} – {shortDate(c.end_date)}</td>
-                <td className="px-3 py-2.5 text-slate-600">{daysLabel(c.delivery_days)}<div className="text-[11px] text-slate-400">by {timeOf(c.delivery_time)}</div></td>
-                <td className="px-3 py-2.5 text-slate-600">{(c.items || []).map((i) => `${i.quantity} × ${productLabel(i.product_type)}`).join(", ")}</td>
-                <td className="px-3 py-2.5 text-slate-600 tabular-nums">
-                  {c.status === "pending" ? <span className="text-slate-400">{c.planned} to make</span> : `${c.delivered_count} / ${c.deliveries_count} delivered`}
-                </td>
-                <td className="px-3 py-2.5">
-                  <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${CONTRACT_BADGE[c.status] || ""}`}>{c.status}</span>
-                  {c.approved_by && <div className="text-[11px] text-slate-400 mt-1">by {c.approved_by.name}</div>}
-                </td>
-                <td className="px-3 py-2.5">
-                  <div className="flex gap-1.5 justify-end">
-                    {c.status === "pending" && (
-                      <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "approve" })} className="px-2 py-1 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[11.5px] font-medium">Approve</button>
-                    )}
-                    {c.status !== "cancelled" && (
-                      <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "cancel" })} className="px-2 py-1 rounded-md border border-black/[0.09] text-red-600 text-[11.5px] hover:bg-red-50">Cancel</button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+  if (making) {
+    return <ContractForm store={store} contract={running} onClose={() => setMaking(false)} onSaved={() => { setMaking(false); load(); onChanged(); }} />;
+  }
+
+  return (
+    <>
+      <Modal title={`Contracts for ${storeName(store)}`} onClose={onClose} wide>
+        <div className="p-5 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[12px] text-slate-500 max-w-xl">
+              Every contract this store has had, newest first, including ended and cancelled ones. Saving a contract makes its daily deliveries at once, each with the store's driver (Deliveries &gt; Driver Stores). A store has one contract at a time.
+            </p>
+            <button type="button" onClick={() => setMaking(true)} className={`${btnPrimary} flex items-center gap-1.5`}>
+              {running ? "Edit contract" : <><PlusIcon /> New contract</>}
+            </button>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-black/[0.09]">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-slate-400 text-[11px] uppercase tracking-widest">
+                  <th className="px-3 py-2.5 font-medium">Contract</th>
+                  <th className="px-3 py-2.5 font-medium">Dates</th>
+                  <th className="px-3 py-2.5 font-medium">Days</th>
+                  <th className="px-3 py-2.5 font-medium">Items</th>
+                  <th className="px-3 py-2.5 font-medium">Deliveries</th>
+                  <th className="px-3 py-2.5 font-medium">Status</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contracts === null && <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">Loading…</td></tr>}
+                {contracts?.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">No contracts for this store yet. Make one with New contract.</td></tr>}
+                {pager.pageItems.map((c) => (
+                  <tr key={c.id} className="border-t border-black/[0.06] align-top">
+                    <td className="px-3 py-2.5">
+                      <div className="text-slate-800 font-medium font-mono text-[12px]">{c.contract_no}</div>
+                      {(c.stores || []).length > 1 && <span className="cell-note text-[11px] text-slate-400">{c.stores.length} stores{c.chain ? ` · ${c.chain}` : ""}</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{shortDate(c.start_date)} – {shortDate(c.end_date)}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{daysLabel(c.delivery_days)}<span className="cell-note text-[11px] text-slate-400">{c.delivery_from ? `${timeOf(c.delivery_from)}–${timeOf(c.delivery_time)}` : `by ${timeOf(c.delivery_time)}`}</span></td>
+                    <td className="px-3 py-2.5 text-slate-600">{(c.items || []).map((i) => `${i.quantity} × ${productLabel(i.product_type)}`).join(", ")}</td>
+                    <td className="px-3 py-2.5 text-slate-600 tabular-nums">
+                      {c.status === "pending" ? <span className="text-slate-400">{c.planned} to make</span> : `${c.delivered_count} / ${c.deliveries_count} delivered`}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${CONTRACT_BADGE[shownStatus(c)] || ""}`}>{shownStatus(c)}</span>
+                      {c.approved_by && <span className="cell-note text-[11px] text-slate-400">by {c.approved_by.name}</span>}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex gap-1.5 justify-end">
+                        {c.status === "pending" && (
+                          <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "approve" })} className="px-2 py-1 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[11.5px] font-medium">Approve</button>
+                        )}
+                        {["pending", "approved"].includes(shownStatus(c)) && (
+                          <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "cancel" })} className="px-2 py-1 rounded-md border border-black/[0.09] text-red-600 text-[11.5px] hover:bg-red-50">Cancel</button>
+                        )}
+                        {["ended", "cancelled"].includes(shownStatus(c)) && <span className="text-[12px] text-slate-400">History only</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} />}
+          </div>
+          <div className="flex justify-end pt-3 border-t border-black/[0.09]">
+            <button type="button" onClick={onClose} className={btnGhost}>Close</button>
+          </div>
+        </div>
+      </Modal>
 
       {confirm && (
         <Modal title={confirm.action === "approve" ? "Approve contract?" : "Cancel contract?"} onClose={() => setConfirm(null)}>
           <div className="p-5 flex flex-col gap-4">
             <p className="text-[12.5px] text-slate-600">
               {confirm.action === "approve"
-                ? <>About <b>{confirm.contract.planned}</b> deliveries for <b>{confirm.contract.name}</b> will be made now, from {shortDate(confirm.contract.start_date)} to {shortDate(confirm.contract.end_date)}, each with its store's assigned driver.</>
-                : <>All of <b>{confirm.contract.name}</b>'s upcoming deliveries that have not started will be cancelled. Deliveries in transit or delivered stay.</>}
+                ? <>About <b>{confirm.contract.planned}</b> deliveries under <b>{confirm.contract.contract_no}</b> will be made now, from {shortDate(confirm.contract.start_date)} to {shortDate(confirm.contract.end_date)}, each with its store's assigned driver.</>
+                : <>All upcoming deliveries under <b>{confirm.contract.contract_no}</b> that have not started will be cancelled{(confirm.contract.stores || []).length > 1 ? `, for all ${confirm.contract.stores.length} stores` : ""}. Deliveries in transit or delivered stay.</>}
             </p>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setConfirm(null)} className={btnGhost}>{confirm.action === "approve" ? "Cancel" : "Keep contract"}</button>
@@ -134,7 +149,7 @@ export default function ContractsTab({ live, onChanged, search = "", type = "", 
           </div>
         </Modal>
       )}
-    </div>
+    </>
   );
 }
 
@@ -150,10 +165,11 @@ export function ContractForm({ store = null, contract = null, onClose, onSaved }
     name: contract.name, chain: contract.chain || "", store_ids: (contract.stores || []).map((s) => s.id),
     start_date: String(contract.start_date).slice(0, 10), end_date: String(contract.end_date).slice(0, 10),
     delivery_days: contract.delivery_days || [], delivery_time: String(contract.delivery_time || "08:00").slice(0, 5),
+    delivery_from: contract.delivery_from ? String(contract.delivery_from).slice(0, 5) : "",
     items: (contract.items || []).map((i) => ({ product_type: i.product_type, quantity: String(i.quantity) })), notes: contract.notes || "",
   } : {
     name: store ? store.name : "", chain: "", store_ids: store ? [store.id] : [], start_date: todayStr(), end_date: "",
-    delivery_days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], delivery_time: "08:00",
+    delivery_days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], delivery_from: "06:00", delivery_time: "08:00",
     items: [{ product_type: "", quantity: "" }], notes: "",
   }));
   const [saving, setSaving] = useState(false);
@@ -174,6 +190,8 @@ export function ContractForm({ store = null, contract = null, onClose, onSaved }
     e.preventDefault();
     if (!form.end_date || form.end_date < form.start_date) return fail("The end date must be on or after the start date.");
     if (!form.delivery_days.length) return fail("Pick at least one delivery day.");
+    if (!form.delivery_from) return fail("Pick the time the delivery window opens.");
+    if (form.delivery_from >= form.delivery_time) return fail("The window must open before the Deliver by time.");
     if (form.items.some((i) => !i.product_type || !(Number(i.quantity) >= 1))) return fail("Pick a product and a quantity of at least 1 for every item.");
     setSaving(true);
     try {
@@ -203,19 +221,27 @@ export function ContractForm({ store = null, contract = null, onClose, onSaved }
           <label htmlFor="contract-branch" className={labelCls}>Branch name</label>
           <input id="contract-branch" name="branch_name" value={storeName(store)} readOnly aria-readonly="true" className={`${inputCls} cursor-default`} />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="contract-from" className={labelCls}>From<Req /></label>
+            <label htmlFor="contract-from" className={labelCls}>Start date<Req /></label>
             <input id="contract-from" name="start_date" type="date" required min={editing ? undefined : todayStr()} max={yearAhead} value={form.start_date} onChange={(e) => set({ start_date: e.target.value })} className={inputCls} />
           </div>
           <div>
-            <label htmlFor="contract-to" className={labelCls}>To<Req /></label>
+            <label htmlFor="contract-to" className={labelCls}>End date<Req /></label>
             <input id="contract-to" name="end_date" type="date" required min={form.start_date} max={yearAhead} value={form.end_date} onChange={(e) => set({ end_date: e.target.value })} className={inputCls} />
           </div>
+        </div>
+        {/* The time window: the ice may arrive from the first time, and must by the second (a deadline) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="contract-deliver-by" className={labelCls}>Deliver by<Req /></label>
+            <label htmlFor="contract-deliver-from" className={labelCls}>Deliver from<Req /></label>
+            <TimeSelect id="contract-deliver-from" required value={form.delivery_from} onChange={(e) => set({ delivery_from: e.target.value })} className="w-full" selectClassName={`${inputCls} flex-1 min-w-0`} />
+          </div>
+          <div>
+            <label htmlFor="contract-deliver-by" className={labelCls}>Deliver by (latest)<Req /></label>
             <TimeSelect id="contract-deliver-by" required value={form.delivery_time} onChange={(e) => set({ delivery_time: e.target.value })} className="w-full" selectClassName={`${inputCls} flex-1 min-w-0`} />
           </div>
+          <p className="sm:col-span-2 -mt-1.5 text-[11px] text-slate-400">The store gets its ice inside this window, e.g. 6:00–8:00 AM for a mall that opens at 9:00.</p>
         </div>
         <div>
           <div className={labelCls}>Delivery days<Req /></div>

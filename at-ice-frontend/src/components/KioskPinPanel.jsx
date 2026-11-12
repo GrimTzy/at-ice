@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import HrLayout from "../../components/HrLayout";
-import PasswordInput from "../../components/PasswordInput";
-import { toast } from "../../lib/toast";
-import { formatDateTime } from "../../lib/time";
-import { KpiCard, KpiGrid } from "../../components/Kpi";
-import { TipsWidget } from "../../components/Insight";
+import PasswordInput from "./PasswordInput";
+import { toast } from "../lib/toast";
+import { formatDateTime } from "../lib/time";
+import { KpiCard, KpiGrid } from "./Kpi";
+
+// HR > Rates and rules > Kiosk: the HR security PIN, the HR override PIN and the
+// locked kiosks, above the lockout settings (moved here from HRIS > Kiosk PIN,
+// owner, 2026-11-12). The safety tips are in the page's side column.
 
 const token = () => localStorage.getItem("token") || "";
 
@@ -95,7 +97,7 @@ function HrOverridePinForm({ status, onSaved }) {
   );
 }
 
-export default function KioskPinPage() {
+export default function KioskPinPanel() {
   const [status, setStatus] = useState(null);
   const [loadError, setLoadError] = useState("");
 
@@ -137,7 +139,7 @@ export default function KioskPinPage() {
   }
 
   return (
-    <HrLayout pageTitle="Kiosk PIN" breadcrumb="HRIS / Kiosk PIN">
+    <div className="flex flex-col gap-4">
       {/* Status */}
       {loadError && <Notice tone="error">{loadError}</Notice>}
       <KpiGrid cols={4}>
@@ -238,12 +240,7 @@ export default function KioskPinPage() {
           )}
         </div>
 
-        <TipsWidget title="How the kiosk stays safe" tips={[
-          { title: "Change the PIN after a staff change", text: "Every unlocked terminal locks again and needs the new PIN.", tone: "cyan", icon: "key" },
-          { title: "Five wrong PINs lock a kiosk", text: "HR and Admin get a notice and an email with the kiosk, time and IP.", tone: "rose", icon: "alert" },
-          { title: "Kiosks are for computers", text: "Phones and tablets cannot open the Attendance Station; it also needs a working camera.", tone: "violet", icon: "shield" },
-        ]} />
       </div>
-    </HrLayout>
+    </div>
   );
 }

@@ -62,13 +62,13 @@ class PayrollStressAndRetentionTest extends TestCase
         $this->travelTo(now('Asia/Manila')->setDate(2026, 10, 14)->setTime(9, 0));
         $old = Employee::create([
             'employee_id' => 'EMP-0100', 'first_name' => 'Old', 'last_name' => 'Timer', 'position' => 'Guard', 'daily_rate' => 500, 'date_hired' => '2020-01-06',
-            'employment_type' => 'regular', 'shift' => 'day', 'is_active' => false, 'deactivated_at' => '2024-01-10',
+            'employment_type' => 'regular', 'shift' => 'day', 'is_active' => false, 'deactivated_at' => '2023-01-10',
         ]);
         $recent = Employee::create([
             'employee_id' => 'EMP-0101', 'first_name' => 'New', 'last_name' => 'Leaver', 'position' => 'Guard', 'daily_rate' => 500, 'date_hired' => '2025-01-06',
             'employment_type' => 'regular', 'shift' => 'day', 'is_active' => false, 'deactivated_at' => '2026-05-01',
         ]);
-        Attendance::create(['employee_id' => $old->id, 'date' => '2023-03-01', 'time_in' => '08:55:00', 'status' => 'present']);
+        Attendance::create(['employee_id' => $old->id, 'date' => '2022-03-01', 'time_in' => '08:55:00', 'status' => 'present']);
         Attendance::create(['employee_id' => $recent->id, 'date' => '2026-03-01', 'time_in' => '08:55:00', 'status' => 'present']);
 
         Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
@@ -76,8 +76,8 @@ class PayrollStressAndRetentionTest extends TestCase
 
         Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
         $review = $this->getJson('/api/retention-review')->assertOk();
-        $this->assertSame(['EMP-0100'], array_column($review->json('employees'), 'employee_id')); // inactive over 2 years only
-        $this->assertSame([2023], array_column($review->json('attendance_years'), 'year'));
+        $this->assertSame(['EMP-0100'], array_column($review->json('employees'), 'employee_id')); // inactive over 3 years only (DOLE minimum)
+        $this->assertSame([2022], array_column($review->json('attendance_years'), 'year'));
 
         // Keep hides it for another period; nothing is deleted
         $this->postJson('/api/retention-review/keep', ['kind' => 'employee', 'ref' => $old->id])->assertOk();
@@ -86,7 +86,7 @@ class PayrollStressAndRetentionTest extends TestCase
 
         // Delete an old attendance year; the current one cannot be
         $this->postJson('/api/retention-review/delete', ['kind' => 'attendance_year', 'ref' => 2026])->assertStatus(422);
-        $this->postJson('/api/retention-review/delete', ['kind' => 'attendance_year', 'ref' => 2023])->assertOk();
+        $this->postJson('/api/retention-review/delete', ['kind' => 'attendance_year', 'ref' => 2022])->assertOk();
         $this->assertSame(1, Attendance::count());
 
         $this->postJson('/api/retention-review/delete', ['kind' => 'employee', 'ref' => $old->id])->assertOk();

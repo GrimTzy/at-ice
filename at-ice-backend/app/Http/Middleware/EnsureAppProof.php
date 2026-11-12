@@ -17,7 +17,7 @@ class EnsureAppProof
         $bearer = $request->bearerToken();
         if ($bearer) {
             $token = PersonalAccessToken::findToken($bearer);
-            if ($token && $token->name === 'android-app' && ! AppClient::verified($request)) {
+            if ($token && \App\Support\SessionIdle::isApk($token) && ! AppClient::verified($request)) {
                 return response()->json(['message' => 'Unauthenticated.'], 401);
             }
         }

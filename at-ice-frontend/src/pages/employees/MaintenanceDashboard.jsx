@@ -94,7 +94,7 @@ export default function MaintenanceDashboard() {
             <Link to="/maintenance/projects?new=1" className={`${CARD_BUTTON} flex items-center gap-3`}>
               <span className="w-11 h-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center flex-shrink-0"><Icon name="clipboard" /></span>
               <span className="flex-1 min-w-0">
-                <span className="block text-[15px] font-semibold text-slate-900">Log a repair job</span>
+                <span className="block text-[15px] font-semibold text-slate-900">Log a Project</span>
                 <span className="block text-[14px] text-slate-500">Add a project for Admin to schedule</span>
               </span>
               <Icon name="chevron" className="text-slate-300" />

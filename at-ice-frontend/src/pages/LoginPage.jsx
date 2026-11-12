@@ -191,9 +191,8 @@ export default function LoginPage() {
       const res = await fetch("/api/login", {
         signal: controller.signal,
         method: "POST",
-        // from the Android app the four mobile roles stay signed in (no session time limit)
         headers: { "Content-Type": "application/json", Accept: "application/json", ...appHeaders() },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: email.trim(), password, platform: isNativeApp() ? "android" : "web" }),
       });
       const data = await res.json().catch((err) => {
         if (controller.signal.aborted) throw err;

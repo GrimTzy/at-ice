@@ -15,36 +15,47 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
-// Leave (docs/REVIEW-DECISIONS.md). Employees file their own leave; HR only
-// approves or rejects (a rejection needs a reason).
-//   EL  emergency leave, filed in hours for one day
-//   SL  sick leave, for past dates only, filed at most
-//       leave.sl_filing_window_days after returning; needs leave credits and a
-//       medical certificate. Never approved on its own.
+// Leave (docs/REVIEW-DECISIONS.md, QA review 2026-11-11). Employees file their
+// own leave; HR only approves or rejects (a rejection needs a reason).
 //   VL  vacation leave, starting at least leave.vl_notice_days ahead
-//   All blocked while probationary; no overlapping requests.
-// When HR approves, the days are paid from the employee's leave credits as far
-// as they go (LeaveCredits); the rest is unpaid and is deducted in payroll and
+//   EL  emergency leave, filed in hours for one day; uses the VL credits
+//   SL  sick leave, for past dates only, filed at most
+//       leave.sl_filing_window_days after returning; needs SL credits and a
+//       medical certificate. Never approved on its own.
+//   These three are blocked while probationary. The leave the law gives
+//   (LeaveRequest::STATUTORY: maternity, paternity, solo parent, VAWC, special
+//   leave for women) needs no credits and no regular status, only its own
+//   conditions and proof, and is paid in full. No overlapping requests.
+// When HR approves, VL, EL and SL are paid from their own credits as far as
+// they go (LeaveCredits); the rest is unpaid and is deducted in payroll and
 // the 13th month. HR may mark an SL unpaid.
 class LeaveRequestController extends Controller
 {
-    private const TYPES = 'sick,vacation,emergency';
+    private function types(): string
+    {
+        return implode(',', array_keys(LeaveRequest::TYPE_LABELS));
+    }
 
     private function today(): Carbon
     {
         return Carbon::now(config('atice.timezone'))->startOfDay();
     }
 
-    // Number of days: 0.5 for a half day, otherwise start to end inclusive,
-    // leaving out holidays (no leave is needed on a holiday, R3).
-    private function computeDays(string $start, string $end, bool $half): float
+    // Number of days: 0.5 for a half day, otherwise the work days from start to
+    // end, leaving out holidays (no leave is needed on a holiday, R3) and rest
+    // days. Maternity and the special leave for women count calendar days.
+    private function computeDays(string $start, string $end, bool $half, bool $calendar = false): float
     {
         if ($half) {
             return 0.5;
         }
+        if ($calendar) {
+            return (float) (Carbon::parse($start)->diffInDays(Carbon::parse($end)) + 1);
+        }
+        $workDays = array_map('intval', explode(',', (string) Settings::get('attendance.work_days')));
         $days = 0;
         foreach (CarbonPeriod::create($start, $end) as $d) {
-            if (! Holiday::forDate($d->toDateString())) {
+            if (in_array($d->dayOfWeekIso, $workDays, true) && ! Holiday::forDate($d->toDateString())) {
                 $days++;
             }
         }
@@ -145,9 +156,12 @@ class LeaveRequestController extends Controller
         if ($data['status'] === 'rejected') {
             $update['reject_reason'] = $data['reject_reason'];
         } else {
-            // Paid from the credits as far as they go; the rest is unpaid.
+            // VL, EL, SL: paid from their own credits as far as they go, the
+            // rest unpaid. Leave the law gives is paid in full.
             $days = LeaveCredits::days($leave);
-            $available = $leave->employee ? LeaveCredits::for($leave->employee, $leave->start_date->toDateString())['available'] : 0;
+            $pool = LeaveCredits::pool($leave->leave_type);
+            $available = $pool === null ? $days
+                : ($leave->employee ? LeaveCredits::for($leave->employee, $leave->start_date->toDateString())[$pool]['available'] : 0);
             $wantsPaid = $leave->leave_type !== 'sick' || $request->boolean('is_paid', true);
             $paid = $wantsPaid ? min($days, $available) : 0;
             $update += [
@@ -225,12 +239,34 @@ class LeaveRequestController extends Controller
             'hours_per_day' => (float) Settings::get('payroll.hours_per_day'),
             'sl_filing_window_days' => (int) Settings::get('leave.sl_filing_window_days'),
             'vl_notice_days' => (int) Settings::get('leave.vl_notice_days'),
+            'work_days' => array_map('intval', explode(',', (string) Settings::get('attendance.work_days'))),
+            // the leave the law gives that this employee can file, with its rules
+            'statutory' => collect(LeaveRequest::STATUTORY)
+                ->filter(fn ($rule, $type) => $this->statutoryBlock($employee, $type, now(config('atice.timezone'))) === null)
+                ->map(fn ($rule, $type) => ['label' => LeaveRequest::TYPE_LABELS[$type]] + $rule)->all(),
         ]);
     }
 
-    // GET /api/leave-balances (HR): every active employee's credits this year,
-    // the same numbers as their own my-leave-credits (LeaveCredits), with the
-    // credits used split by leave type. Credits stay one pool.
+    // Why this employee cannot take this leave the law gives (on that date), or null.
+    private function statutoryBlock(Employee $employee, string $type, Carbon $on): ?string
+    {
+        $rule = LeaveRequest::STATUTORY[$type];
+        $label = LeaveRequest::TYPE_LABELS[$type];
+        if ($rule['sex'] && $employee->sex !== $rule['sex']) {
+            return $employee->sex
+                ? "{$label} is for {$rule['sex']} employees ({$rule['law']})."
+                : "{$label} is for {$rule['sex']} employees ({$rule['law']}). Ask HR to fill in your sex in your biodata first.";
+        }
+        if ($rule['service'] && Carbon::parse($employee->date_hired)->addMonths($rule['service'])->gt($on)) {
+            return "{$label} needs {$rule['service']} months of service first ({$rule['law']}).";
+        }
+
+        return null;
+    }
+
+    // GET /api/leave-balances (HR): every active employee's VL and SL credits
+    // this year, the same numbers as their own my-leave-credits (LeaveCredits),
+    // with the days used split by leave type (leave the law gives included).
     public function balances()
     {
         $year = now(config('atice.timezone'))->year;
@@ -257,6 +293,8 @@ class LeaveRequestController extends Controller
                     'earned' => $credits['earned'],
                     'used' => $credits['used'],
                     'available' => $credits['available'],
+                    'vacation' => $credits['vacation'],
+                    'sick' => $credits['sick'],
                     'used_by_type' => collect(array_keys(LeaveRequest::TYPE_LABELS))
                         ->mapWithKeys(fn ($t) => [$t => round((float) ($types[$t] ?? 0), 2)])->all(),
                 ];
@@ -274,12 +312,8 @@ class LeaveRequestController extends Controller
             return response()->json(['message' => 'No employee record linked to this login.'], 404);
         }
 
-        if ($employee->employment_status !== 'regular') {
-            $this->fail('leave_type', 'Leave cannot be filed while probationary. Absences during probation are unpaid.');
-        }
-
         $request->validate([
-            'leave_type' => 'required|in:'.self::TYPES,
+            'leave_type' => 'required|in:'.$this->types(),
             'start_date' => 'required|date_format:Y-m-d',
             'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date',
             'is_half_day' => 'nullable|boolean',
@@ -291,25 +325,66 @@ class LeaveRequestController extends Controller
         ]);
 
         $type = $request->leave_type;
+        $statutory = LeaveRequest::STATUTORY[$type] ?? null;
+        $label = LeaveRequest::TYPE_LABELS[$type];
         $today = $this->today();
         $start = Carbon::parse($request->start_date);
-        $half = $type !== 'emergency' && $request->boolean('is_half_day');
+        $half = ! $statutory && $type !== 'emergency' && $request->boolean('is_half_day');
         $end = ($type === 'emergency' || $half) ? $start->copy() : Carbon::parse($request->end_date ?? $request->start_date);
+
+        // VL, EL and SL come from credits, which start once regular. The leave
+        // the law gives does not wait for that.
+        if (! $statutory && $employee->employment_status !== 'regular') {
+            $this->fail('leave_type', 'Vacation, emergency and sick leave cannot be filed while probationary. Absences during probation are unpaid.');
+        }
+        if ($statutory && ($why = $this->statutoryBlock($employee, $type, $start))) {
+            $this->fail('leave_type', $why);
+        }
+
+        // No leave from before the hire date, nor more than a year ahead
+        if ($start->lt(Carbon::parse($employee->date_hired)->startOfDay())) {
+            $this->fail('start_date', 'The leave cannot start before your hire date ('.Carbon::parse($employee->date_hired)->format('M j, Y').').');
+        }
+        if ($end->gt($today->copy()->addYear())) {
+            $this->fail('end_date', 'Leave can be filed at most one year ahead.');
+        }
 
         // Holidays need no leave: a request only on holidays is refused, and
         // holidays inside a longer request are not counted (computeDays).
-        if ($type === 'emergency' || $half || $start->equalTo($end)) {
-            if ($h = Holiday::forDate($start->toDateString())) {
-                $this->fail('start_date', "{$start->format('M j, Y')} is a holiday ({$h->name}). No leave is needed: you are not marked absent on a holiday.");
+        $calendar = (bool) ($statutory['calendar'] ?? false);
+        if (! $calendar) {
+            if ($type === 'emergency' || $half || $start->equalTo($end)) {
+                if ($h = Holiday::forDate($start->toDateString())) {
+                    $this->fail('start_date', "{$start->format('M j, Y')} is a holiday ({$h->name}). No leave is needed: you are not marked absent on a holiday.");
+                }
             }
-        } elseif ($this->computeDays($start->toDateString(), $end->toDateString(), false) === 0.0) {
-            $this->fail('start_date', 'Every day in this range is a holiday. No leave is needed.');
+            if ($type !== 'emergency' && ! $half && $this->computeDays($start->toDateString(), $end->toDateString(), false) === 0.0) {
+                $this->fail('start_date', 'Every day in this range is a rest day or a holiday. No leave is needed.');
+            }
         }
 
         $credits = LeaveCredits::for($employee);
+        $pool = LeaveCredits::pool($type);
         $days = $type === 'emergency'
             ? (float) $request->hours / (float) Settings::get('payroll.hours_per_day')
-            : $this->computeDays($start->toDateString(), $end->toDateString(), $half);
+            : $this->computeDays($start->toDateString(), $end->toDateString(), $half, $calendar);
+
+        if ($statutory) {
+            $unit = $calendar ? 'days' : 'work days';
+            if ($days > $statutory['days']) {
+                $this->fail('end_date', "{$label} is at most {$statutory['days']} {$unit} ({$statutory['law']}). This request is {$days}.");
+            }
+            if ($statutory['per_year']) {
+                $taken = (float) LeaveRequest::where('employee_id', $employee->id)->where('leave_type', $type)
+                    ->whereIn('status', ['pending', 'approved'])->whereYear('start_date', $start->year)->sum('total_days');
+                if ($taken + $days > $statutory['per_year']) {
+                    $this->fail('end_date', "{$label} is at most {$statutory['per_year']} {$unit} a year ({$statutory['law']}). {$taken} already filed in {$start->year}.");
+                }
+            }
+            if (! $request->hasFile('attachment')) {
+                $this->fail('attachment', "Attach the proof for {$label}: {$statutory['proof']}.");
+            }
+        }
 
         if ($type === 'sick') {
             $window = (int) Settings::get('leave.sl_filing_window_days');
@@ -322,8 +397,8 @@ class LeaveRequestController extends Controller
             if (! $request->hasFile('attachment')) {
                 $this->fail('attachment', 'Attach your medical certificate.');
             }
-            if ($credits['available'] < $days) {
-                $this->fail('leave_type', "Not enough leave credits for sick leave ({$credits['available']} day(s) left).");
+            if ($credits['sick']['available'] < $days) {
+                $this->fail('leave_type', "Not enough sick leave credits ({$credits['sick']['available']} day(s) left).");
             }
         }
         if ($type === 'vacation') {
@@ -362,9 +437,11 @@ class LeaveRequestController extends Controller
         }
 
         return response()->json([
-            'message' => $credits['available'] >= $days
-                ? 'Leave request sent. It will be paid from your leave credits once HR approves it.'
-                : 'Leave request sent. You do not have enough leave credits, so it will be unpaid.',
+            'message' => $statutory
+                ? "Leave request sent. {$label} is given by law ({$statutory['law']}) and is paid in full once HR approves it."
+                : ($credits[$pool]['available'] >= $days
+                    ? 'Leave request sent. It will be paid from your '.($pool === 'sick' ? 'sick' : 'vacation').' leave credits once HR approves it.'
+                    : 'Leave request sent. You do not have enough '.($pool === 'sick' ? 'sick' : 'vacation').' leave credits, so the rest will be unpaid.'),
             'data' => $leave->load('approvedBy:id,name'),
             'credits' => $credits,
         ], 201);

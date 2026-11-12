@@ -65,6 +65,18 @@ class StockOutReleaseTest extends TestCase
         $this->assertDatabaseHas('inventory_alerts', ['product_id' => $this->product->id, 'is_resolved' => false]);
     }
 
+    // QA review 2026-11-11: with 4 on hand a request for 4 was refused. All of it may be asked for.
+    public function test_the_whole_stock_on_hand_can_be_requested_and_released(): void
+    {
+        $id = $this->request(10)->assertCreated()->json('request.id');
+
+        Sanctum::actingAs($this->admin);
+        $this->putJson("/api/stock-out-requests/{$id}/approve")->assertOk();
+        $this->putJson("/api/stock-out-requests/{$id}/release")->assertOk();
+
+        $this->assertSame(0, (int) $this->product->fresh()->current_stock);
+    }
+
     public function test_release_is_refused_when_the_stock_ran_out_meanwhile(): void
     {
         $id = $this->request(8)->json('request.id');

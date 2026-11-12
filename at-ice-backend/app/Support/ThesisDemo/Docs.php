@@ -198,13 +198,13 @@ class Docs
         $cr = LeaveCredits::for(Employee::find($c->emp['E12']), $c->asOf->toDateString());
         $l01 = DB::table('leave_requests')->where('id', $c->m->id('leave:L-01') ?? 0)->first();
         $l16 = DB::table('leave_requests')->where('id', $c->m->id('leave:L-16') ?? 0)->first();
-        $L[] = "- **Account:** {$this->who('E12')}, login {$this->login('E12')} > `/my-leave`. Credits: earned {$cr['earned']}, used {$cr['used']}, **available {$cr['available']}** (0.5 per period once regular, max 15, reset every Jan 1).";
+        $L[] = "- **Account:** {$this->who('E12')}, login {$this->login('E12')} > `/my-leave`. Credits: VL earned {$cr['vacation']['earned']}, **available {$cr['vacation']['available']}**; SL earned {$cr['sick']['earned']}, **available {$cr['sick']['available']}** (15 VL and 15 SL a year once regular, a 26th each pay period, reset every Jan 1; EL uses VL).";
         $L[] = '  - File a VL for next week: refused (14 days notice). File an SL dated 3 days ago: refused (one day after return).';
         if ($l01) {
             $L[] = '- **Account:** HR > **Leave Requests**: approve her pending VL **'.$this->dShort($l01->start_date).' to '.$this->d($l01->end_date).'**; it is paid from credits.';
         }
         if ($l16) {
-            $L[] = '- **Point out:** her VL **'.$this->dShort($l16->start_date).' (Fri) to '.$this->d($l16->end_date)." (Mon)** counts **{$l16->total_days} days**, weekend included (defect D3).";
+            $L[] = '- **Point out:** her VL **'.$this->dShort($l16->start_date).' (Fri) to '.$this->d($l16->end_date)." (Mon)** counts **{$l16->total_days} days**: only the work days, the weekend is not leave (defect D3, fixed).";
         }
         $L[] = '';
         $L[] = '### 5. Memo ladder and automation [M-01..M-05]';
@@ -221,21 +221,17 @@ class Docs
         $tard = DB::table('employee_memos')->where('employee_id', $c->emp['E08'])->where('status', 'sent')->value('memo_no');
         $L[] = "- **Account:** {$this->who('E08')}, login {$this->login('E08')} > memos > **Acknowledge** {$tard} (it lists her late days).";
         $L[] = '';
-        $L[] = '### 6. Delivery to invoice to payment [D-01, D-14, D-15, C-05]';
+        $L[] = '### 6. Delivery to invoice to payment [D-01, D-14, C-05]';
         $short = $this->deliveries()->join('delivery_proofs as p', 'p.delivery_id', '=', 'd.id')->whereNotNull('p.notes')->orderBy('d.scheduled_date')->get(['d.delivery_no', 'cu.name as customer', 'd.scheduled_date']);
         $re = $this->deliveries()->whereNotNull('d.reassigned_from_driver_id')->orderBy('d.scheduled_date')->get();
-        $top = $this->deliveries()->where('d.is_top_up', true)->first();
         $L[] = '- **Account:** Admin > **Deliveries** (`/admin/deliveries`), history:';
         $L[] = '  - short deliveries (invoice charges only what was delivered): '.$this->list($short, fn ($r) => "{$r->delivery_no} ({$r->customer}, {$this->dShort($r->scheduled_date)})");
         $L[] = '  - reassigned from '.$this->name('E06').' with a "may be delayed" notice: '.$this->list($re, fn ($r) => "{$r->delivery_no} ({$this->dShort($r->scheduled_date)})");
-        if ($top) {
-            $L[] = "  - urgent top-up: {$top->delivery_no} ({$top->customer}, {$this->dShort($top->scheduled_date)})";
-        }
         $k2 = $this->cust('K2');
         $r = DB::table('receipts')->whereIn('id', $this->ids('receipts'))->where('customer_id', $k2->id ?? 0);
         $pend = DB::table('payment_proofs as pp')->join('receipts as r', 'r.id', '=', 'pp.receipt_id')->whereIn('pp.id', $this->ids('payment_proofs'))->get(['pp.status', 'r.receipt_no']);
         $L[] = "- **Account:** customer **{$k2->name}**, login `".DB::table('users')->where('id', $k2->user_id ?? 0)->value('email').'` > **Receipts**:';
-        $L[] = '  - overdue now (more than 15 days unpaid): '.$this->list((clone $r)->where('payment_status', 'overdue')->orderBy('created_at')->get(), fn ($x) => $x->receipt_no).'. This list grows every day; it is decided when the page opens.';
+        $L[] = '  - overdue now (unpaid 14 days or more): '.$this->list((clone $r)->where('payment_status', 'overdue')->orderBy('created_at')->get(), fn ($x) => $x->receipt_no).'. This list grows every day; it is decided when the page opens.';
         $L[] = '  - payment proofs: '.$this->list($pend, fn ($x) => "{$x->status} on {$x->receipt_no}");
         $L[] = '- **Account:** Admin > **Receipts** > payment proofs > **Approve** the pending one: the invoice becomes paid.';
         $L[] = '';
@@ -390,7 +386,7 @@ class Docs
             ['L-07', 'Rejected with a reason', $this->name('E13').': '.$leave('L-07'), ''],
             ['L-08', 'Pending VL the employee cancels live', $this->name('E12').': '.$leave('L-08'), 'Employee > My Leave > Cancel'],
             ['L-15', 'Half-day leave', $this->name('E12').': '.$leave('L-15'), ''],
-            ['L-16', 'Leave over a weekend (D3)', $this->name('E12').': '.$leave('L-16'), ''],
+            ['L-16', 'Leave over a weekend (D3 fixed: work days only)', $this->name('E12').': '.$leave('L-16'), ''],
             ['L-18', 'Driver on leave, shown off on the board', $this->name('E06').': '.$leave('L-18'), 'Admin > Deliveries > Board'],
             ['M-01..M-05', 'Memo ladder to NTE', $this->name('E19').': '.$memo('E19'), 'HR > Memos'],
             ['M-07', 'Tardiness memo to acknowledge', $this->name('E08').': '.$memo('E08'), 'Employee > My Memos'],
@@ -400,9 +396,8 @@ class Docs
             ['D-03', 'Upcoming, no driver yet', $del($this->deliveries()->where('d.status', 'pending')), 'Assign a timed-in group Driver'],
             ['D-05', 'Reassigned + delay notice', $del($this->deliveries()->whereNotNull('d.reassigned_from_driver_id')), 'Customer > notices'],
             ['D-06', 'Cancelled (skip day / emergency)', $this->list($this->deliveries()->where('d.status', 'cancelled')->orderBy('d.scheduled_date')->get(), fn ($x) => "{$x->delivery_no} ({$x->customer}): {$x->cancel_reason}"), ''],
-            ['D-07..D-09', 'Contracts pending / approved / cancelled', $this->list(DB::table('delivery_contracts')->whereIn('id', $this->ids('delivery_contracts'))->orderBy('id')->get(), fn ($k) => "{$k->contract_no} {$k->status}"), 'Admin > Deliveries > Contracts'],
+            ['D-07..D-09', 'Contracts pending / approved / cancelled', $this->list(DB::table('delivery_contracts')->whereIn('id', $this->ids('delivery_contracts'))->orderBy('id')->get(), fn ($k) => "{$k->contract_no} {$k->status}"), 'Admin > CRM > Customers > Contracts button'],
             ['D-14', 'Short delivery', $del($this->deliveries()->join('delivery_proofs as p', 'p.delivery_id', '=', 'd.id')->whereNotNull('p.notes')), 'Invoice = delivered quantity'],
-            ['D-15', 'Urgent top-up', $del($this->deliveries()->where('d.is_top_up', true)), ''],
             ['D-16', 'Change requests', $this->list(DB::table('delivery_adjustment_requests as r')->join('deliveries as d', 'd.id', '=', 'r.delivery_id')->whereIn('r.id', $this->ids('delivery_adjustment_requests'))->get(['r.status', 'd.delivery_no']), fn ($x) => "{$x->status} {$x->delivery_no}"), 'Admin applies or declines the pending one'],
             ['C-05', 'Payment proofs', $this->list(DB::table('payment_proofs as pp')->join('receipts as r', 'r.id', '=', 'pp.receipt_id')->whereIn('pp.id', $this->ids('payment_proofs'))->get(['pp.status', 'r.receipt_no']), fn ($x) => "{$x->status} {$x->receipt_no}"), 'Admin approves the pending one'],
             ['S-01..S-08', 'Support tickets', $this->list(DB::table('support_messages')->whereIn('id', $this->ids('support_messages'))->orderBy('created_at')->get(), fn ($x) => "{$x->ticket_no} ".str_replace('_', ' ', $x->topic).' '.str_replace('_', ' ', $x->status), 10), 'Admin > Support Inbox'],

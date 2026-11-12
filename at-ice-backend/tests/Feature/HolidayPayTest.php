@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureKioskToken;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\FaceData;
+use App\Models\LeaveRequest;
 use App\Models\PayMultiplier;
 use App\Models\User;
 use App\Support\PayrollCalculator;
@@ -14,7 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
-// R3 holiday pay (client defaults in pay_multipliers). ₱700 a day = ₱87.50 an hour.
+// R3 holiday pay (pay_multipliers; DOLE minimums from Nov 9, 2026). ₱700 a day = ₱87.50 an hour.
 // Nov 30, 2026 (Bonifacio Day) is a regular holiday, in the Nov 23 - Dec 6 period;
 // Dec 8 (Immaculate Conception) a special non-working day, in Dec 7 - 20.
 class HolidayPayTest extends TestCase
@@ -60,7 +61,7 @@ class HolidayPayTest extends TestCase
         $this->worked($e, '2026-12-08', 8, 60, true);
         $p = PayrollCalculator::compute($e, self::DEC07);
         $this->assertEquals(910.00, $p['holiday_pay']);     // special holiday, 8 h at 130%
-        $this->assertEquals(113.75, $p['holiday_ot_pay']);  // 1 h of overtime at 130%
+        $this->assertEquals(147.88, $p['holiday_ot_pay']);  // 1 h of overtime at 169% (DOLE: 130% x 130%)
         $this->assertEquals(0, $p['basic_pay']);            // the holiday is not basic pay
     }
 
@@ -94,6 +95,23 @@ class HolidayPayTest extends TestCase
         $this->assertEquals(10 * 700, PayrollCalculator::compute($e, self::NOV23)['absence_deduction']); // the holiday too
     }
 
+    // DOLE: an unworked regular holiday is paid (100%) only when the employee was
+    // at work, or on paid leave, on the work day before. Nov 30 is a Monday, so
+    // that day is Friday Nov 27.
+    public function test_an_unworked_regular_holiday_is_paid_only_after_a_day_at_work(): void
+    {
+        $e = $this->employee();
+        $this->assertEquals(0.00, PayrollCalculator::compute($e, self::NOV23)['holiday_pay']); // absent on the Friday
+
+        $this->worked($e, '2026-11-27', 8);
+        $this->assertEquals(700.00, PayrollCalculator::compute($e, self::NOV23)['holiday_pay']); // 8 h x 87.50 x 100%
+
+        Attendance::query()->delete();
+        LeaveRequest::create(['employee_id' => $e->id, 'leave_type' => 'vacation', 'start_date' => '2026-11-27', 'end_date' => '2026-11-27',
+            'total_days' => 1, 'paid_days' => 1, 'unpaid_days' => 0, 'reason' => 'Family errand', 'status' => 'approved']);
+        $this->assertEquals(700.00, PayrollCalculator::compute($e, self::NOV23)['holiday_pay']); // paid leave on the Friday counts
+    }
+
     public function test_the_rates_come_from_the_table_and_a_new_rate_applies_from_its_date(): void
     {
         $e = $this->employee();
@@ -124,6 +142,6 @@ class HolidayPayTest extends TestCase
         $this->getJson('/api/timesheets?date=2026-12-15')->assertJsonPath('rows.0.ot_pending_minutes', 90);
         $this->postJson('/api/timesheets/approve', ['date' => '2026-12-15', 'employee_ids' => [$e->id], 'approve_ot_ids' => [$e->id]])->assertOk();
         $this->assertTrue(Attendance::first()->ot_approved);
-        $this->assertEquals(131.25, (float) $e->payrolls()->first()->overtime_pay); // 1.5 h x 87.50 x 100% (client OT_ORDINARY)
+        $this->assertEquals(164.06, (float) $e->payrolls()->first()->overtime_pay); // 1.5 h x 87.50 x 125% (DOLE OT_ORDINARY)
     }
 }

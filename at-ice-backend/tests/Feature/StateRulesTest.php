@@ -80,5 +80,16 @@ class StateRulesTest extends TestCase
         $this->assertSame('overdue', $old->fresh()->payment_status);
         $this->assertSame('unpaid', $new->fresh()->payment_status);
         Event::assertDispatchedTimes(PaymentOverdue::class, 1);
+
+        // the client's 14 days: on day 14 it is overdue, on day 13 not yet
+        $dueToday = $receipt('RCP-3', 14);
+        $notYet = $receipt('RCP-4', 13);
+        Receipt::markOverdue();
+        $this->assertSame('overdue', $dueToday->fresh()->payment_status);
+        $this->assertSame('unpaid', $notYet->fresh()->payment_status);
+
+        // the dashboard counts days past the due date, not the invoice's age
+        $row = collect($this->getJson('/api/bi/overdue-receipts')->assertOk()->json('receipts'))->firstWhere('receipt_no', 'RCP-1');
+        $this->assertSame(6, $row['days_overdue']);
     }
 }

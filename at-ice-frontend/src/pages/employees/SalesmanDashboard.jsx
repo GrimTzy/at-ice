@@ -11,7 +11,7 @@ import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
-import { StopMeta, ArrivalChips } from "../../components/RouteParts";
+import { StopMeta, ArrivalChips, RouteOrderNote } from "../../components/RouteParts";
 import { pressArrived } from "../../lib/route";
 import { toast } from "../../lib/toast";
 import { KpiIcon } from "../../components/Kpi";
@@ -41,7 +41,6 @@ export default function SalesmanDashboard() {
   const [done, setDone] = useState([]);
   const [status, setStatus] = useState("loading");
   const [loadError, setLoadError] = useState("");
-  useNoticeRecord(status === "ready"); // a phone notice about a delivery opens it
   const [selectedId, setSelectedId] = useState(null);
   const [picking, setPicking] = useState(false);
   const [arriving, setArriving] = useState(false);
@@ -75,6 +74,12 @@ export default function SalesmanDashboard() {
   const visible = (delivered ? done : stops).filter((d) =>
     matchesQuery(query, d.customer?.name, d.store_name, d.customer?.address, d.address, d.customer?.city, d.delivery_no));
   const pager = usePagination(visible, { initialSize: 10 });
+  useNoticeRecord(status === "ready", (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "delivery") return;
+    setQuery("");
+    pager.reveal((row) => String(row.id) === id);
+  });
   const selected = visible.find((d) => d.id === selectedId) || null;
   const crew = route.crew;
 
@@ -164,6 +169,8 @@ export default function SalesmanDashboard() {
           {query ? "No delivery matches your search." : delivered ? "Deliveries you confirm show here." : crew?.on_shift ? "Your driver has no stops left today." : "Your route shows once a driver has timed in."}
         </EmptyCard>
       )}
+
+      {status === "ready" && !delivered && visible.some((d) => d.stop_no) && <RouteOrderNote />}
 
       {status === "ready" && visible.length > 0 && (
         <div className="grid grid-cols-1 gap-3">

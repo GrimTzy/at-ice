@@ -39,8 +39,9 @@ class SupportMessage extends Model
     // Topics that start as High: complaints about staff, urgent supply, missing sacks.
     public const HIGH_TOPICS = ['staff_conduct', 'emergency_supply', 'short_delivery'];
 
-    // Never blocked by the ticket limits (one open ticket per topic, support.max_open_tickets).
-    public const UNLIMITED_TOPICS = ['emergency_supply'];
+    // Kept only so old tickets keep their label; no longer offered. The client
+    // does not allow emergency deliveries (QA review, 2026-11-11).
+    public const RETIRED_TOPICS = ['emergency_supply'];
 
     public const ACTIVE = ['open', 'in_progress'];
 

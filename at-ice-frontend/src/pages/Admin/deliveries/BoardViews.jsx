@@ -3,7 +3,7 @@ import { toast } from "../../../lib/toast";
 import { PILL } from "../../../lib/statusTones";
 import { api, DRIVER_STATUS, STATUS_STYLE, byDriverGroup, driverGroup, storeName, productLabel, PRODUCT_TYPES, inputCls, labelCls, btnPrimary, btnGhost } from "./utils";
 import { ReassignedTag, StatusCell, Modal, DeliverByCell } from "./shared";
-import { timingPill, deliverByTime, deliverByValue } from "../../../lib/deliverBy";
+import { timingPill, deliverByValue, windowLabel } from "../../../lib/deliverBy";
 import Req from "../../../components/Req";
 import { useMaxQuantity } from "../../../lib/limits";
 import { QTY_INPUT_PROPS, cleanQty } from "../../../lib/quantity";
@@ -161,7 +161,7 @@ export function StoreView({ board, loading, filtered, onView, onEdit, onCancel }
           <thead>
             <tr className="text-left text-slate-400 text-[11px] uppercase tracking-widest">
               <th className="px-3 py-2.5 font-medium">Store</th>
-              <th className="px-3 py-2.5 font-medium">Deliver by</th>
+              <th className="px-3 py-2.5 font-medium">Time window</th>
               <th className="px-3 py-2.5 font-medium">Driver</th>
               <th className="px-3 py-2.5 font-medium">Regular driver</th>
               <th className="px-3 py-2.5 font-medium">Status</th>
@@ -202,7 +202,7 @@ function DeliveryRows({ list, showDriver, onView, onEdit, onCancel, empty }) {
           <div className="min-w-[200px] flex-1">
             <div className="text-[13px] text-slate-800">{storeName(d.customer)}</div>
             <div className="text-[11px] text-slate-400">
-              {[d.delivery_no, d.due_at && `by ${deliverByTime(d.due_at)}`, showDriver && d.driver?.name].filter(Boolean).join(" · ")}
+              {[d.delivery_no, d.due_at && windowLabel(d.due_from, d.due_at), showDriver && d.driver?.name].filter(Boolean).join(" · ")}
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">
               {(d.items || []).map((it) => `${it.quantity_ordered} × ${productLabel(it.product_type)}`).join(", ")}
@@ -240,6 +240,7 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
   const [items, setItems] = useState((delivery.items || []).map((it) => ({ product_type: it.product_type, quantity_ordered: String(it.quantity_ordered) })));
   const [notes, setNotes] = useState(delivery.notes || "");
   const [deliverBy, setDeliverBy] = useState(deliverByValue(delivery.due_at));
+  const [deliverFrom, setDeliverFrom] = useState(deliverByValue(delivery.due_from));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -249,12 +250,16 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
       setError("Pick a product and a quantity of at least 1 for every item.");
       return;
     }
+    if (deliverFrom && deliverBy && deliverFrom >= deliverBy) {
+      setError("The window must open before the Deliver by time.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       await api(`deliveries/${delivery.id}`, {
         method: "PUT",
-        body: { driver_id: driverId || null, notes: notes || null, ...(deliverBy ? { deliver_by: deliverBy } : {}), items: items.map((it) => ({ ...it, quantity_ordered: Number(it.quantity_ordered) })) },
+        body: { driver_id: driverId || null, notes: notes || null, ...(deliverBy ? { deliver_by: deliverBy, deliver_from: deliverFrom || null } : {}), items: items.map((it) => ({ ...it, quantity_ordered: Number(it.quantity_ordered) })) },
       });
       toast.success(`Delivery ${delivery.delivery_no} was updated.`);
       onSaved();
@@ -285,10 +290,16 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
           </select>
           {isToday && <p className="text-[11px] text-slate-400 mt-1">Today only an available driver can be picked.</p>}
         </div>
-        <div>
-          <label htmlFor="edit-delivery-deliver-by" className={labelCls}>Deliver by{delivery.due_at && <Req />}</label>
-          <input id="edit-delivery-deliver-by" name="deliver_by" type="time" required={!!delivery.due_at} value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} aria-describedby="edit-delivery-deliver-by-hint" className={inputCls} />
-          <p id="edit-delivery-deliver-by-hint" className="text-[11px] text-slate-400 mt-1">The latest time the ice reaches the store. A new time is sent to the store.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="edit-delivery-deliver-from" className={labelCls}>Deliver from</label>
+            <input id="edit-delivery-deliver-from" name="deliver_from" type="time" max={deliverBy || undefined} value={deliverFrom} onChange={(e) => setDeliverFrom(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label htmlFor="edit-delivery-deliver-by" className={labelCls}>Deliver by (latest){delivery.due_at && <Req />}</label>
+            <input id="edit-delivery-deliver-by" name="deliver_by" type="time" required={!!delivery.due_at} value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} aria-describedby="edit-delivery-deliver-by-hint" className={inputCls} />
+          </div>
+          <p id="edit-delivery-deliver-by-hint" className="col-span-2 -mt-1.5 text-[11px] text-slate-400">The time window at the store. A new time is sent to the store.</p>
         </div>
         <div>
           <div className={labelCls}>Items</div>

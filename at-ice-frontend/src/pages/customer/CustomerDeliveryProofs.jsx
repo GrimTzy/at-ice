@@ -4,6 +4,8 @@
 
 import { useEffect, useState } from "react";
 import CustomerLayout from "../../components/CustomerLayout";
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
@@ -74,6 +76,8 @@ export default function CustomerDeliveryProofs() {
       />
     );
 
+  const pager = usePagination(proofs);
+
   return (
     <CustomerLayout pageTitle="Delivery Proofs" breadcrumb="Deliveries">
       {loading ? (
@@ -102,7 +106,7 @@ export default function CustomerDeliveryProofs() {
           );
         })()}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {proofs.map((p) => (
+          {pager.pageItems.map((p) => (
             <button
               key={p.id}
               onClick={() => setSelected(p)}
@@ -119,6 +123,7 @@ export default function CustomerDeliveryProofs() {
             </button>
           ))}
         </div>
+        {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} />}
         </>
       )}
 

@@ -33,6 +33,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'must_change_password' => 'boolean',
             'is_active' => 'boolean',
+            'notices_read_at' => 'datetime',
         ];
     }
 

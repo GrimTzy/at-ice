@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import RoleShell from "../../components/RoleShell";
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import { StatusBadge, LoadingButton, BottomSheet, ActionBar, ErrorBanner, SuccessBanner, EmptyCard, CardSkeleton, SearchBar, Icon } from "../../components/MobileUi";
 import { CARD, FIELD, TEXTAREA, LABEL, matchesQuery } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
@@ -49,7 +51,6 @@ export default function MaintenanceStockOutRequestPage() {
   const [items, setItems] = useState([]);
   const [itemsError, setItemsError] = useState("");
   const [projects, setProjects] = useState([]);
-  useNoticeRecord(true); // a phone notice about a stock-out request shows it
   const [notice, setNotice] = useState("");
 
   const [requests, setRequests] = useState([]);
@@ -168,10 +169,25 @@ export default function MaintenanceStockOutRequestPage() {
     matchesQuery(query, r.product?.name, r.item_name, r.purpose, r.project?.name, r.id));
   const countOf = (v) => (v === "all" ? requests.length : requests.filter((r) => r.status === v).length);
 
+  // 10 a page like every list; the bar docks above the bottom navigation
+  const pager = usePagination(visible);
+  useNoticeRecord(!loading, (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "stock_out_request") return;
+    if (filter !== "all" || query) {
+      setQuery("");
+      setFilter("all");
+      return false;
+    }
+    pager.reveal((row) => String(row.id) === id);
+  });
+  const paged = !loading && !loadError && pager.total > PAGE_SIZES[0];
+
   return (
     <RoleShell
       role="maintenance"
       title="Parts requests"
+      paged={paged}
       actionBar={<ActionBar><LoadingButton disabled={timedIn === false} onClick={() => setShowForm(true)}><Icon name="plus" /> Request parts</LoadingButton></ActionBar>}
     >
       <TimeInNotice timedIn={timedIn} />
@@ -193,7 +209,7 @@ export default function MaintenanceStockOutRequestPage() {
 
       {!loading && !loadError && (
         <div className="grid grid-cols-1 gap-3">
-          {visible.map((req) => (
+          {pager.pageItems.map((req) => (
             <article key={req.id} data-record={`stock_out_request:${req.id}`} data-record-scroll className={CARD}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -222,6 +238,7 @@ export default function MaintenanceStockOutRequestPage() {
         </div>
       )}
 
+      {paged && <Pagination pager={pager} fixed dock dockBottom="4rem" />}
       <BottomSheet
         open={showForm}
         onClose={() => !submitting && setShowForm(false)}

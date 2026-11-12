@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import RoleShell from "../../components/RoleShell";
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import { StatusBadge, LoadingButton, BottomSheet, ActionBar, ErrorBanner, SuccessBanner, EmptyCard, CardSkeleton, Icon } from "../../components/MobileUi";
 import { CARD, FIELD, TEXTAREA, LABEL } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
@@ -46,7 +48,6 @@ export default function CheckerInventoryManagementPage() {
   const [products, setProducts] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [status, setStatus] = useState("loading");
-  useNoticeRecord(status === "ready"); // a phone notice about an item or an alert shows it
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [showResolved, setShowResolved] = useState(false);
@@ -149,11 +150,29 @@ export default function CheckerInventoryManagementPage() {
     .filter((p) => !q || p.name?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q))
     .sort((a, b) => ({ out: 0, low: 1, ok: 2 }[a._s.key] - { out: 0, low: 1, ok: 2 }[b._s.key]));
   const visibleAlerts = alerts.filter((a) => showResolved || !a.is_resolved);
+  // 10 a page like every list; the bar docks above the bottom navigation
+  const itemPager = usePagination(visibleItems);
+  const alertPager = usePagination(visibleAlerts);
+  const pager = filter === "alerts" ? alertPager : itemPager;
+  useNoticeRecord(status === "ready", (record) => {
+    const [kind, id] = record.split(":");
+    if (!["product", "inventory_alert"].includes(kind)) return;
+    const targetFilter = kind === "inventory_alert" ? "alerts" : "all";
+    if (filter !== targetFilter || query || (kind === "inventory_alert" && !showResolved)) {
+      setQuery("");
+      setFilter(targetFilter);
+      if (kind === "inventory_alert") setShowResolved(true);
+      return false;
+    }
+    (kind === "inventory_alert" ? alertPager : itemPager).reveal((row) => String(row.id) === id);
+  });
+  const paged = status === "ready" && pager.total > PAGE_SIZES[0];
 
   return (
     <RoleShell
       role="checker"
       title="Inventory"
+      paged={paged}
       actionBar={filter !== "alerts" ? <ActionBar><LoadingButton onClick={openNew} disabled={timedIn === false}><Icon name="plus" /> Add item</LoadingButton></ActionBar> : null}
     >
       <TimeInNotice timedIn={timedIn} />
@@ -179,7 +198,7 @@ export default function CheckerInventoryManagementPage() {
           </EmptyCard>
         ) : (
           <div className="grid grid-cols-1 gap-3">
-            {visibleItems.map((p) => (
+            {itemPager.pageItems.map((p) => (
               <article key={p.id} className={`${CARD} ${p._s.key === "out" ? "border-rose-200" : ""}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -213,7 +232,7 @@ export default function CheckerInventoryManagementPage() {
             <EmptyCard icon="check" title="No active alerts">Every low stock alert is resolved.</EmptyCard>
           ) : (
             <div className="grid grid-cols-1 gap-3">
-              {visibleAlerts.map((a) => (
+              {alertPager.pageItems.map((a) => (
                 <article key={a.id} data-record={`inventory_alert:${a.id}`} data-record-scroll className={`${CARD} ${a.is_resolved ? "" : "border-rose-200"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -235,6 +254,7 @@ export default function CheckerInventoryManagementPage() {
         </>
       )}
 
+      {paged && <Pagination pager={pager} fixed dock dockBottom="4rem" />}
       <BottomSheet
         open={!!editing}
         onClose={() => !saving && setEditing(null)}
@@ -246,7 +266,7 @@ export default function CheckerInventoryManagementPage() {
           <ErrorBanner>{formError}</ErrorBanner>
           <div>
             <label htmlFor="item-name" className={LABEL}>Item name *</label>
-            <input id="item-name" value={form.name} maxLength={255} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Plastic bags (tube ice)" className={FIELD} />
+            <input id="item-name" value={form.name} maxLength={50} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Plastic bags (tube ice)" className={FIELD} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

@@ -36,7 +36,7 @@ use Carbon\CarbonPeriod;
 //                   that hour's rate: the hourly rate on an ordinary day, the
 //                   holiday rate on a holiday, the overtime rate in overtime
 //                   (see nightDiff)
-//   adjustments     bonus, incentive, referral... (taxable or not)
+//   adjustments     bonus, incentive, allowance... (taxable or not)
 // Government (mandatory; employee shares from contribution_rates on the pay day)
 //   monthly amounts, deducted by payroll.gov_deduction_strategy:
 //   FIRST_PAYROLL_OF_MONTH  all on the first pay day of the month
@@ -172,11 +172,15 @@ class PayrollCalculator
             $out['holiday_ot_pay'] += $ot * $hourly * PayMultiplier::rate(self::holidayOtKey($h), $ymd);
         }
 
-        foreach ($sheet['holiday_unworked'] as [$ymd, $h, $rest]) {
+        foreach ($sheet['holiday_unworked'] as [$ymd, $h, $rest, $eligible]) {
             if ($rest || $h->type === 'SPECIAL_WORKING') {
                 continue;
             }
-            $rate = PayMultiplier::rate($h->type === 'REGULAR' ? 'REGULAR_HOLIDAY_UNWORKED' : 'SPECIAL_HOLIDAY_UNWORKED', $ymd);
+            // DOLE (Omnibus Rules, Book III, Rule IV, Sec. 6): an unworked regular
+            // holiday is paid only when the employee was at work, or on paid leave,
+            // on the work day just before it; otherwise it is an unpaid day.
+            $rate = ($h->type === 'REGULAR' && ! ($eligible ?? true)) ? 0.0
+                : PayMultiplier::rate($h->type === 'REGULAR' ? 'REGULAR_HOLIDAY_UNWORKED' : 'SPECIAL_HOLIDAY_UNWORKED', $ymd);
             if ($monthly) {
                 if (Settings::get('payroll.monthly_unworked_holiday_deduct')) {
                     $out['monthly_unworked_deduction'] += $daily * max(0, 1 - $rate);
@@ -186,8 +190,9 @@ class PayrollCalculator
             }
         }
 
-        // Ordinary overtime: rate of the period's last day is fine, the rate is per key.
-        $out['overtime_pay'] = $sheet['ot_ordinary_hours'] * $hourly * PayMultiplier::rate('OT_ORDINARY', now(config('atice.timezone'))->toDateString());
+        // Ordinary overtime: the rate on the period's last day, so a past period
+        // keeps the rate it had even when it is computed later.
+        $out['overtime_pay'] = $sheet['ot_ordinary_hours'] * $hourly * PayMultiplier::rate('OT_ORDINARY', $sheet['period_end'] ?? now(config('atice.timezone'))->toDateString());
 
         return $out;
     }
@@ -255,6 +260,32 @@ class PayrollCalculator
         return $payroll;
     }
 
+    // Whether the employee was at work, or on paid leave, on the work day just
+    // before this holiday. Rest days and other holidays in between are skipped
+    // (two holidays in a row: the day before the first counts). Someone hired
+    // after that day has no day before, so the holiday is not paid.
+    public static function presentDayBefore(Employee $employee, CarbonImmutable $holiday, $holidays, array $workDays): bool
+    {
+        $day = $holiday->subDay();
+        for ($i = 0; $i < 14 && (! in_array($day->dayOfWeekIso, $workDays, true) || isset($holidays[$day->toDateString()])); $i++) {
+            $day = $day->subDay();
+        }
+        if ($day->lt(CarbonImmutable::parse($employee->date_hired)->startOfDay())) {
+            return false;
+        }
+        $ymd = $day->toDateString();
+
+        $worked = Attendance::whereDate('date', $ymd)->whereNotNull('time_in')
+            ->where(fn ($q) => $q->where('employee_id', $employee->id)
+                ->orWhereHas('faceData', fn ($f) => $f->where('employee_id', $employee->id)))
+            ->exists();
+
+        return $worked || LeaveRequest::where('employee_id', $employee->id)->where('status', 'approved')
+            ->whereDate('start_date', '<=', $ymd)->whereDate('end_date', '>=', $ymd)
+            ->where('paid_days', '>', 0)
+            ->exists();
+    }
+
     // Attendance and leave in the period, counted for pay.
     public static function timesheet(Employee $employee, CarbonImmutable $start, CarbonImmutable $end): array
     {
@@ -285,7 +316,7 @@ class PayrollCalculator
         // day (9 in = 8 paid). Overtime counts only once HR approved it.
         $break = (float) Settings::get('attendance.break_hours');
         $holidayWorked = [];   // [date, holiday, rest day?, paid hours, approved OT hours]
-        $holidayUnworked = []; // [date, holiday, rest day?]
+        $holidayUnworked = []; // [date, holiday, rest day?, paid? (present or on paid leave the work day before)]
         $otPending = 0;
         $otOrdinaryHours = 0.0;
         foreach ($records as $ymd => $day) {
@@ -335,7 +366,7 @@ class PayrollCalculator
         foreach ($holidays as $ymd => $h) {
             $d = CarbonImmutable::parse($ymd);
             if ($ymd >= $start->toDateString() && $ymd <= $end->toDateString() && ! $records->has($ymd) && ! $d->lt($hired) && $d->lte($today)) {
-                $holidayUnworked[] = [$ymd, $h, ! in_array($d->dayOfWeekIso, $workDayNumbers, true)];
+                $holidayUnworked[] = [$ymd, $h, ! in_array($d->dayOfWeekIso, $workDayNumbers, true), self::presentDayBefore($employee, $d, $holidays, $workDayNumbers)];
             }
         }
 
@@ -360,8 +391,8 @@ class PayrollCalculator
             }
             $perDay = $leave->is_half_day ? 0.5 : 1;
             foreach (CarbonPeriod::create($leave->start_date->max($start), $leave->end_date->min($end)) as $d) {
-                if (isset($holidays[$d->toDateString()])) {
-                    continue; // a holiday inside a leave is not a leave day
+                if (isset($holidays[$d->toDateString()]) || ! in_array($d->dayOfWeekIso, $workDayNumbers, true)) {
+                    continue; // a holiday or rest day inside a leave is not a leave day
                 }
                 $leaveDays[$d->toDateString()] = true;
                 $paidLeave += $perDay * $paidShare;
@@ -394,6 +425,7 @@ class PayrollCalculator
             'missing_time_out' => $records->filter(fn ($day) => ! $day->contains(fn ($a) => $a->time_out !== null))->count(),
             'holiday_worked' => $holidayWorked,
             'holiday_unworked' => $holidayUnworked,
+            'period_end' => $end->toDateString(),
             'holiday_days_present' => count($holidayWorked),
             'holiday_hours' => round(array_sum(array_column($holidayWorked, 3)), 2),
             'ot_hours' => round($otOrdinaryHours + array_sum(array_column($holidayWorked, 4)), 2),

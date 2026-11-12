@@ -10,7 +10,7 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 // Review change request, phase 5: one application per email, possible
-// duplicates flagged, referral recorded (docs/REVIEW-DECISIONS.md).
+// duplicates flagged (docs/REVIEW-DECISIONS.md).
 class ApplicantDuplicatesTest extends TestCase
 {
     use RefreshDatabase;
@@ -59,19 +59,12 @@ class ApplicantDuplicatesTest extends TestCase
         $this->assertSame([], $list['other@example.com']['possible_duplicates']);
     }
 
-    public function test_the_referral_link_records_the_employee_only(): void
+    // Referrals were removed (QA review, 2026-11-11): an old referral link only opens
+    // the general form, and a referral code sent with the form is ignored
+    public function test_a_referral_code_is_ignored(): void
     {
-        $emp = Employee::create([
-            'employee_id' => 'EMP-0007', 'first_name' => 'Ana', 'last_name' => 'Cruz', 'position' => 'Checker', 'daily_rate' => 600,
-            'date_hired' => '2026-01-05', 'employment_type' => 'regular', 'shift' => 'day', 'is_active' => true,
-        ]);
-        $this->postJson('/api/apply', $this->form(['referral' => 'emp-0007']))->assertCreated();
-        $this->postJson('/api/apply', $this->form(['referral' => 'EMP-9999', 'email' => 'x@example.com', 'phone' => '09181234567']))->assertCreated();
+        $this->postJson('/api/apply', $this->form(['referral' => 'EMP-0007']))->assertCreated();
 
-        $this->assertSame($emp->id, Applicant::where('email', 'maria@example.com')->value('referred_by_employee_id'));
-        $this->assertNull(Applicant::where('email', 'x@example.com')->value('referred_by_employee_id')); // unknown ID: not recorded
-
-        Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
-        $this->getJson('/api/applicants')->assertJsonFragment(['employee_id' => 'EMP-0007']);
+        $this->assertNull(Applicant::where('email', 'maria@example.com')->value('referred_by_employee_id'));
     }
 }

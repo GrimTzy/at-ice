@@ -68,7 +68,7 @@ class QuantityLimitTest extends TestCase
     }
 
     // Every other way to write a quantity is held to the same limit.
-    public function test_editing_topping_up_adjusting_and_contracts_use_the_same_limit(): void
+    public function test_editing_adjusting_and_contracts_use_the_same_limit(): void
     {
         $this->admin();
         $payload = $this->booking(10);
@@ -78,8 +78,6 @@ class QuantityLimitTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('items.0.quantity_ordered');
         $this->putJson("/api/deliveries/{$id}", ['items' => [['product_type' => 'bags', 'quantity_ordered' => 500]]])->assertOk();
 
-        $this->postJson("/api/deliveries/{$id}/top-up", ['items' => ['bags' => 501], 'deliver_by' => '23:00'])
-            ->assertUnprocessable()->assertJsonValidationErrors('items.bags');
         $this->postJson("/api/deliveries/{$id}/adjust", ['mode' => 'add', 'by' => 'count', 'value' => 1, 'reason' => 'one more'])
             ->assertUnprocessable()->assertJsonValidationErrors('value');
 

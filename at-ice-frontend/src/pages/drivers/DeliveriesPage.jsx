@@ -13,7 +13,7 @@ import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
-import { StopMeta, ArrivalChips } from "../../components/RouteParts";
+import { StopMeta, ArrivalChips, RouteOrderNote } from "../../components/RouteParts";
 import { pressArrived } from "../../lib/route";
 import { toast } from "../../lib/toast";
 import FilterSelect from "../../components/FilterSelect";
@@ -79,7 +79,6 @@ export function DeliveriesPage() {
   const [actionLoading, setActionLoading] = useState(null);
   const [salesmen, setSalesmen] = useState([]);
   const [radius, setRadius] = useState(150);
-  useNoticeRecord(!loading); // a phone notice about a delivery opens it
   const timedIn = useTimedIn();
   const watchIdRef = useRef(null);
 
@@ -172,6 +171,12 @@ export function DeliveriesPage() {
   const visible = (filter === "all" ? deliveries : deliveries.filter((d) => d.status === filter)).filter((d) =>
     matchesQuery(query, d.delivery_no, d.customer?.name, d.customer?.address, d.customer?.city, d.customer?.province));
   const pager = usePagination(visible, { initialSize: 10 });
+  useNoticeRecord(!loading, (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "delivery") return;
+    setQuery(""); setFilter("all");
+    pager.reveal((row) => String(row.id) === id);
+  });
 
   // I am at the store: the server checks the phone is near the store pin
   async function arrive(d) {
@@ -250,6 +255,7 @@ export function DeliveriesPage() {
         {!loading && visible.length === 0 && (
           <EmptyState icon="truck">No deliveries found.</EmptyState>
         )}
+        {!loading && visible.some((d) => d.route_today && d.stop_no) && <RouteOrderNote />}
         {!loading && pager.pageItems.map((d) => {
           const cfg = STATUS_CONFIG[d.status] || STATUS_CONFIG.pending;
           const open = expanded === d.id;

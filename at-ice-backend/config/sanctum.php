@@ -42,10 +42,7 @@ return [
     | Expiration Minutes
     |--------------------------------------------------------------------------
     |
-    | A website session ends web_expiration minutes (default 1440 = 24 hours,
-    | SANCTUM_EXPIRATION in .env) after the login, so a leaked or forgotten
-    | token does not work forever. After it ends, the user signs in again.
-    |
+    | A website session ends after atice.web_token_hours (default 12 hours).
     | The time is stamped on each token when it is made (AuthController), which
     | is why the global 'expiration' is off: a login from the Android app, for
     | the four mobile roles, gets a token with no end date so the phone stays
@@ -53,10 +50,8 @@ return [
     |
     */
 
+    // Off here: expiry is set per token at login (AuthController), so the Android app is not cut short.
     'expiration' => null,
-
-    'web_expiration' => (int) env('SANCTUM_EXPIRATION', 1440),
-
 
     /*
     |--------------------------------------------------------------------------

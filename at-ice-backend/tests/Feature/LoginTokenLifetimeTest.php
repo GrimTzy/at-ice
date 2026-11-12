@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\TestCase;
 
-// A website login ends 24 hours after the sign-in (sanctum.web_expiration); a login from the Android
+// A website login ends 12 hours after the sign-in (atice.web_token_hours); a login from the Android
 // app, for the four mobile roles only, has no end time.
 class LoginTokenLifetimeTest extends TestCase
 {
@@ -52,28 +52,28 @@ class LoginTokenLifetimeTest extends TestCase
             ->getJson('/api/me');
     }
 
-    public function test_a_website_login_lasts_24_hours(): void
+    public function test_a_website_login_lasts_12_hours(): void
     {
         $token = $this->login($this->user('admin'));
 
         $stored = PersonalAccessToken::findToken($token);
         $this->assertSame('auth_token', $stored->name);
-        $this->assertEqualsWithDelta(1440, now()->diffInMinutes($stored->expires_at), 1);
+        $this->assertEqualsWithDelta(720, now()->diffInMinutes($stored->expires_at), 1);
     }
 
-    public function test_a_website_session_is_not_cut_by_inactivity(): void
+    public function test_an_idle_admin_website_session_is_ended(): void
     {
         $token = $this->login($this->user('admin'));
 
         $this->travel(90)->minutes();
-        $this->me($token)->assertOk();
+        $this->me($token)->assertUnauthorized();
     }
 
-    public function test_a_website_session_ends_after_24_hours(): void
+    public function test_a_website_session_ends_after_12_hours(): void
     {
-        $token = $this->login($this->user('hr'));
+        $token = $this->login($this->user('driver'));
 
-        $this->travel(23)->hours();
+        $this->travel(11)->hours();
         $this->me($token)->assertOk();
         $this->travel(2)->hours();
         $this->me($token)->assertUnauthorized();
@@ -158,5 +158,15 @@ class LoginTokenLifetimeTest extends TestCase
                 ->postJson('/api/logout')->assertOk();
             $this->assertNull(PersonalAccessToken::findToken($token));
         }
+    }
+    public function test_a_legacy_apk_token_requires_app_proof_and_skips_idle(): void
+    {
+        $user = $this->user('driver');
+        $token = $user->createToken('auth_token_apk')->plainTextToken;
+        $this->travel(40)->days();
+        $this->me($token)->assertUnauthorized();
+        $this->app['auth']->forgetGuards();
+        $this->flushHeaders()->withHeaders(['Authorization' => 'Bearer '.$token] + $this->appHeader())
+            ->getJson('/api/me')->assertOk();
     }
 }

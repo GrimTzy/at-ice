@@ -38,8 +38,8 @@ class SupplierController extends Controller
     private function rules(?Supplier $supplier = null): array
     {
         return [
-            'name' => ['required', 'string', 'max:255', Rule::unique('suppliers', 'name')->ignore($supplier?->id)],
-            'contact_person' => 'nullable|string|max:255',
+            'name' => ['required', 'string', 'max:50', Rule::unique('suppliers', 'name')->ignore($supplier?->id)],
+            'contact_person' => 'nullable|string|max:50',
             'contact_number' => ['nullable', 'regex:'.self::PHONE_REGEX],
             'email' => 'nullable|email:rfc,filter,dns|max:255',
             'address' => 'nullable|string|max:500',

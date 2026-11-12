@@ -1,3 +1,6 @@
+import Req from "../../components/Req";
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import { useCallback, useEffect, useState } from "react";
 import CustomerLayout from "../../components/CustomerLayout";
 import MessageBubble from "../../components/MessageBubble";
@@ -97,7 +100,9 @@ function TicketReply({ ticket, onSent }) {
 export default function CustomerSupport() {
   // An unsent message survives a refresh.
   const draft = useDraft("support:new", { topic: SUPPORT_TOPICS[0].key, message: "" });
-  const { topic, message } = draft.values;
+  const { message } = draft.values;
+  // a draft saved with a topic no longer offered falls back to the first one
+  const topic = SUPPORT_TOPICS.some((t) => t.key === draft.values.topic) ? draft.values.topic : SUPPORT_TOPICS[0].key;
   const { topic: setTopic } = draft.set;
   const setMessage = draft.set.message;
   const [sending, setSending] = useState(false);
@@ -106,11 +111,8 @@ export default function CustomerSupport() {
   const [branch, setBranch] = useState("");
   const [history, setHistory] = useState([]);
 
-  // one open ticket per topic (Emergency Ice Shortage is never blocked): point
-  // the customer to the ticket they already have instead
-  const openSame = topic === "emergency_supply"
-    ? null
-    : history.find((m) => m.topic === topic && ACTIVE.includes(m.status));
+  // one open ticket per topic: point the customer to the ticket they already have instead
+  const openSame = history.find((m) => m.topic === topic && ACTIVE.includes(m.status));
 
   const loadHistory = useCallback(async () => {
     try {
@@ -163,6 +165,8 @@ export default function CustomerSupport() {
     }
   };
 
+  const pager = usePagination(history);
+
   return (
     <CustomerLayout pageTitle="Contact Support" breadcrumb="Support">
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-5 items-start">
@@ -192,8 +196,10 @@ export default function CustomerSupport() {
             </label>
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-500">Message / Details</span>
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-500">Message / Details<Req /></span>
               <textarea name="message"
+                required
+                minLength={5}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={4}
@@ -225,7 +231,7 @@ export default function CustomerSupport() {
               <div className="px-1 text-[13px] font-semibold text-slate-800">
                 Your Tickets <span className="text-slate-400 font-normal">· {history.length}</span>
               </div>
-              {history.map((m) => {
+              {pager.pageItems.map((m) => {
                 const s = TICKET_STATUS[statusOf(m)] || TICKET_STATUS.open;
                 return (
                   <div key={m.id} className={`${ICE_CARD} overflow-hidden`}>
@@ -266,6 +272,7 @@ export default function CustomerSupport() {
                   </div>
                 );
               })}
+              {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} />}
             </div>
           )}
         </div>

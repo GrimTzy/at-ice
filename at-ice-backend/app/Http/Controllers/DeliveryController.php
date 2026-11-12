@@ -25,7 +25,8 @@ class DeliveryController extends Controller
     // ?from=&to= limit it to scheduled dates (contracts make many deliveries).
     public function index(Request $request)
     {
-        $q = Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs', 'reassignedFrom:id,name', 'contract:id,contract_no,name'])
+        $q = Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs', 'reassignedFrom:id,name', 'contract:id,contract_no,name',
+            'iceLoadings:id,delivery_id,product_type,quantity_loaded,checker_id,created_at', 'iceLoadings.checker:id,name'])
             ->latest();
         if ($from = $request->query('from')) {
             $q->whereDate('scheduled_date', '>=', $from);
@@ -105,6 +106,8 @@ class DeliveryController extends Controller
             'driver_id' => ['nullable', Rule::exists('users', 'id')->where('role', 'driver')],
             'notes' => 'nullable|string|max:1000',
             'deliver_by' => 'sometimes|required|date_format:H:i',
+            // when the time window opens; empty: Deliver by only
+            'deliver_from' => 'sometimes|nullable|date_format:H:i',
             'items' => 'sometimes|array|min:1',
             'items.*.product_type' => 'required_with:items|distinct|in:bags,small_sack,big_sack',
             'items.*.quantity_ordered' => 'required_with:items|integer|min:1|max:'.config('atice.max_product_quantity'),
@@ -132,6 +135,12 @@ class DeliveryController extends Controller
                 return response()->json(['message' => 'Pick a Deliver by time later than now.', 'errors' => ['deliver_by' => ['Pick a Deliver by time later than now.']]], 422);
             }
         }
+        $dueFrom = array_key_exists('deliver_from', $data)
+            ? ($data['deliver_from'] ? DeliveryDispatch::dueAt($delivery->scheduled_date->toDateString(), $data['deliver_from']) : null)
+            : $delivery->due_from;
+        if ($dueFrom && $dueAt && $dueFrom->gte($dueAt)) {
+            return response()->json(['message' => 'The window must open before the Deliver by time.', 'errors' => ['deliver_from' => ['The window must open before the Deliver by time.']]], 422);
+        }
 
         $prices = [];
         if (isset($data['items'])) {
@@ -145,10 +154,11 @@ class DeliveryController extends Controller
         }
 
         $before = ['driver_id' => $delivery->driver_id, 'due_at' => $delivery->due_at?->toDateTimeString(), 'items' => $delivery->items->map->only(['product_type', 'quantity_ordered'])->all()];
-        DB::transaction(function () use ($delivery, $data, $driverId, $prices, $dueAt) {
+        DB::transaction(function () use ($delivery, $data, $driverId, $prices, $dueAt, $dueFrom) {
             $delivery->update([
                 'driver_id' => $driverId,
                 'due_at' => $dueAt,
+                'due_from' => $dueFrom,
                 // a queued delivery given a driver is back to pending
                 'status' => $driverId ? 'pending' : $delivery->status,
                 'notes' => array_key_exists('notes', $data) ? $data['notes'] : $delivery->notes,
@@ -207,6 +217,8 @@ class DeliveryController extends Controller
             'scheduled_date' => 'required|date|after_or_equal:'.DriverAvailability::today(),
             // the time it must reach the store, at the latest (a store delivery only)
             'deliver_by' => 'required_if:delivery_type,outbound|nullable|date_format:H:i',
+            // when its time window opens (optional)
+            'deliver_from' => 'nullable|date_format:H:i',
             'notes' => 'nullable|string|max:1000',
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|in:bags,small_sack,big_sack',
@@ -222,7 +234,11 @@ class DeliveryController extends Controller
         if ($dueAt && $dueAt->lte(now())) {
             return response()->json(['message' => 'Pick a Deliver by time later than now.', 'errors' => ['deliver_by' => ['Pick a Deliver by time later than now.']]], 422);
         }
-        unset($data['deliver_by']);
+        $dueFrom = $dueAt && ! empty($data['deliver_from']) ? DeliveryDispatch::dueAt($data['scheduled_date'], $data['deliver_from']) : null;
+        if ($dueFrom && $dueFrom->gte($dueAt)) {
+            return response()->json(['message' => 'The window must open before the Deliver by time.', 'errors' => ['deliver_from' => ['The window must open before the Deliver by time.']]], 422);
+        }
+        unset($data['deliver_by'], $data['deliver_from']);
 
         // Only an available Driver (timed in today, not in transit) can be assigned.
         if ($why = DriverAvailability::refusal((int) $data['driver_id'], $data['scheduled_date'])) {
@@ -274,7 +290,7 @@ class DeliveryController extends Controller
         // Retried when two deliveries made at the same moment get the same number.
         for ($attempt = 1; ; $attempt++) {
             try {
-                $delivery = DB::transaction(function () use ($data, $items, $dueAt) {
+                $delivery = DB::transaction(function () use ($data, $items, $dueAt, $dueFrom) {
                     // No double booking: one delivery per customer per day. Only a
                     // cancelled one frees the day. The customer row is locked so two
                     // Admins booking the same day at the same moment cannot both pass.
@@ -290,7 +306,7 @@ class DeliveryController extends Controller
                         }
                     }
 
-                    $delivery = Delivery::create($data + ['delivery_no' => self::nextDeliveryNo(), 'ordered_at' => now(), 'due_at' => $dueAt]);
+                    $delivery = Delivery::create($data + ['delivery_no' => self::nextDeliveryNo(), 'ordered_at' => now(), 'due_at' => $dueAt, 'due_from' => $dueFrom]);
 
                     foreach ($items as $item) {
                         $delivery->items()->create($item);
@@ -326,26 +342,8 @@ class DeliveryController extends Controller
     public function show($id)
     {
         return response()->json(
-            Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs', 'preparedBy', 'parent:id,delivery_no', 'topUps:id,parent_delivery_id,delivery_no,status,ordered_at', 'adjustments.user:id,name'])->findOrFail($id)
+            Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs', 'preparedBy', 'adjustments.user:id,name'])->findOrFail($id)
         );
-    }
-
-    // POST /api/deliveries/{id}/top-up (Admin): another delivery today to the
-    // same store, by a later time (App\Support\DeliveryAdjust::topUp)
-    public function topUp(Request $request, $id)
-    {
-        $data = $request->validate([
-            'items' => 'required|array',
-            'items.*' => 'integer|min:0|max:'.config('atice.max_product_quantity'),
-            'deliver_by' => 'required|date_format:H:i',
-            'notes' => 'nullable|string|max:200',
-        ]);
-        $parent = Delivery::with('customer')->findOrFail($id);
-        $items = array_intersect_key($data['items'], DeliveryItem::PRODUCT_TYPES);
-
-        $delivery = DeliveryAdjust::topUp($parent, $items, $data['deliver_by'], 'admin', $data['notes'] ?? null);
-
-        return response()->json($delivery->load(['driver', 'customer', 'items']), 201);
     }
 
     // POST /api/deliveries/{id}/adjust (Admin): add or reduce sacks on a

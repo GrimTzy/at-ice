@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNoticeRecord } from "../lib/noticeRecord";
+import Pagination from "./Pagination";
+import { PAGE_SIZES, usePagination } from "../lib/usePagination";
 import { BottomSheet, StatusBadge } from "./MobileUi";
 import { useLiveTick } from "../lib/live";
 import { formatDateShort, formatDateTime } from "../lib/time";
@@ -124,7 +126,6 @@ export function MyMemosButton({ compact = false, variant = "icon", onActivate })
   const { memos, loading, error, load, setMemos } = useMyMemos();
   const [open, setOpen] = useState(false);
   const pending = memos.filter((m) => needsAck(m) || m.status === "awaiting_physical").length;
-  useNoticeRecord(open && !loading); // a phone notice about a memo shows it in the sheet
 
   // A phone notice about a memo opens this sheet (lib/push.js sets the flag or sends the event).
   useEffect(() => {
@@ -136,6 +137,13 @@ export function MyMemosButton({ compact = false, variant = "icon", onActivate })
     window.addEventListener("atice:open-memos", openNow);
     return () => window.removeEventListener("atice:open-memos", openNow);
   }, []);
+  const pager = usePagination(memos);
+  useNoticeRecord(open && !loading, (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "employee_memo") return;
+
+    pager.reveal((row) => String(row.id) === id);
+  });
 
   return (
     <>
@@ -182,9 +190,12 @@ export function MyMemosButton({ compact = false, variant = "icon", onActivate })
             <p className="max-w-[260px] text-[13px] leading-relaxed text-slate-500">Important announcements and shift notes will appear here.</p>
           </div>
         ) : (
-          memos.map((m) => (
+          <>
+          {pager.pageItems.map((m) => (
             <MemoCard key={m.id} memo={m} onAcknowledged={(id, at) => setMemos((list) => list.map((x) => (x.id === id ? { ...x, status: "acknowledged", acknowledged_at: at } : x)))} />
-          ))
+          ))}
+          {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} fixed />}
+          </>
         )}
       </BottomSheet>
     </>

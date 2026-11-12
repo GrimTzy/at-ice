@@ -172,10 +172,7 @@ function Modal({ title, onClose, children, width = "max-w-lg" }) {
 // QR code of the public application form (/apply). People scan it with their
 // phone, fill in the form, and the application shows up here as Pending ("QR").
 function ApplyQrModal({ onClose }) {
-  // Blank: the general form. An employee ID: that employee's referral link.
-  const [referrer, setReferrer] = useState("");
-  const code = /^EMP-\d{4,}$/i.test(referrer.trim()) ? referrer.trim().toUpperCase() : "";
-  const url = applyUrl(code);
+  const url = applyUrl();
   const [qr, setQr] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -218,12 +215,6 @@ function ApplyQrModal({ onClose }) {
         <p className="text-[12px] text-slate-500">
           Applicants scan this with their phone to fill in the job application form. Each one shows up here as <b>Pending</b>, marked <b>QR</b>.
         </p>
-        <label className="w-full flex flex-col gap-1 text-left">
-          <span className="text-[11px] text-slate-500">Referral QR for an employee (optional)</span>
-          <input name="referrer" value={referrer} onChange={(e) => setReferrer(e.target.value)} placeholder="Employee ID, e.g. EMP-0001"
-            className="px-2.5 py-1.5 border border-black/[0.09] rounded-md text-xs font-mono" />
-          <span className="text-[10px] text-slate-400">{code ? `Applicants who use this QR are recorded as referred by ${code}. Any referral bonus is added by Admin in payroll.` : "Leave blank for the general application QR."}</span>
-        </label>
         <div className="w-60 h-60 rounded-lg border border-black/[0.09] bg-white flex items-center justify-center overflow-hidden">
           {qr ? <img src={qr} alt={`QR code for ${url}`} className="w-full h-full" /> : <span className="text-[11px] text-slate-400">Making the QR code…</span>}
         </div>
@@ -699,7 +690,7 @@ export default function InterviewsPage() {
               </div>
             ) : null}
             <Field label="Full Name">
-              <input name="name" type="text" maxLength={255} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Juan Dela Cruz" />
+              <input name="name" type="text" maxLength={50} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Juan Dela Cruz" />
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -796,7 +787,7 @@ export default function InterviewsPage() {
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 className={`${inputClass} resize-y`}
-                placeholder="Referral, requirements submitted, interview remarks"
+                placeholder="Requirements submitted, interview remarks"
               />
             </Field>
 
@@ -876,7 +867,6 @@ export default function InterviewsPage() {
               ["Email", viewing.email || "—"],
               ["Applied Through", viewing.source === "qr" ? "QR code form (filled in by the applicant)" : "Added by HR"],
               ["Submitted", fmtDateTime(viewing.created_at)],
-              ["Referred By", viewing.referred_by ? `${viewing.referred_by.employee_id} · ${[viewing.referred_by.first_name, viewing.referred_by.last_name].filter(Boolean).join(" ")}` : "—"],
               ["Possible Duplicate", (viewing.possible_duplicates || []).length === 0 ? "—" : (
                 <span className="flex flex-col gap-1">
                   {viewing.possible_duplicates.map((d) => (

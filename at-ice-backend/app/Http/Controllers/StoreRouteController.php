@@ -27,7 +27,7 @@ class StoreRouteController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:60', $this->uniqueName()],
+            'name' => ['required', 'string', 'max:50', $this->uniqueName()],
             'store_ids' => ['sometimes', 'array'],
             'store_ids.*' => ['integer', 'distinct', Rule::exists('customers', 'id')->where('is_active', true)],
         ], $this->messages());
@@ -47,7 +47,7 @@ class StoreRouteController extends Controller
     {
         $route = StoreRoute::findOrFail($id);
         $data = $request->validate([
-            'name' => ['sometimes', 'string', 'max:60', $this->uniqueName($route->id)],
+            'name' => ['sometimes', 'string', 'max:50', $this->uniqueName($route->id)],
             'store_ids' => ['sometimes', 'array'],
             'store_ids.*' => ['integer', 'distinct', Rule::exists('customers', 'id')->where('is_active', true)],
         ], $this->messages());

@@ -287,7 +287,7 @@ class DeliveryDispatch
             return;
         }
 
-        $when = $d->due_at ? ' (deliver by '.$d->due_at->format('g:i A').')' : '';
+        $when = $d->due_at ? ' ('.self::windowText($d).')' : '';
         self::tellStore($d, 'delay', "Your delivery {$d->delivery_no} today{$when} may be delayed: it was moved to another driver.");
     }
 
@@ -305,7 +305,7 @@ class DeliveryDispatch
             ->get();
 
         foreach ($late as $d) {
-            $by = $d->due_at->format('g:i A');
+            $by = $d->due_at->copy()->setTimezone(DriverAvailability::tz())->format('g:i A');
             self::tellStore($d, 'overdue', "Your delivery {$d->delivery_no} was due by {$by} and is running late. We are on it and will let you know when it arrives.");
             LiveEvent::create([
                 'module' => 'deliveries',
@@ -392,6 +392,15 @@ class DeliveryDispatch
     // "Nov 16" for a delivery date
     // The Deliver by time on a day, in the company's time zone, stored the way
     // the other delivery times are.
+    // "deliver 6:00 AM - 8:00 AM", or "deliver by 8:00 AM" with no window start
+    public static function windowText(Delivery $d): string
+    {
+        $tz = DriverAvailability::tz();
+        $by = $d->due_at->copy()->setTimezone($tz)->format('g:i A');
+
+        return $d->due_from ? 'deliver '.$d->due_from->copy()->setTimezone($tz)->format('g:i A').' - '.$by : "deliver by {$by}";
+    }
+
     public static function dueAt(string $date, string $time): Carbon
     {
         return Carbon::parse("{$date} {$time}", DriverAvailability::tz())->setTimezone(config('app.timezone'));
@@ -466,12 +475,13 @@ class DeliveryDispatch
         }
 
         $time = substr((string) $contract->delivery_time, 0, 5) ?: '08:00';
+        $from = $contract->delivery_from ? substr((string) $contract->delivery_from, 0, 5) : null;
         $created = 0;
         $skipped = 0;
         $drivers = [];
 
-        Delivery::withoutEvents(function () use ($contract, $dates, $stores, $booked, $prices, $time, $preparedBy, &$created, &$skipped, &$drivers) {
-            DB::transaction(function () use ($contract, $dates, $stores, $booked, $prices, $time, $preparedBy, &$created, &$skipped, &$drivers) {
+        Delivery::withoutEvents(function () use ($contract, $dates, $stores, $booked, $prices, $time, $from, $preparedBy, &$created, &$skipped, &$drivers) {
+            DB::transaction(function () use ($contract, $dates, $stores, $booked, $prices, $time, $from, $preparedBy, &$created, &$skipped, &$drivers) {
                 $no = self::lastDeliveryNumber();
                 foreach ($dates as $date) {
                     foreach ($stores as $store) {
@@ -489,9 +499,10 @@ class DeliveryDispatch
                             'delivery_type' => 'outbound',
                             'status' => 'pending',
                             'scheduled_date' => $date,
-                            'ordered_at' => Carbon::parse("{$date} {$time}"),
-                            // the contract's Deliver by time on that day
-                            'due_at' => Carbon::parse("{$date} {$time}"),
+                            'ordered_at' => self::dueAt($date, $time),
+                            // the contract's window on that day, in the business timezone
+                            'due_at' => self::dueAt($date, $time),
+                            'due_from' => $from ? self::dueAt($date, $from) : null,
                             'notes' => "Contract {$contract->contract_no}",
                             'prepared_by' => $preparedBy,
                         ]);

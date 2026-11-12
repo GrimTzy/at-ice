@@ -85,13 +85,16 @@ export default function StockLimitsPage() {
   };
   const isChanged = (p) =>
     valueOf(p, "min") !== String(p.minimum_stock ?? "") || valueOf(p, "max") !== String(p.maximum_stock ?? "");
-  const setDraft = (id, key, value) => setDrafts((all) => ({ ...all, [id]: { ...all[id], [key]: value } }));
+  // minimum: 2 digits at most, maximum: 5 (same caps as the server)
+  const setDraft = (id, key, value) => setDrafts((all) => ({ ...all, [id]: { ...all[id], [key]: value.replace(/\D/g, "").slice(0, key === "min" ? 2 : 5) } }));
 
   async function save(p) {
     const min = Number(valueOf(p, "min"));
     const max = Number(valueOf(p, "max"));
     if (valueOf(p, "min") === "" || !Number.isInteger(min) || min < 0) return toast.error("Minimum stock must be a whole number, 0 or more.");
     if (valueOf(p, "max") === "" || !Number.isInteger(max) || max < 0) return toast.error("Maximum stock must be a whole number, 0 or more.");
+    if (min > 99) return toast.error("Minimum stock can have at most 2 digits (up to 99).");
+    if (max > 99999) return toast.error("Maximum stock can have at most 5 digits (up to 99,999).");
     if (max < min) return toast.error("Maximum stock must be greater than or equal to the minimum stock.");
 
     setSavingId(p.id);
@@ -126,7 +129,7 @@ export default function StockLimitsPage() {
   // Stock health for the KPI cards and side panels
   const health = { ok: 0, low: 0, out: 0, over: 0 };
   products.forEach((p) => { health[levelOf(p)] += 1; });
-  const noLimits = products.filter((p) => p.minimum_stock == null || p.maximum_stock == null).length;
+  const noLimits = products.filter((p) => !p.limits_set_at).length;
   const lowest = [...products]
     .filter((p) => levelOf(p) === "out" || levelOf(p) === "low")
     .sort((a, b) => Number(a.current_stock ?? 0) - Number(b.current_stock ?? 0))
@@ -202,7 +205,15 @@ export default function StockLimitsPage() {
               <tbody>
                 {pager.pageItems.map((p) => (
                   <tr key={p.id} className="border-b border-black/[0.04] last:border-0">
-                    <td className="py-2 pr-3 text-slate-800 font-medium">{p.name}</td>
+                    <td className="py-2 pr-3 text-slate-800 font-medium">
+                      {p.name}
+                      {!p.limits_set_at && (
+                        <span className="cell-note px-2 py-0.5 rounded-full text-[10.5px] font-medium border bg-amber-50 text-amber-800 border-amber-200"
+                          title="Added without limits. The numbers shown are the defaults until you save them.">
+                          Needs limits
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 pr-3 text-slate-500">{p.category || "—"}</td>
                     <td className="py-2 pr-3 text-right tabular-nums text-slate-700">
                       {p.current_stock ?? 0} {p.unit || ""}
@@ -211,6 +222,7 @@ export default function StockLimitsPage() {
                       <input name="stock_limit"
                         type="number"
                         min="0"
+                        max="99"
                         step="1"
                         inputMode="numeric"
                         value={valueOf(p, "min")}
@@ -223,6 +235,7 @@ export default function StockLimitsPage() {
                       <input name="stock_limit"
                         type="number"
                         min="0"
+                        max="99999"
                         step="1"
                         inputMode="numeric"
                         value={valueOf(p, "max")}

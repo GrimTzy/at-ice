@@ -27,6 +27,7 @@ use App\Http\Controllers\KioskController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\NavCountController;
 use App\Http\Controllers\LiveFeedController;
+use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PaymentController;
@@ -93,15 +94,22 @@ Route::post('attendances', [AttendanceController::class, 'store'])->middleware([
 // Live feed (realtime pop-up notices, polled every few seconds by every open
 // page; see App\Support\LiveFeed). Own limit so polling never eats the api one.
 Route::get('live-feed', [LiveFeedController::class, 'index'])
-    ->middleware(['auth:sanctum', 'password.changed', 'throttle:40,1,live']);
+    ->middleware(['auth:sanctum', 'idle:passive', 'password.changed', 'throttle:40,1,live']);
+// The notice bell reloads itself on a live notice, so it is not activity either
+Route::get('notices', [NoticeController::class, 'index'])
+    ->middleware(['auth:sanctum', 'idle:passive', 'password.changed', 'throttle:40,1,notices']);
 
-Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->group(function () {
+Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,api'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
     // Push-notification address of the Android app (see DeviceTokenController)
     Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
     Route::delete('/device-tokens', [DeviceTokenController::class, 'destroy']);
+    Route::post('notices/read', [NoticeController::class, 'read']);
     Route::get('/me', [AuthController::class, 'me']);
+    // The web app sends this while the person is working, so a page they are
+    // reading (no requests of their own) does not count as idle.
+    Route::post('/session/ping', fn () => response()->json(['ok' => true]));
     // Whether the signed-in employee or Driver has timed in at the kiosk
     // (Checker, Salesman, Maintenance and Driver pages).
     Route::get('my-time-in', fn (\Illuminate\Http\Request $request) => response()->json([
@@ -184,7 +192,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         // Driver View / Store View for one day (?date=)
         Route::get('deliveries/board', [DeliveryController::class, 'board']);
         Route::post('deliveries', [DeliveryController::class, 'store']);
-        // Same-day changes (App\Support\DeliveryAdjust): top-up, add/reduce sacks on one delivery
+        // Same-day changes (App\Support\DeliveryAdjust): add/reduce sacks on one delivery
         // Stores' requests to change the sacks on one delivery: Admin applies or declines
         Route::get('delivery-adjustment-requests', [DeliveryAdjustmentRequestController::class, 'index']);
         Route::post('delivery-adjustment-requests/{id}/apply', [DeliveryAdjustmentRequestController::class, 'apply']);
@@ -192,7 +200,6 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         Route::get('deliveries/{id}', [DeliveryController::class, 'show']);
         Route::put('deliveries/{id}', [DeliveryController::class, 'update']);
         Route::put('deliveries/{id}/cancel', [DeliveryController::class, 'cancel']);
-        Route::post('deliveries/{id}/top-up', [DeliveryController::class, 'topUp']);
         Route::post('deliveries/{id}/adjust', [DeliveryController::class, 'adjust']);
 
         // Delivery contracts: Admin approves, the daily deliveries are generated
@@ -522,8 +529,6 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         // customer via customers.user_id (see CustomerPortalController).
         Route::get('my-profile', [CustomerPortalController::class, 'myProfile']);
         Route::get('my-delivery-history', [CustomerPortalController::class, 'myDeliveries']);
-        // Ran out after today's delivery: ask for an urgent top-up (5 a minute)
-        Route::post('my-deliveries/{id}/top-up', [CustomerPortalController::class, 'requestTopUp'])->middleware('throttle:5,1,top-up');
         // Ask to change the sacks on a delivery not yet delivered (Admin answers)
         Route::post('my-deliveries/{id}/adjustment-requests', [CustomerPortalController::class, 'requestAdjustment'])->middleware('throttle:5,1,adjust-request');
         Route::post('my-adjustment-requests/{id}/withdraw', [CustomerPortalController::class, 'withdrawAdjustment']);

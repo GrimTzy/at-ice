@@ -84,7 +84,6 @@ class CrossAccountAccessTest extends TestCase
         $ticket = SupportMessage::create(['customer_id' => $storeA->id, 'user_id' => $userA->id, 'topic' => 'late_delivery', 'message' => 'Where is it? Secret-A-text', 'status' => 'open']);
 
         Sanctum::actingAs($userB);
-        $this->postJson("/api/my-deliveries/{$delivery->id}/top-up", ['items' => ['small_sack' => 5], 'deliver_by' => '16:00'])->assertNotFound();
         $this->postJson("/api/my-deliveries/{$delivery->id}/adjustment-requests", ['items' => ['small_sack' => 1]])->assertNotFound();
         $this->postJson("/api/my-support-messages/{$ticket->id}/replies", ['body' => 'Not my ticket'])->assertNotFound();
         $this->getJson('/api/my-payment-proofs/1/file')->assertNotFound();

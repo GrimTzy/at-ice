@@ -111,6 +111,29 @@ class ExpectedPayroll
         return CarbonImmutable::createFromFormat('!Y-m-d', substr($ymd, 0, 10), 'UTC');
     }
 
+    // DOLE: an unworked regular holiday is paid only when the employee was at
+    // work or on paid leave on the work day before it (rest days and other
+    // holidays skipped). Worked out here on its own, from the tables.
+    private function atWorkDayBefore($employee, string $holiday, array $workDays, string $hired): bool
+    {
+        $day = $this->d($holiday)->subDay();
+        for ($i = 0; $i < 14 && (! in_array($day->dayOfWeekIso, $workDays, true) || isset($this->holidays[$day->toDateString()])); $i++) {
+            $day = $day->subDay();
+        }
+        $ymd = $day->toDateString();
+        if ($ymd < $hired) {
+            return false;
+        }
+        $faceIds = DB::table('face_data')->where('employee_id', $employee->id)->pluck('id');
+        $worked = DB::table('attendances')->where('date', 'like', $ymd.'%')->whereNotNull('time_in')
+            ->where(fn ($q) => $q->where('employee_id', $employee->id)->orWhereIn('face_data_id', $faceIds))
+            ->exists();
+
+        return $worked || DB::table('leave_requests')->where('employee_id', $employee->id)->where('status', 'approved')
+            ->where('start_date', '<=', $ymd)->where('end_date', '>=', $ymd)->where('paid_days', '>', 0)
+            ->exists();
+    }
+
     // n-th pay day of its month (1, 2 or 3), from the anchor rule.
     public function payDayNumber(string $payDay): int
     {
@@ -183,7 +206,7 @@ class ExpectedPayroll
         $holidayUnworked = [];
         foreach ($this->holidays as $ymd => $h) {
             if ($ymd >= $period['start'] && $ymd <= $period['end'] && ! isset($byDay[$ymd]) && $ymd >= $hired && $ymd <= $today) {
-                $holidayUnworked[] = [$ymd, $h, ! in_array($this->d($ymd)->dayOfWeekIso, $s['work_days'], true)];
+                $holidayUnworked[] = [$ymd, $h, ! in_array($this->d($ymd)->dayOfWeekIso, $s['work_days'], true), $this->atWorkDayBefore($employee, $ymd, $s['work_days'], $hired)];
             }
         }
 
@@ -205,7 +228,7 @@ class ExpectedPayroll
             $per = $l->is_half_day ? 0.5 : 1;
             for ($d = $this->d(max(substr($l->start_date, 0, 10), $period['start'])); $d->toDateString() <= min(substr($l->end_date, 0, 10), $period['end']); $d = $d->addDay()) {
                 $ymd = $d->toDateString();
-                if (isset($this->holidays[$ymd])) {
+                if (isset($this->holidays[$ymd]) || ! in_array($d->dayOfWeekIso, $s['work_days'], true)) {
                     continue;
                 }
                 $leaveDay[$ymd] = true;
@@ -266,11 +289,13 @@ class ExpectedPayroll
             $holidayOt += $ot * $hourly * $this->mult($otKey, $ymd);
             $steps[] = "holiday {$ymd} {$key}: {$hrs} h x {$hourly} x ".($monthly !== null ? 'premium '.max(0, $rate - 1) : $rate).($ot ? "; OT {$ot} h x {$this->mult($otKey, $ymd)}" : '');
         }
-        foreach ($holidayUnworked as [$ymd, $h, $rest]) {
+        foreach ($holidayUnworked as [$ymd, $h, $rest, $atWork]) {
             if ($rest || $h->type === 'SPECIAL_WORKING') {
                 continue;
             }
-            $rate = $this->mult($h->type === 'REGULAR' ? 'REGULAR_HOLIDAY_UNWORKED' : 'SPECIAL_HOLIDAY_UNWORKED', $ymd);
+            // not at work (or on paid leave) the work day before: an unpaid day
+            $rate = ($h->type === 'REGULAR' && ! $atWork) ? 0.0
+                : $this->mult($h->type === 'REGULAR' ? 'REGULAR_HOLIDAY_UNWORKED' : 'SPECIAL_HOLIDAY_UNWORKED', $ymd);
             if ($monthly !== null) {
                 if ($s['monthly_unworked']) {
                     $absence += $daily * max(0, 1 - $rate);
@@ -280,7 +305,7 @@ class ExpectedPayroll
             }
             $steps[] = "unworked holiday {$ymd}: rate {$rate}";
         }
-        $otRate = $this->mult('OT_ORDINARY', $today);
+        $otRate = $this->mult('OT_ORDINARY', $period['end']);
         $otPay = $otOrdinary * $hourly * $otRate;
         if ($otOrdinary) {
             $steps[] = "ordinary OT {$otOrdinary} h x {$hourly} x {$otRate}";

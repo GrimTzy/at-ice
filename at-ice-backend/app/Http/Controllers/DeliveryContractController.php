@@ -12,7 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
-// Admin > Deliveries > Contracts: one delivery schedule per customer (a whole
+// Admin > CRM > Customers > Contracts: one delivery schedule per customer (a whole
 // chain such as SM, or a single store) with a date range and delivery days.
 // Approving it makes the daily deliveries (App\Support\DeliveryDispatch).
 class DeliveryContractController extends Controller
@@ -35,7 +35,7 @@ class DeliveryContractController extends Controller
     public function nextNumber(Request $request)
     {
         $data = $request->validate([
-            'chain' => 'nullable|string|max:100',
+            'chain' => 'nullable|string|max:50',
             'store_ids' => 'required|array|min:1',
             'store_ids.*' => 'integer|exists:customers,id',
         ]);
@@ -46,14 +46,16 @@ class DeliveryContractController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name' => 'required|string|max:150',
-            'chain' => 'nullable|string|max:100',
+            'name' => 'required|string|max:50',
+            'chain' => 'nullable|string|max:50',
             'store_ids' => 'required|array|min:1',
             'store_ids.*' => 'integer|distinct|exists:customers,id',
             'start_date' => 'required|date|after_or_equal:'.DriverAvailability::today(),
             'end_date' => 'required|date|after_or_equal:start_date|before_or_equal:'.now(config('atice.timezone'))->addYear()->toDateString(),
             'delivery_days' => 'required|array|min:1',
             'delivery_days.*' => ['string', 'distinct', Rule::in(DeliveryContract::DAYS)],
+            // the time window: from (optional) to Deliver by, a deadline
+            'delivery_from' => ['nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
             'delivery_time' => ['required', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|distinct|in:bags,small_sack,big_sack',
@@ -63,8 +65,11 @@ class DeliveryContractController extends Controller
             'store_ids.required' => 'Pick at least one store.',
             'delivery_days.required' => 'Pick at least one delivery day.',
             'end_date.before_or_equal' => 'A contract can run for at most one year.',
+            'delivery_from.regex' => 'Pick the time the window opens.',
             'items.*.product_type.distinct' => 'Each product can only be added once.',
         ]);
+
+        $this->checkWindow($data);
 
         // One contract per store (owner, 2026-11-11): a store that has one running
         // or coming up is edited instead of getting a second.
@@ -86,6 +91,7 @@ class DeliveryContractController extends Controller
                 // kept in Mon..Sun order
                 'delivery_days' => array_values(array_intersect(DeliveryContract::DAYS, $data['delivery_days'])),
                 'delivery_time' => $data['delivery_time'].':00',
+                'delivery_from' => ! empty($data['delivery_from']) ? $data['delivery_from'].':00' : null,
                 'items' => array_map(fn ($i) => ['product_type' => $i['product_type'], 'quantity' => (int) $i['quantity']], $data['items']),
                 'notes' => $data['notes'] ?? null,
                 'status' => 'pending',
@@ -152,6 +158,14 @@ class DeliveryContractController extends Controller
         return response()->json(['message' => $text] + $result);
     }
 
+    // The window must open before its Deliver by time.
+    private function checkWindow(array $data): void
+    {
+        if (! empty($data['delivery_from']) && $data['delivery_from'] >= $data['delivery_time']) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['delivery_from' => ['The window must open before the Deliver by time.']]);
+        }
+    }
+
     // Edit the store's contract (owner, 2026-11-11: one contract per store, editable).
     // The upcoming deliveries that have not started are made again from the new
     // details; deliveries in transit or delivered stay as they are.
@@ -163,11 +177,13 @@ class DeliveryContractController extends Controller
         }
 
         $data = $request->validate([
-            'name' => 'required|string|max:150',
+            'name' => 'required|string|max:50',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date|before_or_equal:'.now(config('atice.timezone'))->addYear()->toDateString(),
             'delivery_days' => 'required|array|min:1',
             'delivery_days.*' => ['string', 'distinct', Rule::in(DeliveryContract::DAYS)],
+            // the time window: from (optional) to Deliver by, a deadline
+            'delivery_from' => ['nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
             'delivery_time' => ['required', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|distinct|in:bags,small_sack,big_sack',
@@ -176,10 +192,12 @@ class DeliveryContractController extends Controller
         ], [
             'delivery_days.required' => 'Pick at least one delivery day.',
             'end_date.before_or_equal' => 'A contract can run for at most one year.',
+            'delivery_from.regex' => 'Pick the time the window opens.',
             'items.*.product_type.distinct' => 'Each product can only be added once.',
         ]);
 
-        $before = $contract->only(['name', 'start_date', 'end_date', 'delivery_days', 'delivery_time', 'items']);
+        $this->checkWindow($data);
+        $before = $contract->only(['name', 'start_date', 'end_date', 'delivery_days', 'delivery_from', 'delivery_time', 'items']);
         $result = [];
         $cancelled = 0;
         DB::transaction(function () use ($contract, $data, $request, &$result, &$cancelled) {
@@ -189,6 +207,7 @@ class DeliveryContractController extends Controller
                 'end_date' => $data['end_date'],
                 'delivery_days' => array_values(array_intersect(DeliveryContract::DAYS, $data['delivery_days'])),
                 'delivery_time' => $data['delivery_time'].':00',
+                'delivery_from' => ! empty($data['delivery_from']) ? $data['delivery_from'].':00' : null,
                 'items' => array_map(fn ($i) => ['product_type' => $i['product_type'], 'quantity' => (int) $i['quantity']], $data['items']),
                 'notes' => $data['notes'] ?? null,
             ]);

@@ -8,7 +8,6 @@ use App\Models\Delivery;
 use App\Models\DeliveryAdjustment;
 use App\Models\DeliveryAdjustmentRequest;
 use App\Models\DeliveryItem;
-use App\Models\DriverStoreAssignment;
 use App\Models\LiveEvent;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -17,12 +16,8 @@ use Illuminate\Validation\ValidationException;
 
 // Same-day changes to deliveries (2026-10-22).
 //
-// Urgent top-up: a store that already got (or is getting) today's delivery
-// runs out and asks for more by a later time. The top-up is its own one-off
-// delivery (is_top_up, parent_delivery_id), so the morning delivery and its
-// invoice never change; it is not blocked by the one-delivery-per-day rule or
-// by contract generation. Its Driver is the store's Driver if available, else
-// the first available Driver, else it is queued for the next free one.
+// (No urgent top-up: the client does not allow an extra delivery after the
+// day's one, QA review 2026-11-11.)
 //
 // Add / reduce sacks: on one store's delivery not yet delivered (pending,
 // queued or in transit), never on many stores at once (owner, 2026-10-22: no
@@ -44,84 +39,6 @@ class DeliveryAdjust
         if ($quantities && max($quantities) > $max) {
             throw ValidationException::withMessages([$field => "Each product can have at most {$max} on one delivery."]);
         }
-    }
-
-    // items: [product_type => sacks]
-    public static function topUp(Delivery $parent, array $items, string $deliverBy, string $source, ?string $notes = null): Delivery
-    {
-        $today = DriverAvailability::today();
-        if (! $parent->customer_id || $parent->status === 'cancelled' || $parent->scheduled_date->toDateString() !== $today) {
-            throw ValidationException::withMessages(['delivery' => 'A top-up follows one of today\'s deliveries to this store.']);
-        }
-        $due = Carbon::parse("{$today} {$deliverBy}", DriverAvailability::tz());
-        if ($due->lte(Carbon::now(DriverAvailability::tz())->addMinutes(30))) {
-            throw ValidationException::withMessages(['deliver_by' => 'Pick a time at least 30 minutes from now.']);
-        }
-        $max = (int) Settings::get('delivery.max_top_ups_per_day');
-        $already = Delivery::where('parent_delivery_id', $parent->id)->where('status', '!=', 'cancelled')->count();
-        if ($already >= $max) {
-            throw ValidationException::withMessages(['items' => "This store already has {$max} top-ups today. Call the dispatch hotline for more."]);
-        }
-
-        $rows = [];
-        foreach ($items as $type => $qty) {
-            if ($qty < 1) {
-                continue;
-            }
-            $price = CustomerPrice::priceFor($parent->customer_id, $type);
-            if ($price === null) {
-                throw ValidationException::withMessages(['items' => 'No price is set for '.(DeliveryItem::PRODUCT_TYPES[$type] ?? $type).'. Set it in Customer Prices first.']);
-            }
-            $rows[] = ['product_type' => $type, 'quantity_ordered' => (int) $qty, 'unit_price' => $price];
-        }
-        if (! $rows) {
-            throw ValidationException::withMessages(['items' => 'Add at least one sack.']);
-        }
-        self::withinLimit(array_column($rows, 'quantity_ordered'), 'items');
-
-        $driverId = self::driverForTopUp($parent->customer_id, $today);
-
-        $delivery = DB::transaction(function () use ($parent, $rows, $due, $driverId, $source, $notes, $today) {
-            $delivery = Delivery::create([
-                'delivery_no' => DeliveryDispatch::formatDeliveryNo(DeliveryDispatch::lastDeliveryNumber() + 1),
-                'customer_id' => $parent->customer_id,
-                'delivery_type' => 'outbound',
-                'driver_id' => $driverId,
-                'status' => $driverId ? 'pending' : 'queued',
-                'scheduled_date' => $today,
-                'ordered_at' => $due->copy()->setTimezone(config('app.timezone')),
-                'due_at' => $due->copy()->setTimezone(config('app.timezone')),
-                'parent_delivery_id' => $parent->id,
-                'is_top_up' => true,
-                'notes' => trim("Urgent top-up after {$parent->delivery_no}. ".($notes ?? '')),
-                'prepared_by' => Auth::id(),
-            ]);
-            foreach ($rows as $row) {
-                $delivery->items()->create($row);
-            }
-            DeliveryAdjustment::create([
-                'delivery_id' => $delivery->id,
-                'kind' => 'top_up',
-                'source' => $source,
-                'reason' => mb_substr("Top-up after {$parent->delivery_no}".($notes ? ": {$notes}" : ''), 0, 255),
-                'changes' => array_map(fn ($r) => ['product_type' => $r['product_type'], 'before' => 0, 'after' => $r['quantity_ordered']], $rows),
-                'user_id' => Auth::id(),
-            ]);
-
-            return $delivery;
-        });
-
-        Audit::log('delivery.top_up', $delivery, null, ['parent' => $parent->delivery_no, 'items' => $items, 'deliver_by' => $deliverBy, 'source' => $source]);
-        LiveEvent::create([
-            'module' => 'deliveries',
-            'action' => 'created',
-            'message' => "URGENT top-up {$delivery->delivery_no} for ".($parent->customer?->name ?? 'a store').' by '.$due->format('g:i A').($driverId ? '' : ' (queued, no Driver free yet)'),
-            'roles' => ['employee:salesman'],
-            'user_ids' => array_values(array_filter([$driverId])),
-            'actor_id' => Auth::id(),
-        ]);
-
-        return $delivery;
     }
 
     // mode add|reduce, by count|percent; productType null = every product
@@ -362,15 +279,5 @@ class DeliveryAdjust
             'user_ids' => [$userId],
             'actor_id' => Auth::id(),
         ]);
-    }
-
-    // The store's own Driver when available, else the Driver free longest,
-    // else null (the top-up is queued for the next free Driver).
-    public static function driverForTopUp(int $storeId, string $date): ?int
-    {
-        $available = DeliveryDispatch::availableDrivers();
-        $own = DriverStoreAssignment::driverFor($storeId, $date);
-
-        return $own && in_array($own, $available, false) ? (int) $own : ($available[0] ?? null);
     }
 }

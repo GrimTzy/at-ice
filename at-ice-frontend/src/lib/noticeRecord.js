@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 // A phone notice about one record (e.g. "delivery:12") opens that record on its mobile page.
 // The page marks each row with data-record="<kind>:<id>" on the element that opens it. Pages load
@@ -26,18 +26,28 @@ function forgetRecord() {
 }
 
 // Pages call this once their screen is mounted. Every page of the mobile app calls it.
-export function useNoticeRecord(ready = true) {
+export function useNoticeRecord(ready = true, prepare) {
+  const prepareRef = useRef(prepare);
+  useEffect(() => { prepareRef.current = prepare; });
   useEffect(() => {
     if (!ready) return undefined;
     let timer = null;
     let tries = 0;
     let active = true;
+    let prepared = "";
 
     const attempt = () => {
       timer = null;
       if (!active) return;
       const record = pendingRecord();
       if (!record) return;
+      if (prepared !== record) {
+        if (prepareRef.current?.(record) === false) {
+          if (tries++ < TRIES) timer = setTimeout(attempt, EVERY_MS);
+          return;
+        }
+        prepared = record;
+      }
       const el = document.querySelector(`[data-record="${CSS.escape(record)}"]`);
       if (!el) {
         if (tries++ < TRIES) timer = setTimeout(attempt, EVERY_MS);
@@ -51,6 +61,7 @@ export function useNoticeRecord(ready = true) {
 
     const again = () => {
       tries = 0;
+      prepared = "";
       if (timer) clearTimeout(timer);
       attempt();
     };
