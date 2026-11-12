@@ -151,7 +151,9 @@ class PublicApplicationTest extends TestCase
         Sanctum::actingAs(User::create(['name' => 'HR', 'email' => 'hr@atice.cloud', 'password' => 'secret-password', 'role' => 'hr']));
         $this->get("/api/applicants/{$a->id}/documents/{$a->documents[0]->id}")->assertOk();
 
-        $employee = $this->postJson('/api/employees', [
+        // Only a hired applicant can be made an employee
+        $a->update(['status' => 'hired']);
+        $employee =$this->postJson('/api/employees', [
             'first_name' => 'Maria Clara', 'last_name' => 'Reyes', 'phone' => '09171234567', 'position' => 'Bagger',
             'street' => 'Rizal St', 'barangay' => 'Muzon', 'city' => 'San Jose Del Monte', 'province' => 'Bulacan',
             'daily_rate' => 600, 'date_hired' => now()->toDateString(), 'shift_start' => '08:00', 'shift_end' => '17:00',

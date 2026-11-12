@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class EmployeeController extends Controller
 {
@@ -295,11 +296,27 @@ class EmployeeController extends Controller
 
         $password = $noAccount ? null : self::oneTimePassword();
 
-        // Login and employee record are created together, or not at all.
+        // From Interviews: only a hired applicant, and only once (checked here
+        // for a quick answer, then again under a lock inside the transaction).
+        $applicantId = $request->filled('applicant_id') ? (int) $request->applicant_id : null;
+        if ($applicantId) {
+            self::assertApplicantCanBeHired(Applicant::find($applicantId));
+        }
+
+        // Login, employee record and the applicant link are created together, or not at all.
         // Retried when two employees added at the same moment get the same code.
         for ($attempt = 1; ; $attempt++) {
             try {
-                [$user, $employee] = DB::transaction(fn () => $this->createEmployee($request, $noAccount, $isDriver, $subRole, $password));
+                [$user, $employee] = DB::transaction(function () use ($request, $noAccount, $isDriver, $subRole, $password, $applicantId) {
+                    $applicant = $applicantId ? Applicant::lockForUpdate()->find($applicantId) : null;
+                    if ($applicantId) {
+                        self::assertApplicantCanBeHired($applicant);
+                    }
+                    [$user, $employee] = $this->createEmployee($request, $noAccount, $isDriver, $subRole, $password);
+                    $applicant?->forceFill(['employee_id' => $employee->id])->save();
+
+                    return [$user, $employee];
+                });
                 break;
             } catch (UniqueConstraintViolationException $e) {
                 if ($attempt >= 3) {
@@ -320,6 +337,21 @@ class EmployeeController extends Controller
             'email' => $user?->email,
             'password' => $password,
         ], 201);
+    }
+
+    // An applicant becomes an employee only once HR marked them Hired, and only once.
+    private static function assertApplicantCanBeHired(?Applicant $applicant): void
+    {
+        if (! $applicant) {
+            throw ValidationException::withMessages(['applicant_id' => 'This applicant was not found.']);
+        }
+        if ($applicant->status !== 'hired') {
+            throw ValidationException::withMessages(['applicant_id' => "{$applicant->name} is not hired yet. Mark them Hired in Interviews first."]);
+        }
+        if ($applicant->employee_id) {
+            $code = Employee::whereKey($applicant->employee_id)->value('employee_id');
+            throw ValidationException::withMessages(['applicant_id' => "{$applicant->name} already has an employee record".($code ? " ({$code})" : '').'.']);
+        }
     }
 
     // The login (when the position has one) and the employee row, with the next free code.

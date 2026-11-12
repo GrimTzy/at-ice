@@ -85,7 +85,7 @@ class ApplicantController extends Controller
 
         if (in_array($current, ['hired', 'rejected'], true)) {
             throw ValidationException::withMessages([
-                'status' => ["This applicant is already {$current}. The status can no longer be changed."],
+                'status' => ['This applicant is already '.Applicant::statusLabel($current).'. The status can no longer be changed.'],
             ]);
         }
 
@@ -146,7 +146,7 @@ class ApplicantController extends Controller
         }
 
         $applicants = $query
-            ->with(['documents'])
+            ->with(['employee:id,employee_id,first_name,middle_initial,last_name,suffix', 'documents'])
             ->orderByRaw('interview_date IS NULL')   // scheduled first
             ->orderBy('interview_date', 'asc')
             ->orderBy('created_at', 'desc')
@@ -242,7 +242,7 @@ class ApplicantController extends Controller
 
         // A hired or rejected applicant's interview record is final: view only.
         if (in_array($applicant->status, ['hired', 'rejected'], true)) {
-            return response()->json(['message' => "This applicant is already {$applicant->status}. The interview record can no longer be edited."], 422);
+            return response()->json(['message' => 'This applicant is already '.Applicant::statusLabel($applicant->status).'. The interview record can no longer be edited.'], 422);
         }
 
         $this->cleanPhone($request);
@@ -343,7 +343,7 @@ class ApplicantController extends Controller
         $applicant->update(['status' => $request->status]);
 
         return response()->json([
-            'message' => "Applicant marked as {$request->status}.",
+            'message' => 'Applicant marked as '.Applicant::statusLabel($request->status).'.',
             'applicant' => $applicant->fresh(),
         ]);
     }
@@ -353,7 +353,7 @@ class ApplicantController extends Controller
     {
         $applicant = Applicant::findOrFail($id);
         if (in_array($applicant->status, ['hired', 'rejected'], true)) {
-            return response()->json(['message' => "This applicant is already {$applicant->status}. The interview record is kept and can no longer be deleted."], 422);
+            return response()->json(['message' => 'This applicant is already '.Applicant::statusLabel($applicant->status).'. The interview record is kept and can no longer be deleted.'], 422);
         }
         $applicant->delete();
 
