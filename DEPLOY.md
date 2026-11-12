@@ -74,7 +74,10 @@ never in git. Hand them over outside git and chat.
    container). `GET /api/app-version` then returns the build number, the login page
    offers the download (`/api/app-download`) and installed apps offer the update.
    Until both files are there the API answers `{"build":0}` and the download is a 404.
-4. A website sign-in lasts `WEB_TOKEN_HOURS` (default 12); the app has no limit.
+4. The app calls the API from the origin `https://localhost` (Capacitor), so the
+   compose file allows it next to the website in `CORS_ALLOWED_ORIGINS`. Without it the
+   app cannot reach the server even with the right key.
+5. A website sign-in lasts `WEB_TOKEN_HOURS` (default 12); the app has no limit.
    Changing the value does not shorten sign-ins that are already open.
 
 ## Backups
