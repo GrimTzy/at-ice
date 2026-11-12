@@ -59,6 +59,11 @@ class Settings
         'delivery.allow_rolling_stock_fifo' => [true, 'bool', 'Keep the ice left on each truck as dated loads and deliver the oldest load first (FIFO). Off: loads and deliveries are not tracked per truck'],
         'delivery.auto_queue_on_trip_completion' => [true, 'bool', 'Give queued deliveries on their own to the Driver who finished their list first. Off: Admin picks a Driver for each queued delivery'],
         'delivery.max_transit_hours_before_alert' => [4, 'int', 'Hours a delivery may stay In transit before Admin is alerted (0 = no alert)'],
+        // Truck load and stops per Driver per day (client, 2026-11-10; App\Support\RouteCapacity)
+        'delivery.truck_big_sacks' => [150, 'int', 'Big sacks one truck carries on its one trip a day'],
+        'delivery.truck_small_sacks' => [350, 'int', 'Small sacks one truck carries on its one trip a day'],
+        'delivery.truck_bags' => [500, 'int', 'Bags one truck carries on its one trip a day'],
+        'delivery.max_stores_per_driver_day' => [80, 'int', 'Most stores (customers; each mall tenant counts) one Driver delivers to in a day'],
         'delivery.email_delay_notices' => [false, 'bool', 'Also email the store when its delivery is moved or may be late (off: customer portal only). Addresses ending in .invalid never get email'],
         // Support tickets (SupportMessageController)
         'support.overdue_hours' => [24, 'int', 'Hours an open support ticket may wait before it is marked Overdue'],

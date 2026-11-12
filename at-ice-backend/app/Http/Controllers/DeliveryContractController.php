@@ -7,6 +7,7 @@ use App\Models\DeliveryContract;
 use App\Support\Audit;
 use App\Support\DeliveryDispatch;
 use App\Support\DriverAvailability;
+use App\Support\RouteCapacity;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -81,7 +82,8 @@ class DeliveryContractController extends Controller
         // Admin makes the contract, so it is approved at once: the daily deliveries
         // are made now (owner, 2026-11-11). No price for a store stops it before anything is saved.
         $result = [];
-        $contract = DB::transaction(function () use ($data, $request, &$result) {
+        $check = ['warnings' => [], 'without_driver' => 0];
+        $contract = DB::transaction(function () use ($data, $request, &$result, &$check) {
             $contract = DeliveryContract::create([
                 'contract_no' => DeliveryContract::nextNumber($data['chain'] ?? null, $data['store_ids']),
                 'name' => $data['name'],
@@ -109,6 +111,8 @@ class DeliveryContractController extends Controller
                 ], 422));
             }
 
+            // truck-limit warnings (RouteCapacity) for what is about to be made
+            $check = RouteCapacity::forContract($contract);
             $contract->update(['status' => 'approved', 'approved_by' => $request->user()->id, 'approved_at' => now()]);
             $result = DeliveryDispatch::generate($contract, $request->user()->id);
 
@@ -122,7 +126,23 @@ class DeliveryContractController extends Controller
             $text .= " {$result['skipped']} were skipped because the store already has a delivery that day.";
         }
 
-        return response()->json($contract->load('stores:customers.id,customers.name')->toArray() + ['message' => $text], 201);
+        return response()->json($contract->load('stores:customers.id,customers.name')->toArray()
+            + ['message' => $text.self::capacityText($check)] + self::capacityFields($check), 201);
+    }
+
+    // GET delivery-contracts/{id}/capacity-check: before Approve, what the
+    // contract would add to each Driver's days against the truck limits
+    // (RouteCapacity), and how many store-days would have no Driver. Only a
+    // warning: Admin may still approve.
+    public function capacityCheck($id)
+    {
+        $contract = DeliveryContract::with('stores')->findOrFail($id);
+        $check = RouteCapacity::forContract($contract);
+
+        return response()->json([
+            'limits' => RouteCapacity::limits(),
+            'warning' => RouteCapacity::message($check['warnings']),
+        ] + $check);
     }
 
     // Admin approves: the daily deliveries are generated at once.
@@ -146,6 +166,7 @@ class DeliveryContractController extends Controller
             ], 422);
         }
 
+        $check = RouteCapacity::forContract($contract);
         $contract->update(['status' => 'approved', 'approved_by' => $request->user()->id, 'approved_at' => now()]);
         $result = DeliveryDispatch::generate($contract, $request->user()->id);
         Audit::log('delivery_contract.approved', $contract, ['status' => 'pending'], ['status' => 'approved'] + $result);
@@ -155,7 +176,7 @@ class DeliveryContractController extends Controller
             $text .= " {$result['skipped']} were skipped because the store already has a delivery that day.";
         }
 
-        return response()->json(['message' => $text] + $result);
+        return response()->json(['message' => $text.self::capacityText($check)] + $result + self::capacityFields($check));
     }
 
     // The window must open before its Deliver by time.
@@ -200,7 +221,8 @@ class DeliveryContractController extends Controller
         $before = $contract->only(['name', 'start_date', 'end_date', 'delivery_days', 'delivery_from', 'delivery_time', 'items']);
         $result = [];
         $cancelled = 0;
-        DB::transaction(function () use ($contract, $data, $request, &$result, &$cancelled) {
+        $check = ['warnings' => [], 'without_driver' => 0];
+        DB::transaction(function () use ($contract, $data, $request, &$result, &$cancelled, &$check) {
             $contract->fill([
                 'name' => $data['name'],
                 'start_date' => $data['start_date'],
@@ -226,13 +248,15 @@ class DeliveryContractController extends Controller
                 ->whereDate('scheduled_date', '>=', DriverAvailability::today())
                 ->update(['status' => 'cancelled', 'cancel_reason' => "Contract {$contract->contract_no} edited", 'updated_at' => now()]);
             $contract->save();
+            // truck-limit warnings (RouteCapacity) for the deliveries made again
+            $check = RouteCapacity::forContract($contract);
             $result = DeliveryDispatch::generate($contract, $request->user()->id);
         });
         Audit::log('delivery_contract.updated', $contract, $before, $contract->only(['name', 'start_date', 'end_date', 'delivery_days', 'delivery_time', 'items']) + $result);
 
         return response()->json($contract->load('stores:customers.id,customers.name')->toArray() + [
-            'message' => "Contract saved. {$result['created']} upcoming deliveries were made again from the new details.",
-        ]);
+            'message' => "Contract saved. {$result['created']} upcoming deliveries were made again from the new details.".self::capacityText($check),
+        ] + self::capacityFields($check));
     }
 
     // The message to show when one of these stores already has a contract that
@@ -273,5 +297,28 @@ class DeliveryContractController extends Controller
         }
 
         return response()->json(['message' => "Contract cancelled. {$count} upcoming deliveries were cancelled."]);
+    }
+
+    // The RouteCapacity::forContract() result as toast text and response fields.
+    private static function capacityText(array $check): string
+    {
+        $text = '';
+        if (! empty($check['without_driver'])) {
+            $text .= " {$check['without_driver']} store days have no Driver yet.";
+        }
+        if ($warning = RouteCapacity::message($check['warnings'] ?? [])) {
+            $text .= ' '.$warning;
+        }
+
+        return $text;
+    }
+
+    private static function capacityFields(array $check): array
+    {
+        return [
+            'warnings' => $check['warnings'] ?? [],
+            'without_driver' => $check['without_driver'] ?? 0,
+            'warning' => RouteCapacity::message($check['warnings'] ?? []),
+        ];
     }
 }

@@ -13,6 +13,7 @@ use App\Support\Audit;
 use App\Support\DeliveryAdjust;
 use App\Support\DeliveryDispatch;
 use App\Support\DriverAvailability;
+use App\Support\RouteCapacity;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -192,7 +193,12 @@ class DeliveryController extends Controller
                 : "Your delivery {$delivery->delivery_no} on {$day} is being moved to another driver. The schedule stays the same.");
         }
 
-        return response()->json($delivery->fresh(['driver:id,name', 'customer', 'items', 'reassignedFrom:id,name']));
+        $warnings = $driverId ? RouteCapacity::warningsFor([$driverId], [$delivery->scheduledDateString()]) : [];
+
+        return response()->json($delivery->fresh(['driver:id,name', 'customer', 'items', 'reassignedFrom:id,name'])->toArray() + [
+            'capacity_warnings' => $warnings,
+            'capacity_warning' => RouteCapacity::message($warnings),
+        ]);
     }
 
     // Admin: every Driver as available / in_transit / unavailable for the
@@ -330,7 +336,12 @@ class DeliveryController extends Controller
             return response()->json(['message' => $text, 'errors' => ['scheduled_date' => [$text]]], 422);
         }
 
-        return response()->json($delivery->load(['driver', 'customer', 'items.product']), 201);
+        $warnings = $delivery->driver_id ? RouteCapacity::warningsFor([(int) $delivery->driver_id], [$delivery->scheduledDateString()]) : [];
+
+        return response()->json($delivery->load(['driver', 'customer', 'items.product'])->toArray() + [
+            'capacity_warnings' => $warnings,
+            'capacity_warning' => RouteCapacity::message($warnings),
+        ], 201);
     }
 
     // Highest DEL-0000 number so far, plus 1 (contracts use the same numbers).

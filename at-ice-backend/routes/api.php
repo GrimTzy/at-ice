@@ -207,6 +207,7 @@ Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,a
         Route::get('delivery-contracts/next-number', [DeliveryContractController::class, 'nextNumber']);
         Route::post('delivery-contracts', [DeliveryContractController::class, 'store']);
         Route::put('delivery-contracts/{id}', [DeliveryContractController::class, 'update']);
+        Route::get('delivery-contracts/{id}/capacity-check', [DeliveryContractController::class, 'capacityCheck']);
         Route::post('delivery-contracts/{id}/approve', [DeliveryContractController::class, 'approve']);
         Route::post('delivery-contracts/{id}/cancel', [DeliveryContractController::class, 'cancel']);
 
