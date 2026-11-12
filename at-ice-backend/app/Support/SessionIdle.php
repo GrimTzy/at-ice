@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -15,6 +16,21 @@ use Laravel\Sanctum\PersonalAccessToken;
 class SessionIdle
 {
     private const KEY = 'session-activity:';
+
+    /** Name of the token the Android app gets: no idle and no absolute limit. */
+    public const APK_TOKEN = 'auth_token_apk';
+
+    /** The login came from the Android app (platform field) or an Android WebView. */
+    public static function isApkLogin(Request $request): bool
+    {
+        return $request->input('platform') === 'android'
+            || str_contains((string) $request->userAgent(), '; wv)');
+    }
+
+    public static function isApk(PersonalAccessToken $token): bool
+    {
+        return $token->name === self::APK_TOKEN;
+    }
 
     /** Minutes of inactivity allowed for this user, or null for no limit. */
     public static function minutesFor(User $user): ?int
@@ -45,7 +61,7 @@ class SessionIdle
     {
         $minutes = self::minutesFor($user);
         $idle = self::idleSeconds($token);
-        if (! $minutes || $idle === null) {
+        if (self::isApk($token) || ! $minutes || $idle === null) {
             return false;
         }
 

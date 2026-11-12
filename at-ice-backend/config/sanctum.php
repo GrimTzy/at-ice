@@ -49,7 +49,8 @@ return [
     |
     */
 
-    'expiration' => (int) env('SANCTUM_EXPIRATION', 1440),
+    // Off here: expiry is set per token at login (AuthController), so the Android app is not cut short.
+    'expiration' => null,
 
     /*
     |--------------------------------------------------------------------------

@@ -42,6 +42,9 @@ return [
     // app shows a countdown and signs out by itself at the same time; `grace`
     // only absorbs the delay between the two so a busy person is never cut off
     // by a race.
+    // Hours a browser sign-in lasts, even with activity. The Android app has no limit.
+    'web_token_hours' => (int) env('WEB_TOKEN_HOURS', 12),
+
     'session_idle' => [
         'minutes' => [
             'admin' => (int) env('IDLE_MINUTES_ADMIN', 30),

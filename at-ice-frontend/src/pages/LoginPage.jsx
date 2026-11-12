@@ -119,7 +119,7 @@ export default function LoginPage() {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: email.trim(), password, platform: "web" }),
       });
       const data = await res.json().catch(() => null);
       if (res.status === 429 && data?.retry_after_seconds) {

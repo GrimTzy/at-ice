@@ -23,9 +23,10 @@ const OPEN_TAB_LIMIT = 8 * 60 * 60_000;
 const INPUT_EVENTS = ["pointerdown", "pointermove", "keydown", "wheel", "scroll", "touchstart"];
 const WRITE_EVERY = 30_000;
 
+const IN_APK = /; wv\)/.test(navigator.userAgent); // Android WebView
 const now = () => Date.now();
 const limitMs = () => {
-  if (!localStorage.getItem("token")) return 0;
+  if (!localStorage.getItem("token") || IN_APK) return 0; // the Android app never signs out for being idle
   return Math.max(0, Number(localStorage.getItem("idle_minutes")) || 0) * 60_000;
 };
 const read = (key) => Number(localStorage.getItem(key)) || 0;

@@ -27,7 +27,7 @@ class EnforceIdleTimeout
         $token = $user?->currentAccessToken();
 
         // Only real sign-ins have a token row (tests that act as a user do not)
-        if (! $user || ! $token instanceof PersonalAccessToken || ! SessionIdle::minutesFor($user)) {
+        if (! $user || ! $token instanceof PersonalAccessToken || SessionIdle::isApk($token) || ! SessionIdle::minutesFor($user)) {
             return $next($request);
         }
 
