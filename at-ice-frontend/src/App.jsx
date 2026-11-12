@@ -65,7 +65,6 @@ const InterviewsPage = lazy(() => import('./pages/hr/InterviewsPage'))
 const TimesheetsPage = lazy(() => import('./pages/hr/TimesheetsPage'))
 const HolidaysPage = lazy(() => import('./pages/hr/HolidaysPage'))
 const PayrollRecordsPage = lazy(() => import('./pages/hr/PayrollRecordsPage'))
-const KioskPinPage = lazy(() => import('./pages/hr/KioskPinPage'))
 const RatesRulesPage = lazy(() => import('./pages/hr/RatesRulesPage'))
 
 // -- Employee Module
@@ -381,14 +380,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/hr/kiosk-pin"
-          element={
-            <ProtectedRoute allowedRoles={["hr"]}>
-              <KioskPinPage />
-            </ProtectedRoute>
-          }
-        />
+        {/* the Kiosk PIN page moved into Rates and rules > Kiosk (owner, 2026-11-12) */}
+        <Route path="/hr/kiosk-pin" element={<Navigate to="/hr/rates/kiosk" replace />} />
         {/* Rates and rules: moved from Admin > Settings, HR only */}
         <Route
           path="/hr/rates/:section?"

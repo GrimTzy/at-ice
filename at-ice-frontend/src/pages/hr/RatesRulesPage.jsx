@@ -2,6 +2,7 @@ import { Navigate, useParams } from "react-router-dom";
 import HrLayout from "../../components/HrLayout";
 import { RatesSection, PayRates } from "../../components/SystemSettings";
 import { TipsWidget } from "../../components/Insight";
+import KioskPinPanel from "../../components/KioskPinPanel";
 
 // HR > Rates and rules: one page per section (/hr/rates/{page}), each opened
 // from its own item of the Rates and rules menu in the sidebar (lib/nav.jsx;
@@ -14,7 +15,7 @@ const PAGES = [
   { key: "payroll", label: "Payroll", hint: "Pay period, paid hours, the daily-rate divisor, deductions and the night differential." },
   { key: "attendance", label: "Attendance", hint: "Default shift hours, break, grace minutes and work days." },
   { key: "leave", label: "Leave", hint: "Leave credits and how early sick and vacation leave are filed." },
-  { key: "kiosk", label: "Kiosk", hint: "Wrong PINs before a kiosk or a network address is locked." },
+  { key: "kiosk", label: "Kiosk", hint: "The kiosk PIN, the HR override PIN, locked kiosks, and the wrong PINs before a kiosk or a network address is locked." },
   { key: "memos", label: "Disciplinary memos", hint: "Missing Time Out drafts and how long an offense counts." },
   { key: "thirteenth", label: "13th month", hint: "The date the 13th month pay is credited." },
   { key: "records", label: "Records", hint: "A month after deactivation the login, face, documents and personal details are deleted; the attendance, leave and payroll records stay 3 years (DOLE), then are anonymized." },
@@ -22,6 +23,11 @@ const PAGES = [
 ];
 
 const TIPS = {
+  kiosk: [
+    { title: "Change the PIN after a staff change", text: "Every unlocked terminal locks again and needs the new PIN.", tone: "cyan", icon: "key" },
+    { title: "Five wrong PINs lock a kiosk", text: "HR and Admin get a notice and an email with the kiosk, time and IP.", tone: "rose", icon: "alert" },
+    { title: "Kiosks are for computers", text: "Phones and tablets cannot open the Attendance Station; it also needs a working camera.", tone: "violet", icon: "shield" },
+  ],
   "pay-rates": [
     { title: "Rates are dated", text: "A new rate applies from its date; past payrolls keep the rate of their day.", tone: "cyan", icon: "calendar" },
   ],
@@ -36,6 +42,11 @@ export default function RatesRulesPage() {
   return (
     <HrLayout pageTitle={`Rates and rules · ${page.label}`} breadcrumb={`Rates and rules / ${page.label}`}>
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+        {page.key === "kiosk" && (
+          <div className="xl:col-span-12 min-w-0">
+            <KioskPinPanel />
+          </div>
+        )}
         <div className="xl:col-span-8 flex flex-col gap-4 min-w-0">
           <section className="bg-white border border-black/[0.09] rounded-xl p-[18px]" aria-labelledby="rates-page-title">
             <h2 id="rates-page-title" className="text-[15px] font-semibold text-slate-800">{page.label}</h2>
