@@ -4,7 +4,7 @@ namespace App\Support;
 
 use App\Models\Delivery;
 use App\Models\DeliveryContract;
-use App\Models\RouteStop;
+use App\Models\DriverStoreAssignment;
 use App\Models\User;
 use Carbon\Carbon;
 
@@ -204,8 +204,6 @@ class RouteCapacity
             ->get(['customer_id', 'scheduled_date'])
             ->map(fn ($d) => $d->customer_id.'|'.$d->scheduledDateString())
             ->flip();
-
-        $routes = RouteStop::forCustomers($storeIds);
         $items = array_map(fn ($i) => ['product_type' => $i['product_type'], 'quantity' => (int) $i['quantity']], $contract->items ?? []);
         $plan = [];
         $withoutDriver = 0;
@@ -214,7 +212,7 @@ class RouteCapacity
                 if (isset($booked[$storeId.'|'.$date])) {
                     continue;
                 }
-                $driverId = DeliveryDispatch::driverFor($storeId, $date, $routes);
+                $driverId = DriverStoreAssignment::driverFor($storeId, $date);
                 if (! $driverId) {
                     $withoutDriver++;
 

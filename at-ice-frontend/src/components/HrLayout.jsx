@@ -6,6 +6,7 @@ import { NightStyle, NightToggle } from "./NightMode";
 import { ambientStyle, useNightMode } from "../lib/theme";
 import { useLogoutConfirm } from "../lib/useLogoutConfirm";
 import HeaderAvatar from "./HeaderAvatar";
+import NoticeBell from "./NoticeBell";
 import SidebarSignOut from "./SidebarSignOut";
 import LiveClock from "./LiveClock";
 import { initialsOf } from "../lib/initials";
@@ -105,6 +106,7 @@ export default function HrLayout({ pageTitle, breadcrumb, headerActions, childre
           </div>
           <div className="flex-1" />
           {headerActions}
+          <NoticeBell />
           <NightToggle dark={dark} onToggle={() => setDark((d) => !d)} />
           <LiveClock compact />
           <HeaderAvatar initials={initials} name={user?.name || "HR Staff"} subtitle={user?.email || "HR"} onSignOut={askLogout} />

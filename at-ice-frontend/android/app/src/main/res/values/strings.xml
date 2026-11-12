@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AT-ICE</string>
+    <string name="title_activity_main">AT-ICE</string>
+    <string name="package_name">com.atice.erp</string>
+    <string name="custom_url_scheme">com.atice.erp</string>
+</resources>

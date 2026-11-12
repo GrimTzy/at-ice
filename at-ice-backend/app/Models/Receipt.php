@@ -62,7 +62,8 @@ class Receipt extends Model
     }
 
     // An unpaid receipt becomes overdue this many days after it was made.
-    public const OVERDUE_DAYS = 15;
+    // Client's terms: an invoice is due 14 days from its date (QA review, 2026-11-11)
+    public const OVERDUE_DAYS = 14;
 
     // Marks unpaid receipts older than OVERDUE_DAYS as overdue. Every page that
     // shows receipts calls this first (there is no scheduler), so they all agree.

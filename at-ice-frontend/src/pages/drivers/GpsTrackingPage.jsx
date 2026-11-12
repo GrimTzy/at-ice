@@ -245,7 +245,7 @@ export function GpsTrackingPage() {
   }, []);
 
   return (
-    <div className="gps-root h-[100dvh] overflow-hidden flex flex-col font-sans bg-slate-50">
+    <div data-no-pull className="gps-root h-[100dvh] overflow-hidden flex flex-col font-sans bg-slate-50">
       <MobileHeader
         role="driver"
         title="GPS Tracking"

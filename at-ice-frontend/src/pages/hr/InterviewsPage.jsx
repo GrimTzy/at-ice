@@ -62,7 +62,7 @@ const toList = (d) => (Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : 
 // Positions at Bella Erin (an older free-text value is still shown)
 const POSITIONS = APPLICANT_POSITIONS;
 
-const STATUS_LABEL = { pending: "Pending", interviewed: "Interviewed", hired: "Hired", rejected: "Declined" };
+const STATUS_LABEL = { pending: "Pending", interviewed: "Interviewed", hired: "Hired", rejected: "Rejected" };
 const STATUS_CLASS = {
   pending: "bg-amber-100 text-amber-600",
   interviewed: "bg-cyan-100 text-cyan-600",
@@ -172,10 +172,7 @@ function Modal({ title, onClose, children, width = "max-w-lg" }) {
 // QR code of the public application form (/apply). People scan it with their
 // phone, fill in the form, and the application shows up here as Pending ("QR").
 function ApplyQrModal({ onClose }) {
-  // Blank: the general form. An employee ID: that employee's referral link.
-  const [referrer, setReferrer] = useState("");
-  const code = /^EMP-\d{4,}$/i.test(referrer.trim()) ? referrer.trim().toUpperCase() : "";
-  const url = applyUrl(code);
+  const url = applyUrl();
   const [qr, setQr] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -218,12 +215,6 @@ function ApplyQrModal({ onClose }) {
         <p className="text-[12px] text-slate-500">
           Applicants scan this with their phone to fill in the job application form. Each one shows up here as <b>Pending</b>, marked <b>QR</b>.
         </p>
-        <label className="w-full flex flex-col gap-1 text-left">
-          <span className="text-[11px] text-slate-500">Referral QR for an employee (optional)</span>
-          <input name="referrer" value={referrer} onChange={(e) => setReferrer(e.target.value)} placeholder="Employee ID, e.g. EMP-0001"
-            className="px-2.5 py-1.5 border border-black/[0.09] rounded-md text-xs font-mono" />
-          <span className="text-[10px] text-slate-400">{code ? `Applicants who use this QR are recorded as referred by ${code}. Any referral bonus is added by Admin in payroll.` : "Leave blank for the general application QR."}</span>
-        </label>
         <div className="w-60 h-60 rounded-lg border border-black/[0.09] bg-white flex items-center justify-center overflow-hidden">
           {qr ? <img src={qr} alt={`QR code for ${url}`} className="w-full h-full" /> : <span className="text-[11px] text-slate-400">Making the QR code…</span>}
         </div>
@@ -646,11 +637,8 @@ export default function InterviewsPage() {
                             {!isFinal(a) && (
                               <button onClick={() => openEdit(a)} className={`${actionBtn} border-black/[0.09] text-slate-600 hover:border-cyan-400 hover:text-cyan-500`}>Edit</button>
                             )}
-                            {a.status === "hired" && !a.employee_id && (
+                            {a.status === "hired" && (
                               <button onClick={() => addAsEmployee(a)} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`} title="Open Add Employee with this applicant's details">Add as Employee</button>
-                            )}
-                            {a.status === "hired" && a.employee_id && (
-                              <span className="text-[11px] text-emerald-700 font-medium" title="This applicant already has an employee record">Employee {a.employee?.employee_id || ""}</span>
                             )}
                             {a.status === "pending" && (interviewDue(a) ? (
                               <button data-no-confirm onClick={() => openStatus(a, "interviewed")} className={`${actionBtn} border-cyan-200 text-cyan-600 hover:bg-cyan-50`}>Mark Interviewed</button>
@@ -661,7 +649,7 @@ export default function InterviewsPage() {
                               <button data-no-confirm onClick={() => openStatus(a, "hired")} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`}>Hire</button>
                             )}
                             {(a.status === "pending" || a.status === "interviewed") && (
-                              <button data-no-confirm onClick={() => openStatus(a, "rejected")} className={`${actionBtn} border-transparent bg-red-500 text-white`}>Decline</button>
+                              <button data-no-confirm onClick={() => openStatus(a, "rejected")} className={`${actionBtn} border-transparent bg-red-500 text-white`}>Reject</button>
                             )}
                             {!isFinal(a) && (
                               <button data-no-confirm onClick={() => { setDeleteTarget(a); setDeleteError(""); }} className={`${actionBtn} border-black/[0.09] text-slate-500 hover:border-red-300 hover:text-red-500`}>Delete</button>
@@ -702,7 +690,7 @@ export default function InterviewsPage() {
               </div>
             ) : null}
             <Field label="Full Name">
-              <input name="name" type="text" maxLength={255} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Juan Dela Cruz" />
+              <input name="name" type="text" maxLength={50} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Juan Dela Cruz" />
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -799,7 +787,7 @@ export default function InterviewsPage() {
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 className={`${inputClass} resize-y`}
-                placeholder="Referral, requirements submitted, interview remarks"
+                placeholder="Requirements submitted, interview remarks"
               />
             </Field>
 
@@ -879,7 +867,6 @@ export default function InterviewsPage() {
               ["Email", viewing.email || "—"],
               ["Applied Through", viewing.source === "qr" ? "QR code form (filled in by the applicant)" : "Added by HR"],
               ["Submitted", fmtDateTime(viewing.created_at)],
-              ["Referred By", viewing.referred_by ? `${viewing.referred_by.employee_id} · ${[viewing.referred_by.first_name, viewing.referred_by.last_name].filter(Boolean).join(" ")}` : "—"],
               ["Possible Duplicate", (viewing.possible_duplicates || []).length === 0 ? "—" : (
                 <span className="flex flex-col gap-1">
                   {viewing.possible_duplicates.map((d) => (
@@ -932,7 +919,7 @@ export default function InterviewsPage() {
               <div className="text-[11px] text-slate-400 pt-1">This applicant is {STATUS_LABEL[viewing.status]}. The interview record is view only.</div>
             )}
             <div className="flex justify-end gap-2 pt-2">
-              {viewing.status === "hired" && !viewing.employee_id && (
+              {viewing.status === "hired" && (
                 <button onClick={() => addAsEmployee(viewing)} className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-md cursor-pointer">Add as Employee</button>
               )}
               <button onClick={() => setViewing(null)} className="px-3.5 py-2 border border-black/[0.09] rounded-md text-xs text-slate-600 cursor-pointer hover:bg-slate-50">Close</button>

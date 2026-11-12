@@ -265,18 +265,17 @@ export default function CustomerPriceManagement() {
                     {PRODUCT_LABELS[p]}
                   </th>
                 ))}
-                <th className="px-[18px] py-2.5 font-medium">Status</th>
                 <th className="px-[18px] py-2.5 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <SkeletonTableRows cols={6} />
+                <SkeletonTableRows cols={5} />
               )}
 
               {!loading && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
+                  <td colSpan={5}className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
                     {search ? "No customers match your search." : "No customers found."}
                   </td>
                 </tr>
@@ -285,8 +284,6 @@ export default function CustomerPriceManagement() {
               {!loading &&
                 pager.pageItems.map((row) => {
                   const isEditing = editingId === row.customer_id;
-                  const complete = setCount(row) === 3;
-                  const partial = setCount(row) > 0 && !complete;
 
                   return (
                     <tr
@@ -328,20 +325,6 @@ export default function CustomerPriceManagement() {
                           )}
                         </td>
                       ))}
-
-                      <td className="px-[18px] py-2.5">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                            complete
-                              ? "bg-cyan-50 text-cyan-700"
-                              : partial
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {complete ? "Complete" : partial ? "Partial" : "Unpriced"}
-                        </span>
-                      </td>
 
                       <td className="px-[18px] py-2.5 text-right">
                         {isEditing ? (
@@ -393,13 +376,13 @@ export default function CustomerPriceManagement() {
         <Pagination pager={pager} />
       </div>
 
-      <ReferencePrices onChanged={fetchPrices} />
+      <ReferencePrices rows={rows} onChanged={fetchPrices} />
     </AdminLayout>
   );
 }
 // Reference prices per customer type (client-confirmed table, v25.7), editable.
 // "Apply to all" makes every customer of that type drop its own prices.
-function ReferencePrices({ onChanged }) {
+function ReferencePrices({ rows, onChanged }) {
   const [data, setData] = useState(null);
   const [editing, setEditing] = useState(null); // customer type
   const [draft, setDraft] = useState({});
@@ -428,6 +411,9 @@ function ReferencePrices({ onChanged }) {
 
   // The spinner shows until the server answers, and at least 1 second so
   // the change can be seen; one click only (the button is locked meanwhile).
+  // Customers of this type with at least one own price, which Apply to all removes
+  const withOwn = (type) => rows.filter((r) => (r.customer_type || "dealer") === type && Object.values(r.source || {}).includes("custom"));
+
   async function apply(type) {
     if (applying) return;
     setApplying(true);
@@ -514,7 +500,12 @@ function ReferencePrices({ onChanged }) {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-sm p-5">
             <h3 className="text-[14px] font-semibold text-slate-800 mb-1.5">Use the reference prices for every {CUSTOMER_TYPES[confirmApply]?.label} customer?</h3>
-            <p className="text-[12px] text-slate-500 mb-4">Their own prices are removed, so they all pay the reference prices from now on. Deliveries already made keep their prices.</p>
+            <p className="text-[12px] text-slate-500 mb-4">
+              {withOwn(confirmApply).length
+                ? <>The own prices of <b>{withOwn(confirmApply).length === 1 ? "1 customer" : `${withOwn(confirmApply).length} customers`}</b> ({withOwn(confirmApply).slice(0, 3).map((r) => r.customer_name).join(", ")}{withOwn(confirmApply).length > 3 ? ", …" : ""}) are removed, so they pay the reference prices from now on.</>
+                : "No customer of this type has its own price, so nothing changes."}
+              {" "}Deliveries already made keep their prices.
+            </p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmApply(null)} disabled={applying} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 text-[12px] disabled:opacity-50">Back</button>
               <button onClick={() => apply(confirmApply)} disabled={applying} aria-busy={applying || undefined} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-80 disabled:cursor-wait">

@@ -4,9 +4,8 @@ namespace Tests\Feature;
 
 use App\Console\Commands\ImportRoutes;
 use App\Models\Customer;
-use App\Models\DeliveryRoute;
 use App\Models\ReferencePrice;
-use App\Models\RouteStop;
+use App\Models\StoreRoute;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -63,7 +62,7 @@ class ImportRoutesTest extends TestCase
 
         $this->assertSame(0, Customer::count());
         $this->assertSame(0, User::count());
-        $this->assertSame(0, DeliveryRoute::count());
+        $this->assertSame(0, StoreRoute::count());
         $this->assertSame([], Storage::disk('local')->allFiles());
     }
 
@@ -71,18 +70,18 @@ class ImportRoutesTest extends TestCase
     {
         $this->artisan('routes:import', ['file' => $this->dir.'/routes.csv'])->assertSuccessful();
 
-        $this->assertSame(['A', 'D'], DeliveryRoute::orderBy('code')->pluck('code')->all());
+        $this->assertSame(['Route A', 'Route D'], StoreRoute::orderBy('name')->pluck('name')->all());
         $this->assertSame(6, Customer::count());
 
-        // the 3 SM tenants share stop 1 of Route D, the Alfamart is stop 2
-        $d = DeliveryRoute::where('code', 'D')->first();
-        $stops = RouteStop::with('customer')->where('route_id', $d->id)->orderBy('stop_order')->orderBy('id')->get();
-        $this->assertSame([1, 1, 1, 2], $stops->pluck('stop_order')->all());
-        $this->assertSame('Savory - SM City San Jose del Monte', $stops[0]->customer->name);
-        $this->assertSame('SM City San Jose del Monte', $stops[0]->stop_group);
-        $this->assertSame('supermarket', $stops[0]->customer->customer_type);
-        $this->assertSame('SM', $stops[0]->customer->chain);
-        $this->assertSame('convenience_store', $stops[3]->customer->customer_type);
+        // the 3 SM tenants and the Alfamart are on Route D, the two Alfamarts on Route A
+        $d = StoreRoute::where('name', 'Route D')->first();
+        $stores = $d->stores()->orderBy('id')->get();
+        $this->assertCount(4, $stores);
+        $this->assertCount(2, StoreRoute::where('name', 'Route A')->first()->stores);
+        $this->assertSame('Savory - SM City San Jose del Monte', $stores[0]->name);
+        $this->assertSame('supermarket', $stores[0]->customer_type);
+        $this->assertSame('SM', $stores[0]->chain);
+        $this->assertSame('convenience_store', $stores[3]->customer_type);
 
         $halili = Customer::where('name', 'Alfamart Gov. F Halili Gaya-Gaya SJDM')->first();
         $this->assertSame('Governor Fortunato Halili Avenue', $halili->street);
@@ -124,7 +123,7 @@ class ImportRoutesTest extends TestCase
 
         $this->assertSame(6, Customer::count());
         $this->assertSame(6, User::count());
-        $this->assertSame(6, RouteStop::count());
+        $this->assertSame(6, Customer::whereNotNull('store_route_id')->count());
         $this->assertCount(1, Storage::disk('local')->files());
     }
 
@@ -160,8 +159,7 @@ class ImportRoutesTest extends TestCase
 
         $this->assertSame(0, Customer::count());
         $this->assertSame(0, User::count());
-        $this->assertSame(0, DeliveryRoute::count());
-        $this->assertSame(0, RouteStop::count());
+        $this->assertSame(0, StoreRoute::count());
         $this->assertSame([], Storage::disk('local')->allFiles());
         Mail::assertNothingSent();
     }
@@ -193,7 +191,7 @@ class ImportRoutesTest extends TestCase
             ->doesntExpectOutputToContain('Small Sack')
             ->assertSuccessful();
 
-        $this->assertSame(['A', 'D'], DeliveryRoute::orderBy('code')->pluck('code')->all());
+        $this->assertSame(['Route A', 'Route D'], StoreRoute::orderBy('name')->pluck('name')->all());
         $this->assertSame(6, Customer::count());
         $this->assertCount(1, Storage::disk('local')->files());
     }

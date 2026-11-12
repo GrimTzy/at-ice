@@ -45,10 +45,14 @@ class LeaveRulesTest extends TestCase
         return UploadedFile::fake()->create('medcert.pdf', 100, 'application/pdf');
     }
 
-    public function test_credits_are_half_a_day_per_cutoff_from_january_and_capped(): void
+    // 15 VL and 15 SL a year once regular, a 26th of each for every pay period that ends
+    public function test_vl_and_sl_credits_are_15_days_a_year_each(): void
     {
-        // Pay periods ending from Jan 1 to Oct 14, 2026: Jan 4 ... Oct 11 = 21 periods
-        $this->assertSame(['year' => 2026, 'earned' => 10.5, 'used' => 0.0, 'available' => 10.5], LeaveCredits::for($this->employee));
+        // Pay periods ending from Jan 1 to Oct 14, 2026: Jan 4 ... Oct 11 = 21 periods: 21 x 15 / 26 = 12.12
+        $credits = LeaveCredits::for($this->employee);
+        $this->assertSame(['earned' => 12.12, 'used' => 0.0, 'available' => 12.12], $credits['vacation']);
+        $this->assertSame(['earned' => 12.12, 'used' => 0.0, 'available' => 12.12], $credits['sick']);
+        $this->assertSame(24.24, $credits['available']);
 
         // Probationary: no credits
         $this->employee->update(['employment_status' => 'probationary']);
@@ -56,11 +60,13 @@ class LeaveRulesTest extends TestCase
 
         // Regular since Oct 1: only the period ending Oct 11
         $this->employee->update(['employment_status' => 'regular', 'regularized_at' => '2026-10-01']);
-        $this->assertSame(0.5, LeaveCredits::for($this->employee->fresh())['earned']);
+        $this->assertSame(0.58, LeaveCredits::for($this->employee->fresh())['vacation']['earned']);
 
-        // A full year is 26 pay periods = 13 days (the 15-day cap is never reached at 0.5)
+        // A full year is 26 pay periods = 15 days of each
         $this->employee->update(['regularized_at' => '2024-01-01']);
-        $this->assertSame(13.0, LeaveCredits::for($this->employee->fresh(), '2026-12-31')['earned']);
+        $full = LeaveCredits::for($this->employee->fresh(), '2026-12-31');
+        $this->assertSame(15.0, $full['vacation']['earned']);
+        $this->assertSame(15.0, $full['sick']['earned']);
     }
 
     public function test_probationary_employees_cannot_file_leave(): void
@@ -68,7 +74,7 @@ class LeaveRulesTest extends TestCase
         $this->employee->update(['employment_status' => 'probationary']);
         $this->file(['leave_type' => 'vacation', 'start_date' => '2026-11-03', 'end_date' => '2026-11-03'])
             ->assertStatus(422)
-            ->assertJsonPath('errors.leave_type.0', 'Leave cannot be filed while probationary. Absences during probation are unpaid.');
+            ->assertJsonPath('errors.leave_type.0', 'Vacation, emergency and sick leave cannot be filed while probationary. Absences during probation are unpaid.');
     }
 
     public function test_vacation_leave_needs_14_days_notice(): void
@@ -96,12 +102,12 @@ class LeaveRulesTest extends TestCase
         $this->employee->update(['regularized_at' => '2026-10-12']);
         LeaveRequest::query()->delete();
         $this->file(['leave_type' => 'sick', 'start_date' => '2026-10-13', 'attachment' => $this->medcert()])
-            ->assertStatus(422)->assertJsonPath('errors.leave_type.0', 'Not enough leave credits for sick leave (0 day(s) left).');
+            ->assertStatus(422)->assertJsonPath('errors.leave_type.0', 'Not enough sick leave credits (0 day(s) left).');
     }
 
-    public function test_emergency_leave_in_hours_is_paid_from_credits_then_unpaid(): void
+    public function test_emergency_leave_in_hours_is_paid_from_vl_credits_then_unpaid(): void
     {
-        $this->employee->update(['regularized_at' => '2026-10-01']); // 0.5 day of credit
+        $this->employee->update(['regularized_at' => '2026-10-01']); // 0.58 day of VL credit
         $this->file(['leave_type' => 'emergency', 'start_date' => '2026-10-14', 'hours' => 6])->assertCreated();
         $leave = LeaveRequest::first();
         $this->assertEquals(6, (float) $leave->hours);
@@ -110,10 +116,12 @@ class LeaveRulesTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
         $this->putJson("/api/leave-requests/{$leave->id}/status", ['status' => 'approved'])->assertOk();
         $leave->refresh();
-        $this->assertEquals(0.5, (float) $leave->paid_days);   // 4 hours paid from credits
-        $this->assertEquals(0.25, (float) $leave->unpaid_days); // 2 hours unpaid
+        $this->assertEquals(0.58, (float) $leave->paid_days);   // paid from the VL credits
+        $this->assertEquals(0.17, (float) $leave->unpaid_days); // the rest unpaid
         $this->assertFalse($leave->is_paid);
-        $this->assertSame(0.0, LeaveCredits::for($this->employee->fresh())['available']);
+        $credits = LeaveCredits::for($this->employee->fresh());
+        $this->assertSame(0.0, $credits['vacation']['available']);
+        $this->assertSame(0.58, $credits['sick']['available']); // the SL credits are separate
     }
 
     public function test_no_overlapping_requests(): void
@@ -163,10 +171,10 @@ class LeaveRulesTest extends TestCase
         $this->file(['leave_type' => 'vacation', 'start_date' => '2026-11-30', 'end_date' => '2026-11-30'])
             ->assertStatus(422)->assertJsonPath('errors.start_date.0', 'Nov 30, 2026 is a holiday (Bonifacio Day). No leave is needed: you are not marked absent on a holiday.');
         $this->file(['leave_type' => 'vacation', 'start_date' => '2026-11-01', 'end_date' => '2026-11-02'])
-            ->assertStatus(422)->assertJsonPath('errors.start_date.0', 'Every day in this range is a holiday. No leave is needed.');
+            ->assertStatus(422)->assertJsonPath('errors.start_date.0', 'Every day in this range is a rest day or a holiday. No leave is needed.');
 
-        // Nov 29 to Dec 1: 3 days with the holiday in the middle = 2 leave days
+        // Sun Nov 29 to Tue Dec 1: a rest day, the holiday, then Dec 1 = 1 leave day
         $this->file(['leave_type' => 'vacation', 'start_date' => '2026-11-29', 'end_date' => '2026-12-01'])->assertCreated();
-        $this->assertEquals(2, (float) LeaveRequest::first()->total_days);
+        $this->assertEquals(1, (float) LeaveRequest::first()->total_days);
     }
 }

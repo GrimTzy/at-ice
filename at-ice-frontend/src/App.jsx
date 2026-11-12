@@ -5,11 +5,13 @@ import { NightScope } from './components/NightMode'
 import MobileAppShell from './components/MobileAppShell'
 import LightOnly from './components/LightOnly'
 import SplashScreen from './components/SplashScreen'
+import AppUpdatePrompt from './components/AppUpdatePrompt'
 import SoftPickers from './components/SoftPickers'
 import Toaster from './components/Toaster'
 import ActionGuard from './components/ActionGuard'
 import AttachmentViewer from './components/AttachmentViewer'
 import OverflowTitle from './components/OverflowTitle'
+import IdleGuard from './components/IdleGuard'
 import RouteLoading from './components/RouteLoading'
 import { DestinationWatcher } from './lib/destination'
 import { installHeroPulse } from './lib/heroPulse'
@@ -64,7 +66,6 @@ const InterviewsPage = lazy(() => import('./pages/hr/InterviewsPage'))
 const TimesheetsPage = lazy(() => import('./pages/hr/TimesheetsPage'))
 const HolidaysPage = lazy(() => import('./pages/hr/HolidaysPage'))
 const PayrollRecordsPage = lazy(() => import('./pages/hr/PayrollRecordsPage'))
-const KioskPinPage = lazy(() => import('./pages/hr/KioskPinPage'))
 const RatesRulesPage = lazy(() => import('./pages/hr/RatesRulesPage'))
 
 // -- Employee Module
@@ -86,9 +87,11 @@ function App() {
       <SplashScreen />
       <SoftPickers />
       <Toaster />
+      <AppUpdatePrompt />
       <ActionGuard />
       <AttachmentViewer />
       <OverflowTitle />
+      <IdleGuard />
       <DestinationWatcher />
       {/* Pages load on demand (React.lazy); the loader fades in only if a page is slow */}
       <Suspense fallback={<RouteLoading />}>
@@ -102,8 +105,8 @@ function App() {
         <Route path="/forgot-password" element={<LightOnly><ForgotPasswordPage /></LightOnly>} />
         {/* Public job application form, opened from the QR code in HRIS > Interviews */}
         <Route path="/apply" element={<LightOnly><ApplyPage /></LightOnly>} />
-        {/* The same form from an employee's referral link (records who referred) */}
-        <Route path="/job-applications/:referrer" element={<LightOnly><ApplyPage /></LightOnly>} />
+        {/* Old referral QR links open the general form (referrals were removed, QA review 2026-11-11) */}
+        <Route path="/job-applications/:code" element={<Navigate to="/apply" replace />} />
 
         {/* Old per-role login links still work: they all go to the one login page. */}
         {["/admin/login", "/hr/login", "/driver/login", "/customer/login", "/checker/login", "/salesman/login", "/maintenance/login"].map((path) => (
@@ -379,14 +382,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/hr/kiosk-pin"
-          element={
-            <ProtectedRoute allowedRoles={["hr"]}>
-              <KioskPinPage />
-            </ProtectedRoute>
-          }
-        />
+        {/* the Kiosk PIN page moved into Rates and rules > Kiosk (owner, 2026-11-12) */}
+        <Route path="/hr/kiosk-pin" element={<Navigate to="/hr/rates/kiosk" replace />} />
         {/* Rates and rules: moved from Admin > Settings, HR only */}
         <Route
           path="/hr/rates/:section?"

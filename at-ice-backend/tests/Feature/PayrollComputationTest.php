@@ -61,7 +61,10 @@ class PayrollComputationTest extends TestCase
     {
         $this->assertSame(['2026-10-02', '2026-10-16', '2026-10-30'], PayPeriod::payDaysInMonth(2026, 10));
 
-        // SPLIT_FIRST_TWO (the owner's choice): half, half, nothing
+        // SECOND_PAYROLL_OF_MONTH (the default, QA review 2026-11-12): all on the 2nd pay day
+        $this->assertSame([0.0, 1.0, 0.0], array_map(fn ($d) => PayrollCalculator::governmentShare($d), PayPeriod::payDaysInMonth(2026, 10)));
+        // SPLIT_FIRST_TWO: half, half, nothing
+        Settings::set('payroll.gov_deduction_strategy', 'SPLIT_FIRST_TWO');
         $this->assertSame([0.5, 0.5, 0.0], array_map(fn ($d) => PayrollCalculator::governmentShare($d), PayPeriod::payDaysInMonth(2026, 10)));
         // FIRST_PAYROLL_OF_MONTH: all on the first
         Settings::set('payroll.gov_deduction_strategy', 'FIRST_PAYROLL_OF_MONTH');
@@ -71,8 +74,10 @@ class PayrollComputationTest extends TestCase
     public function test_government_shares_for_a_16000_monthly_employee(): void
     {
         // Monthly: SSS 5% of 16,000 = 800; PhilHealth 2.5% = 400; Pag-IBIG 2% capped at 200
-        $g = PayrollCalculator::government(16000, '2026-10-16'); // 2nd pay day: half
-        $this->assertEqualsWithDelta([400, 200, 100], [$g['sss'], $g['philhealth'], $g['pagibig']], 0.001);
+        $g = PayrollCalculator::government(16000, '2026-10-16'); // 2nd pay day: the whole month
+        $this->assertEqualsWithDelta([800, 400, 200], [$g['sss'], $g['philhealth'], $g['pagibig']], 0.001);
+        $g = PayrollCalculator::government(16000, '2026-10-02'); // 1st pay day: none
+        $this->assertEqualsWithDelta([0, 0, 0], [$g['sss'], $g['philhealth'], $g['pagibig']], 0.001);
         $g = PayrollCalculator::government(16000, '2026-10-30'); // 3rd pay day: none
         $this->assertEqualsWithDelta([0, 0, 0], [$g['sss'], $g['philhealth'], $g['pagibig']], 0.001);
     }
@@ -120,9 +125,9 @@ class PayrollComputationTest extends TestCase
         $this->assertEquals(1099.42, $p['leave_deduction']);    // 732.94 + 4 x 91.62
         $this->assertEquals(15.27, $p['late_deduction']);       // 10 x 91.62 / 60
         $this->assertEquals(5536.99, $p['gross_pay']);
-        $this->assertEquals([400, 200, 100], [(float) $p['sss_deduction'], (float) $p['philhealth_deduction'], (float) $p['pagibig_deduction']]);
+        $this->assertEquals([800, 400, 200], [(float) $p['sss_deduction'], (float) $p['philhealth_deduction'], (float) $p['pagibig_deduction']]);
         $this->assertEquals(0, $p['tax_deduction']);
-        $this->assertEquals(4836.99, $p['net_pay']);
+        $this->assertEquals(4136.99, $p['net_pay']);    // 5,536.99 - 1,400
     }
 
     public function test_a_mid_period_hire_is_paid_from_the_hire_date(): void
@@ -145,11 +150,11 @@ class PayrollComputationTest extends TestCase
         }
         $p = PayrollCalculator::compute($e, self::SEP28);
         $this->assertEquals(46153.85, $p['gross_pay']);
-        // SSS 5% of 35,000 (ceiling) = 1,750; PhilHealth 2.5% of 100,000 = 2,500; Pag-IBIG 200; half each
-        $this->assertEquals([875, 1250, 100], [(float) $p['sss_deduction'], (float) $p['philhealth_deduction'], (float) $p['pagibig_deduction']]);
-        // (46,153.85 - 2,225) x 26 = 1,142,150 a year: 102,500 + 25% over 800,000 = 188,037.50 / 26
-        $this->assertEquals(7232.21, $p['tax_deduction']);
-        $this->assertEquals(36696.63, $p['net_pay']);
+        // SSS 5% of 35,000 (ceiling) = 1,750; PhilHealth 2.5% of 100,000 = 2,500; Pag-IBIG 200; the whole month on the 2nd pay day
+        $this->assertEquals([1750, 2500, 200], [(float) $p['sss_deduction'], (float) $p['philhealth_deduction'], (float) $p['pagibig_deduction']]);
+        // (46,153.85 - 4,450) x 26 = 1,084,300.10 a year: 102,500 + 25% over 800,000 = 173,575.03 / 26
+        $this->assertEquals(6675.96, $p['tax_deduction']);
+        $this->assertEquals(35027.88, $p['net_pay']);   // 46,153.85 - 4,450 - 6,675.96, the cent is the gross not yet rounded
     }
 
     public function test_hr_approves_timesheets_and_pays_with_adjustments(): void
@@ -171,7 +176,7 @@ class PayrollComputationTest extends TestCase
         $this->assertEquals(600, (float) $payroll->net_pay);
 
         $this->getJson('/api/payroll-records?date=2026-10-14')->assertOk()->assertJsonPath('rows.0.payroll.status', 'unpaid');
-        $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])->assertCreated();
+        $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Bonus', 'amount' => 500, 'taxable' => false])->assertCreated();
         $this->assertEquals(1100, (float) $payroll->fresh()->net_pay);
 
         $this->postJson('/api/payrolls/mark-paid', ['ids' => [$payroll->id]])->assertOk();
@@ -208,7 +213,7 @@ class PayrollComputationTest extends TestCase
         $this->postJson('/api/timesheets/approve', ['date' => '2026-10-14', 'employee_ids' => [$e->id]])->assertOk();
         $payroll = Payroll::first();
 
-        $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])
+        $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Bonus', 'amount' => 500, 'taxable' => false])
             ->assertCreated()->json('adjustments.0.id');
         $this->assertEquals(1100, (float) $payroll->fresh()->net_pay);
 
@@ -227,7 +232,7 @@ class PayrollComputationTest extends TestCase
         $this->postJson('/api/timesheets/approve', ['date' => '2026-10-14', 'employee_ids' => [$e->id]])->assertOk();
         $payroll = Payroll::first();
 
-        $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])
+        $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Bonus', 'amount' => 500, 'taxable' => false])
             ->assertCreated()->json('adjustments.0.id');
         $this->postJson('/api/payrolls/mark-paid', ['ids' => [$payroll->id]])->assertOk();
 

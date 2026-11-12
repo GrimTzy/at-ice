@@ -16,7 +16,7 @@ const SKIP_PATHS = ["/attendance-station", "/login", "/forgot-password", "/reset
 const w = (words) => new RegExp(`^(${words})(?![a-z])`);
 
 // Verbs (start of the button's label) that change records
-const DANGER = w("delete|remove|deactivate|anonymize|discard|reject|decline|cancel request|cancel movement|cancel delivery|end assignment|sign out other");
+const DANGER = w("delete|remove|deactivate|anonymize|discard|reject|cancel request|cancel movement|cancel delivery|end assignment|sign out other");
 const ACTION = w("approve|release|hire|mark|reactivate|use reference|apply to all|unlock|re-enroll|resend|regenerate|restore|reopen|close ticket");
 // Saving a form (only its submit, or the main button of a form dialog)
 const SAVE = w("save|update|create|submit|add|send|upload|request|log|file|book|set|change|post|apply|generate|approve");
@@ -27,7 +27,7 @@ const CONSEQUENCE = [
   [w("reactivate"), "It becomes active again with the same ID."],
   [w("anonymize"), "Names and contact details are removed for good."],
   [w("discard"), "What you typed is thrown away."],
-  [w("reject|decline"), "The request is turned down."],
+  [w("reject"), "The request is turned down."],
   [w("cancel"), "It is cancelled and cannot be resumed."],
   [w("approve"), "It is approved and the next step starts."],
   [w("release"), "The items are taken out of stock."],
@@ -37,8 +37,8 @@ const CONSEQUENCE = [
   [w("use reference|apply to all"), "Prices go back to the reference prices of the type."],
   [w("unlock"), "The device can be used again."],
   [w("sign out other"), "Every other device is signed out."],
-  [w("save|update|change|set"), "Your changes will be saved."],
-  [w("create|add|submit|request|log|file|book|post|generate|send|upload|apply"), "It will be saved and sent right away."],
+  [w("save|update|change|set"), "Your changes are saved."],
+  [w("create|add|submit|request|log|file|book|post|generate|send|upload|apply"), "It is saved and sent right away."],
 ];
 
 // Approve says what is approved and what happens next, per page:
@@ -58,7 +58,7 @@ const TIPS = [
   [w("deactivate"), "Deactivates this record (kept in history). You are asked to confirm."],
   [w("reactivate"), "Brings this record back. You are asked to confirm."],
   [w("approve"), "Approves this. You are asked to confirm first."],
-  [w("reject|decline"), "Turns this down. You are asked to confirm first."],
+  [w("reject"), "Turns this down. You are asked to confirm first."],
   [w("release"), "Releases the items from stock. You are asked to confirm."],
   [/^mark .*paid/, "Records the payment as final. You are asked to confirm."],
   [w("mark"), "Changes the status. You are asked to confirm first."],

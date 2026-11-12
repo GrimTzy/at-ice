@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import RoleShell from "../../components/RoleShell";
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import { LoadingButton, BottomSheet, ActionBar, ErrorBanner, SuccessBanner, EmptyCard, CardSkeleton, Icon } from "../../components/MobileUi";
 import { CARD, FIELD, TEXTAREA, LABEL } from "../../lib/mobileUi";
 import PhoneInput from "../../components/PhoneInput";
@@ -8,6 +10,7 @@ import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 import AddressFields from "../../components/AddressFields";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
@@ -124,11 +127,21 @@ export default function CheckerSupplierManagementPage() {
 
   const q = query.trim().toLowerCase();
   const visible = q ? suppliers.filter((s) => `${s.name} ${s.supplier_code} ${s.contact_person || ""} ${s.city || ""}`.toLowerCase().includes(q)) : suppliers;
+  // 10 a page like every list; the bar docks above the bottom navigation
+  const pager = usePagination(visible);
+  useNoticeRecord(status === "ready", (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "supplier") return;
+    setQuery("");
+    pager.reveal((row) => String(row.id) === id);
+  });
+  const paged = status === "ready" && pager.total > PAGE_SIZES[0];
 
   return (
     <RoleShell
       role="checker"
       title="Suppliers"
+      paged={paged}
       actionBar={<ActionBar><LoadingButton onClick={startCreate} disabled={timedIn === false}><Icon name="plus" /> Add supplier</LoadingButton></ActionBar>}
       subHeader={
         <div className="relative">
@@ -148,8 +161,8 @@ export default function CheckerSupplierManagementPage() {
 
       {status === "ready" && (
         <div className="grid grid-cols-1 gap-3">
-          {visible.map((s) => (
-            <article key={s.id} className={CARD}>
+          {pager.pageItems.map((s) => (
+            <article key={s.id} data-record={`supplier:${s.id}`} data-record-scroll className={CARD}>
               <h2 className="text-[15px] font-semibold text-slate-900">{s.name}</h2>
               <div className="text-[13px] text-slate-400 font-mono">{s.supplier_code}</div>
               {s.contact_person && <div className="text-[14px] text-slate-600 mt-1">{s.contact_person}</div>}
@@ -170,6 +183,7 @@ export default function CheckerSupplierManagementPage() {
         </div>
       )}
 
+      {paged && <Pagination pager={pager} fixed dock dockBottom="4rem" />}
       <BottomSheet
         open={showForm}
         onClose={() => !submitting && setShowForm(false)}
@@ -182,11 +196,11 @@ export default function CheckerSupplierManagementPage() {
           {!editingId && <p className="text-[13px] text-slate-500">The supplier code is assigned automatically.</p>}
           <div>
             <label htmlFor="sup-name" className={LABEL}>Supplier name *</label>
-            <input id="sup-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={FIELD} />
+            <input id="sup-name" value={form.name} maxLength={50} onChange={(e) => setForm({ ...form, name: e.target.value })} className={FIELD} />
           </div>
           <div>
             <label htmlFor="sup-person" className={LABEL}>Contact person</label>
-            <input id="sup-person" value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} className={FIELD} />
+            <input id="sup-person" value={form.contact_person} maxLength={50} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} className={FIELD} />
           </div>
           <div>
             <label htmlFor="supplier-contact" className={LABEL}>Contact number</label>
@@ -206,7 +220,7 @@ export default function CheckerSupplierManagementPage() {
           </div>
           <div>
             <label htmlFor="sup-notes" className={LABEL}>Notes</label>
-            <textarea id="sup-notes" rows={2} maxLength={1000} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={TEXTAREA} />
+            <textarea id="sup-notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={TEXTAREA} />
           </div>
         </form>
       </BottomSheet>

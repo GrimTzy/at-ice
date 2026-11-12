@@ -71,7 +71,7 @@ export function daysLabel(days = []) {
 // block, so a status never looks like a button.
 export const STATUS_STYLE = {
   pending:    { bg: "bg-amber-50 border-amber-200", text: "text-amber-700", label: "Pending" },
-  queued:     { bg: "bg-violet-50 border-violet-200", text: "text-violet-700", label: "Waiting" },
+  queued:     { bg: "bg-violet-50 border-violet-200", text: "text-violet-700", label: "Queued" },
   in_transit: { bg: "bg-cyan-50 border-cyan-200", text: "text-cyan-800", label: "In Transit" },
   delivered:  { bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", label: "Delivered" },
   cancelled:  { bg: "bg-slate-100 border-slate-200", text: "text-slate-700", label: "Cancelled" },

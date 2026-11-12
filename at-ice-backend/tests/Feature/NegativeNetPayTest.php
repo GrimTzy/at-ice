@@ -19,9 +19,11 @@ class NegativeNetPayTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const NOV23 = ['start' => '2026-11-23', 'end' => '2026-12-06', 'pay_day' => '2026-12-11'];
+    // the 2nd pay day of December, where the month's contributions are deducted (SECOND_PAYROLL_OF_MONTH)
+    private const NOV23 = ['start' => '2026-12-07', 'end' => '2026-12-20', 'pay_day' => '2026-12-25'];
 
-    private const DEC07 = ['start' => '2026-12-07', 'end' => '2026-12-20', 'pay_day' => '2026-12-25'];
+    // the next cut-off, the 1st pay day of January
+    private const DEC07 = ['start' => '2026-12-21', 'end' => '2027-01-03', 'pay_day' => '2027-01-08'];
 
     protected function setUp(): void
     {
@@ -54,7 +56,7 @@ class NegativeNetPayTest extends TestCase
         $this->assertEquals($owed, (float) $first->carry_over_out);
         $this->assertEquals(0, (float) $first->employer_shouldered);
 
-        foreach (['2026-12-07', '2026-12-08', '2026-12-09', '2026-12-10', '2026-12-11'] as $d) {
+        foreach (['2026-12-21', '2026-12-22', '2026-12-23', '2026-12-24', '2026-12-25'] as $d) {
             Attendance::create(['employee_id' => $e->id, 'date' => $d, 'time_in' => '09:00:00', 'time_out' => '18:00:00', 'hours_worked' => 8, 'status' => 'present']);
         }
         $next = PayrollCalculator::compute($e, self::DEC07);

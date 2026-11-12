@@ -5,13 +5,14 @@
 // payroll; HR pays it here:
 //   - pick the pay period (start and end are fixed), filter All / Unpaid / Paid,
 //     search by employee ID
-//   - add earnings (bonus, incentive, referral bonus; taxable or not)
+//   - add earnings (bonus, incentive, allowance; taxable or not)
 //   - mark paid per row, or tick rows and mark them paid together (final, logged)
 //   - print the payslip (PDF from the print dialog)
 //   - 13th month pay per employee for a year
 // Salary is confidential: there are no totals or summary cards.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import HrLayout from "../../components/HrLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
@@ -39,6 +40,23 @@ const todayLocal = () => new Date().toLocaleDateString("en-CA");
 const addDays = (ymd, n) => { const d = new Date(`${ymd}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const peso = (v) => `₱${Number(v || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const n = (v) => Number(v || 0);
+// gov_share is the part of the month's SSS, PhilHealth and Pag-IBIG taken this
+// pay day (HR > Rates > Payroll), not a share of the salary
+// Explains the column header: where the "50%" comes from (QA review, 2026-11-11).
+const govHelp = (strategy) => "Employee share only; the employer pays its own. Each is a monthly amount from the rates in HR > Rates (SSS by salary bracket, PhilHealth and Pag-IBIG as a percent of monthly pay with limits). "
+  + (strategy === "FIRST_PAYROLL_OF_MONTH"
+    ? "The whole month is deducted on the first pay day of the month."
+    : strategy === "SPLIT_FIRST_TWO"
+      ? "The month's amount is taken in two halves, on the 1st and 2nd pay days of the month, and none on a 3rd pay day. The half is not a rate and not half of the salary."
+      : "The whole month's amount is deducted once, on the 2nd pay day of the month (the end-of-month cut-off); the other pay days of the month have none.")
+  + " Change this in HR > Rates > Payroll.";
+
+const govShareText = (share) => {
+  if (share == null) return "—";
+  if (share >= 1) return "the whole month's contribution is deducted this pay day";
+  if (share <= 0) return "none this pay day (already deducted this month)";
+  return `${Math.round(share * 100)}% of the month's contribution this pay day`;
+};
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 function printPayslip(p) {
@@ -139,7 +157,7 @@ function AdjustModal({ payroll, onClose, onChanged }) {
         </ul>
         <form onSubmit={add} className="grid grid-cols-2 gap-2">
           <select name="adjustment_type" aria-label="Kind" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} className="px-2 py-1.5 border border-black/[0.09] rounded-md">
-            {["Bonus", "Incentive", "Referral bonus", "Allowance", "Other earning"].map((l) => <option key={l}>{l}</option>)}
+            {["Bonus", "Incentive", "Allowance", "Other earning"].map((l) => <option key={l}>{l}</option>)}
           </select>
           <input name="amount" aria-label="Amount" type="number" min="0.01" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Amount" className="px-2 py-1.5 border border-black/[0.09] rounded-md" />
           <label className="flex items-center gap-2 col-span-2"><input name="taxable" type="checkbox" data-native checked={form.taxable} onChange={(e) => setForm({ ...form, taxable: e.target.checked })} /> Taxable</label>
@@ -281,7 +299,7 @@ export default function PayrollRecordsPage() {
               <input name="search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name" className="w-full bg-transparent outline-none text-xs text-slate-800 placeholder:text-slate-500" />
             </div>
             <div className="flex-1" />
-            <span className="text-[11px] text-slate-400">Pay day {period?.pay_day || "—"} · SSS, PhilHealth, Pag-IBIG this pay day: {data ? `${Math.round(data.gov_share * 100)}%` : "—"}</span>
+            <span className="text-[11px] text-slate-400">Pay day {period?.pay_day || "—"} · SSS, PhilHealth, Pag-IBIG: {govShareText(data?.gov_share)}</span>
             <button type="button" data-no-confirm onClick={() => markPaid([...selected])} disabled={selected.size === 0 || busy} className="min-w-[150px] px-3.5 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold text-center disabled:opacity-40 cursor-pointer">
               {busy ? "Saving…" : selected.size ? `Mark selected paid (${selected.size})` : "Mark selected paid"}
             </button>
@@ -303,7 +321,7 @@ export default function PayrollRecordsPage() {
                       <th className="px-3 py-2.5 font-medium text-right">Basic</th>
                       <th className="px-3 py-2.5 font-medium text-right" title="Holiday pay, overtime and night differential">Holiday / OT / Night</th>
                       <th className="px-3 py-2.5 font-medium text-right">Late / absence / leave</th>
-                      <th className="px-3 py-2.5 font-medium text-right">SSS · PhilHealth · Pag-IBIG</th>
+                      <th className="px-3 py-2.5 font-medium text-right" title={govHelp(data?.gov_strategy)}>SSS · PhilHealth · Pag-IBIG</th>
                       <th className="px-3 py-2.5 font-medium text-right">Tax</th>
                       <th className="px-3 py-2.5 font-medium text-right">Earnings</th>
                       <th className="px-3 py-2.5 font-medium text-right">Net pay</th>
@@ -318,7 +336,15 @@ export default function PayrollRecordsPage() {
                         <tr key={r.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                           <td className="px-[18px] py-2.5">{p?.status === "unpaid" && <input name="select_payroll" type="checkbox" data-native aria-label={`Select ${r.employee_id}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} />}</td>
                           <td className="px-3 py-2.5 font-mono text-slate-600">{r.employee_id}</td>
-                          <td className="px-3 py-2.5 text-slate-800 font-medium whitespace-nowrap">{r.name}</td>
+                          <td className="px-3 py-2.5 text-slate-800 font-medium whitespace-nowrap">
+                            {r.name}
+                            {r.missing_ids?.length > 0 && (
+                              <span className="cell-note px-2 py-0.5 rounded-full text-[10.5px] font-medium border bg-amber-50 text-amber-800 border-amber-200"
+                                title="The deductions are computed, but they cannot be remitted under this employee's name until the numbers are added in HRIS › Employees.">
+                                No {r.missing_ids.join(", ")} no.
+                              </span>
+                            )}
+                          </td>
                           {p ? (
                             <>
                               <td className="px-3 py-2.5 text-right font-mono">{peso(n(p.basic_pay) + n(p.paid_leave_pay))}</td>
@@ -349,7 +375,9 @@ export default function PayrollRecordsPage() {
                               </td>
                             </>
                           ) : (
-                            <td colSpan={9} className="px-3 py-2.5 text-slate-400">Timesheet not approved by HR yet.</td>
+                            <td colSpan={9} className="px-3 py-2.5 text-slate-400">
+                              Timesheet not approved by HR yet. <Link to="/hr/timesheets" className="font-medium text-cyan-700 hover:underline">Approve it in Timesheets</Link>, then it is paid here.
+                            </td>
                           )}
                         </tr>
                       );

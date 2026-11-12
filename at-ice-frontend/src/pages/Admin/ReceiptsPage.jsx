@@ -15,6 +15,7 @@ import { plural } from "../../lib/plural";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
+import Req from "../../components/Req";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, MiniBars, StatusBreakdown } from "../../components/Insight";
 import { Icon } from "../../components/icons";
@@ -31,6 +32,7 @@ const FILTERS = [
   { key: "unpaid",  label: "Unpaid" },
   { key: "overdue", label: "Overdue" },
   { key: "paid",    label: "Paid" },
+  { key: "proof",   label: "Proof to review" },
 ];
 
 const PrintIcon = () => <Icon name="print" size={14} />;
@@ -59,6 +61,9 @@ export default function ReceiptsPage() {
   const payDraft = useDraft("receipts:pay", { payTarget: null, payMethod: "cash" }, { when: (v) => !!v.payTarget });
   const { payTarget, payMethod } = payDraft.values;
   const { payTarget: setPayTarget, payMethod: setPayMethod } = payDraft.set;
+  const [payFile, setPayFile] = useState(null); // proof for GCash, cheque or bank transfer
+  const [payRef, setPayRef] = useState("");
+  const [payError, setPayError] = useState("");
   const [saving, setSaving]             = useState(false);
 
   const [liveNotice, setLiveNotice]     = useState(null);
@@ -110,23 +115,39 @@ export default function ReceiptsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function confirmMarkPaid() {
+  function closePay() {
+    setPayTarget(null);
+    setPayMethod("cash");
+    setPayFile(null);
+    setPayRef("");
+    setPayError("");
+  }
+
+  // Sent as a form (POST + _method) so the proof file can go with it
+  async function confirmMarkPaid(e) {
+    e.preventDefault();
     if (!payTarget) return;
+    if (payMethod !== "cash" && !payFile) return setPayError("Attach a photo or PDF of the payment for GCash, cheque or bank transfer.");
     setSaving(true);
+    setPayError("");
     try {
+      const body = new FormData();
+      body.append("_method", "PATCH");
+      body.append("payment_method", payMethod);
+      if (payMethod !== "cash") {
+        body.append("proof", payFile);
+        if (payRef.trim()) body.append("reference_no", payRef.trim());
+      }
       const res = await fetch(`/api/receipts/${payTarget.id}/paid`, {
-        method: "PATCH", headers: authHeaders(),
-        body: JSON.stringify({ payment_method: payMethod }),
+        method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token()}` }, body,
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || "Failed to mark invoice as paid.");
+      if (!res.ok) throw new Error(Object.values(data?.errors || {})[0]?.[0] || data?.message || "Failed to mark invoice as paid.");
       toast.success(`${payTarget.receipt_no} marked as paid.`);
-      setPayTarget(null);
-      setPayMethod("cash");
+      closePay();
       fetchAll();
     } catch (err) {
-      setError(err.message);
-      setPayTarget(null);
+      setPayError(err.message);
     } finally {
       setSaving(false);
     }
@@ -148,7 +169,7 @@ export default function ReceiptsPage() {
       }
       const no = proof.receipt?.receipt_no || "the invoice";
       if (action === "approve") toast.success(`Payment proof approved. ${no} is now Paid.`);
-      else toast.success(`Payment proof for ${no} declined. The customer will see the reason.`);
+      else toast.success(`Payment proof for ${no} rejected. The customer will see the reason.`);
       setRejectTarget(null);
       setRejectReason("");
       fetchAll();
@@ -162,7 +183,7 @@ export default function ReceiptsPage() {
   const proofByReceipt = Object.fromEntries(proofs.map((p) => [p.receipt_id, p]));
 
   const filtered = receipts.filter((r) => {
-    if (filter !== "all" && r.payment_status !== filter) return false;
+    if (filter === "proof" ? !proofByReceipt[r.id] : filter !== "all" && r.payment_status !== filter) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     const haystack = `${r.receipt_no} ${r.customer?.name ?? ""} ${r.salesman?.name ?? ""}`.toLowerCase();
@@ -233,7 +254,7 @@ export default function ReceiptsPage() {
                     disabled={proofBusy === p.id}
                     className="px-2.5 py-1 rounded-md bg-red-500 text-white text-[12px] font-medium"
                   >
-                    Decline
+                    Reject
                   </button>
                 </div>
               </div>
@@ -282,7 +303,7 @@ export default function ReceiptsPage() {
           <div>
             <h2 className="text-[15px] font-semibold text-slate-800">Invoices</h2>
             <p className="text-[12px] text-slate-500 mt-0.5">
-              Auto-generated when a Salesman confirms a delivery. Unpaid receipts older than 15 days are marked overdue automatically.
+              Auto-generated when a Salesman confirms a delivery. An unpaid invoice is marked overdue automatically once 14 days have passed since its date.
             </p>
           </div>
           <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
@@ -299,7 +320,7 @@ export default function ReceiptsPage() {
 
         <div className="px-[18px] pt-3">
           <FilterSelect label="Status" value={filter} onChange={setFilter}
-            options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: f.key === "all" ? receipts.length : receipts.filter((r) => r.payment_status === f.key).length }))} />
+            options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: f.key === "all" ? receipts.length : f.key === "proof" ? receipts.filter((r) => proofByReceipt[r.id]).length : receipts.filter((r) => r.payment_status === f.key).length }))} />
         </div>
 
         {error && (
@@ -346,7 +367,7 @@ export default function ReceiptsPage() {
                           {badge.label}
                         </button>
                         {state === "rejected" && (
-                          <span className="text-[10px] text-red-800">Proof declined. Waiting for the customer to re-upload.</span>
+                          <span className="text-[10px] text-red-800">Proof rejected. Waiting for the customer to re-upload.</span>
                         )}
                       </div>
                     </td>
@@ -362,7 +383,7 @@ export default function ReceiptsPage() {
                           <button data-no-confirm
                             onClick={() => { setPayTarget(r); setPayMethod("cash"); }}
                             disabled={!!proofByReceipt[r.id]}
-                            title={proofByReceipt[r.id] ? "The customer sent a payment proof. Approve or decline it under Payment proofs to review." : undefined}
+                            title={proofByReceipt[r.id] ? "The customer sent a payment proof. Approve or reject it under Payment proofs to review." : undefined}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-black/[0.09] text-cyan-600 hover:bg-cyan-50 text-[12px] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                           >
                             <CheckIcon /> Mark Paid
@@ -384,7 +405,7 @@ export default function ReceiptsPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="modal-shell bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
             <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
-              <h3 className="text-[14px] font-semibold text-slate-800">{viewing.receipt_no}</h3>
+              <h3 className="text-[14px] font-semibold text-slate-800">View Invoice</h3>
               <div className="flex items-center gap-2">
                 <button onClick={() => printReceipt(viewing)} className="print-btn">
                   <PrintIcon /> Print
@@ -397,7 +418,9 @@ export default function ReceiptsPage() {
             <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="p-5 flex flex-col gap-4 text-[13px]">
               <div className="detail-well">
+              <Row label="Invoice No." value={<span className="font-mono">{viewing.receipt_no}</span>} />
               <Row label="Customer" value={viewing.customer?.name || "—"} />
+              <Row label="Driver" value={viewing.delivery?.driver?.name || "—"} />
               <Row label="Salesman" value={viewing.salesman?.name || "—"} />
               <Row label="Delivery" value={viewing.delivery?.delivery_no || "—"} />
               <Row label="Status" value={(() => { const b = PAYMENT_BADGE[paymentState(viewing, !!proofByReceipt[viewing.id])]; return <span className={`inline-flex px-2.5 py-0.5 rounded-full border text-[11px] font-semibold ${b.cls}`}>{b.label}</span>; })()} />
@@ -455,7 +478,7 @@ export default function ReceiptsPage() {
                           )}
                           {p.reviewed_at && (
                             <div className="mt-1 text-[11px] text-slate-400">
-                              {p.status === "approved" ? "Approved" : "Declined"} by {p.reviewer?.name || "Admin"} · {formatDateTime(p.reviewed_at, { year: false })}
+                              {p.status === "approved" ? "Approved" : "Rejected"} by {p.reviewer?.name || "Admin"} · {formatDateTime(p.reviewed_at, { year: false })}
                             </div>
                           )}
                           <button
@@ -481,10 +504,10 @@ export default function ReceiptsPage() {
       {rejectTarget && (
         <ConfirmCard
           danger
-          title="Decline payment proof?"
+          title="Reject payment proof?"
           context={rejectTarget.receipt?.receipt_no}
           message="The invoice stays unpaid and its overdue count goes on. The customer sees your reason and can send a new proof."
-          confirmLabel={proofBusy === rejectTarget.id ? "Saving…" : "Decline"}
+          confirmLabel={proofBusy === rejectTarget.id ? "Saving…" : "Reject"}
           busy={proofBusy === rejectTarget.id}
           confirmDisabled={rejectReason.trim().length < 3}
           onCancel={() => setRejectTarget(null)}
@@ -510,30 +533,48 @@ export default function ReceiptsPage() {
       {/* Mark as Paid modal */}
       {payTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-sm p-5">
+          <form onSubmit={confirmMarkPaid} noValidate className="bg-white rounded-xl border border-black/[0.09] w-full max-w-sm p-5">
             <h3 className="text-[14px] font-semibold text-slate-800 mb-1.5">Mark as paid?</h3>
             <p className="text-[12px] text-slate-500 mb-4">
               <span className="font-medium text-slate-700">{payTarget.receipt_no}</span> — {peso(payTarget.total_amount)}
             </p>
-            <label htmlFor="payment-method" className="text-[11px] text-slate-500 mb-1 block">Payment Method</label>
-            <select id="payment-method" name="pay_method"
+            {payError && <div role="alert" className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{payError}</div>}
+            <label htmlFor="payment-method" className="text-[11px] text-slate-500 mb-1 block">Payment Method<Req /></label>
+            <select id="payment-method" name="pay_method" required
               value={payMethod}
-              onChange={(e) => setPayMethod(e.target.value)}
+              onChange={(e) => { setPayMethod(e.target.value); setPayError(""); }}
               className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 mb-4"
             >
               {Object.entries(MOP_LABELS).map(([val, label]) => (
                 <option key={val} value={val}>{label}</option>
               ))}
             </select>
+            {payMethod !== "cash" && (
+              <div className="flex flex-col gap-3 mb-4">
+                <div>
+                  <label htmlFor="payment-proof" className="text-[11px] text-slate-500 mb-1 block">Proof of payment<Req /></label>
+                  <input id="payment-proof" name="proof" type="file" required accept="image/png,image/jpeg,image/webp,application/pdf"
+                    onChange={(e) => { setPayFile(e.target.files?.[0] || null); setPayError(""); }}
+                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[12px] outline-none focus:border-cyan-500" />
+                  <p className="mt-1 text-[11px] text-slate-400">Screenshot or photo of the {MOP_LABELS[payMethod] || "payment"} receipt, or a PDF. Up to 5 MB.</p>
+                </div>
+                <div>
+                  <label htmlFor="payment-ref" className="text-[11px] text-slate-500 mb-1 block">Reference no.</label>
+                  <input id="payment-ref" name="reference_no" maxLength={100} value={payRef} onChange={(e) => setPayRef(e.target.value)}
+                    placeholder="e.g. 3014 552 870 116"
+                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500" />
+                </div>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setPayTarget(null)} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 text-[12px]">
+              <button type="button" onClick={closePay} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 text-[12px] hover:bg-slate-50">
                 Cancel
               </button>
-              <button onClick={confirmMarkPaid} disabled={saving} className="px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-50">
+              <button type="submit" disabled={saving} className="px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-50">
                 {saving ? "Saving…" : "Mark as Paid"}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </AdminLayout>

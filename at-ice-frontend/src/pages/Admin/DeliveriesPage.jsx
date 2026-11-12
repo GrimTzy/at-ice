@@ -17,7 +17,7 @@ import DriverStoresTab from "./deliveries/DriverStoresTab";
 import { ReassignedTag } from "./deliveries/shared";
 import { STATUS_STYLE, DRIVER_GROUPS, driverGroup, timeOf, nowHm } from "./deliveries/utils";
 import Req from "../../components/Req";
-import { timingPill, deliverByTime } from "../../lib/deliverBy";
+import { timingPill, windowLabel } from "../../lib/deliverBy";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
@@ -42,7 +42,7 @@ const PAYMENT_BADGE = {
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
   { value: "pending", label: "Pending" },
-  { value: "queued", label: "Waiting" },
+  { value: "queued", label: "Queued" },
   { value: "in_transit", label: "In Transit" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
@@ -71,6 +71,18 @@ const PRODUCT_TYPES = [
 ];
 const productLabel = (type) => PRODUCT_TYPES.find((p) => p.value === type)?.label || type;
 
+// The Checker's latest count per product (a recount replaces the earlier one)
+const truckLoads = (d) => Object.values((d.ice_loadings || []).reduce((m, l) => (!m[l.product_type] || l.id > m[l.product_type].id ? { ...m, [l.product_type]: l } : m), {}));
+// Short loading note under an open delivery's status in the table
+const loadNote = (d) => {
+  if (d.delivery_type === "inbound" || ["delivered", "cancelled"].includes(d.status)) return null;
+  const loads = truckLoads(d);
+  if (!loads.length) return "Not loaded yet";
+  const loaded = loads.reduce((s, l) => s + Number(l.quantity_loaded || 0), 0);
+  const ordered = (d.items || []).reduce((s, it) => s + Number(it.quantity_ordered || 0), 0);
+  return `Loaded ${loaded} of ${ordered}`;
+};
+
 const EMPTY_ITEM = { product_type: "", quantity_ordered: "" };
 // Today as YYYY-MM-DD in the browser's local time (toISOString would be UTC).
 const todayStr = () => {
@@ -84,7 +96,7 @@ const todayStr = () => {
 let blockSeq = 0;
 const emptyBlock = () => ({
   key: `${Date.now()}-${++blockSeq}`, error: "", // unique after a restored draft too
-  driver_id: "", customer_id: "", scheduled_date: todayStr(), deliver_by: "", notes: "",
+  driver_id: "", customer_id: "", scheduled_date: todayStr(), deliver_from: "", deliver_by: "", notes: "",
   items: [{ ...EMPTY_ITEM }],
 });
 
@@ -288,6 +300,9 @@ export default function DeliveriesPage() {
     // Deliver by is a deadline: the time the ice must reach the store, at the latest
     if (!b.deliver_by) return "Pick the time it must reach the store (Deliver by).";
     if (b.scheduled_date === todayStr() && b.deliver_by <= nowHm()) return "Pick a Deliver by time later than now.";
+    // the time window opens at Deliver from
+    if (!b.deliver_from) return "Pick the time the delivery window opens (Deliver from).";
+    if (b.deliver_from >= b.deliver_by) return "The window must open before the Deliver by time.";
     const booked = bookedFor(b.customer_id, b.scheduled_date, bi);
     if (booked) return `This customer already has a delivery on this date (${booked}).`;
     if (b.items.some((it) => !it.product_type || !(Number(it.quantity_ordered) >= 1))) return "Pick a product and a quantity of at least 1 for every item.";
@@ -319,6 +334,7 @@ export default function DeliveriesPage() {
         customer_id: b.customer_id,
         delivery_type: "outbound",
         scheduled_date: b.scheduled_date,
+        deliver_from: b.deliver_from,
         deliver_by: b.deliver_by,
         notes: b.notes || null,
         items: b.items.map((it) => ({
@@ -536,7 +552,7 @@ export default function DeliveriesPage() {
         )}
 
         {tab === "drivers" && (
-          <DriverView board={viewBoard} loading={boardLoading} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} onChanged={refreshAll} />
+          <DriverView board={viewBoard} loading={boardLoading} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
         )}
         {tab === "stores" && (
           <StoreView board={viewBoard} loading={boardLoading} filtered={!!(needle || typeFilter || subStatus !== "all")} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
@@ -582,13 +598,14 @@ export default function DeliveriesPage() {
                     </td>
                     <td className="px-[18px] py-2.5 text-slate-600">
                       {d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—"}
-                      {d.due_at && <span className="cell-note text-[11px] text-slate-500">by {deliverByTime(d.due_at)}</span>}
+                      {d.due_at && <span className="cell-note text-[11px] text-slate-500">{windowLabel(d.due_from, d.due_at)}</span>}
                       {timingPill(d.timing) && <span className={`cell-note px-1.5 py-px rounded-full text-[10px] font-semibold ${timingPill(d.timing).cls}`}>{timingPill(d.timing).label}</span>}
                     </td>
                     <td className="px-[18px] py-2.5">
                       <span className={`inline-flex items-center justify-center min-w-[84px] px-2.5 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
                         {d.status?.replace("_", " ")}
                       </span>
+                      {loadNote(d) && <span className="cell-note text-[11px] text-slate-500">{loadNote(d)}</span>}
                     </td>
                     <td className="px-[18px] py-2.5">
                       {proof ? (
@@ -699,7 +716,7 @@ export default function DeliveriesPage() {
                           <p className="text-[11px] text-slate-400 mt-1">Customers with a delivery on this date are greyed out.</p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <div>
+                          <div className="col-span-2">
                             <label htmlFor={`delivery-${block.key}-date`} className="text-[11px] text-slate-500 mb-1 block">Scheduled Date<Req /></label>
                             <input id={`delivery-${block.key}-date`} name="scheduled_date" required
                               type="date"
@@ -710,7 +727,17 @@ export default function DeliveriesPage() {
                             />
                           </div>
                           <div>
-                            <label htmlFor={`delivery-${block.key}-deliver-by`} className="text-[11px] text-slate-500 mb-1 block">Deliver by<Req /></label>
+                            <label htmlFor={`delivery-${block.key}-deliver-from`} className="text-[11px] text-slate-500 mb-1 block">Deliver from<Req /></label>
+                            <input id={`delivery-${block.key}-deliver-from`} name="deliver_from" required
+                              type="time"
+                              max={block.deliver_by || undefined}
+                              value={block.deliver_from || ""}
+                              onChange={(e) => updateBlock(bi, { deliver_from: e.target.value })}
+                              className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`delivery-${block.key}-deliver-by`} className="text-[11px] text-slate-500 mb-1 block">Deliver by (latest)<Req /></label>
                             <input id={`delivery-${block.key}-deliver-by`} name="deliver_by" required
                               type="time"
                               min={block.scheduled_date === todayStr() ? nowHm() : undefined}
@@ -720,11 +747,11 @@ export default function DeliveriesPage() {
                               className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                             />
                           </div>
-                          <p id={`delivery-${block.key}-deliver-by-hint`} className="col-span-2 -mt-1.5 text-[11px] text-slate-400">The latest time the ice reaches the store. Later than this is late.</p>
+                          <p id={`delivery-${block.key}-deliver-by-hint`} className="col-span-2 -mt-1.5 text-[11px] text-slate-400">The time window at the store: the ice may arrive from the first time and must by the second. Later than that is late.</p>
                         </div>
                         <div>
                           <label htmlFor={`delivery-${block.key}-notes`} className="text-[11px] text-slate-500 mb-1 block">Notes</label>
-                          <textarea id={`delivery-${block.key}-notes`} name="notes" maxLength={1000}
+                          <textarea id={`delivery-${block.key}-notes`} name="notes"
                             rows={3}
                             value={block.notes}
                             onChange={(e) => updateBlock(bi, { notes: e.target.value })}
@@ -824,7 +851,7 @@ export default function DeliveriesPage() {
               {viewing.contract && <Row label="Contract" value={`${viewing.contract.contract_no} · ${viewing.contract.name}`} />}
               {viewing.cancel_reason && <Row label="Cancel reason" value={viewing.cancel_reason} />}
               <Row label="Scheduled" value={viewing.scheduled_date ? new Date(viewing.scheduled_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—"} />
-              {viewing.due_at && <Row label="Deliver by" value={`${deliverByTime(viewing.due_at)}${timingPill(viewing.timing) ? ` · ${timingPill(viewing.timing).label}` : ""}`} />}
+              {viewing.due_at && <Row label="Time window" value={`${windowLabel(viewing.due_from, viewing.due_at)}${timingPill(viewing.timing) ? ` · ${timingPill(viewing.timing).label}` : ""}`} />}
               <Row label="Status" value={<span className="capitalize">{viewing.status?.replace("_", " ")}</span>} />
               <Row label="Notes" value={viewing.notes || "—"} />
               </div>
@@ -844,6 +871,31 @@ export default function DeliveriesPage() {
                   ))}
                 </div>
               </div>
+              {viewing.delivery_type !== "inbound" && (
+                <div>
+                  <div className="text-[11px] text-slate-400 uppercase tracking-wide mb-1.5">Truck loading</div>
+                  {truckLoads(viewing).length === 0 ? (
+                    <div className="item-card rounded-xl px-3.5 py-2.5 text-[12px] text-slate-400">The Checker has not counted this truck yet.</div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      {truckLoads(viewing).map((l) => {
+                        const ordered = (viewing.items || []).find((it) => it.product_type === l.product_type)?.quantity_ordered;
+                        return (
+                          <div key={l.id} className="item-card flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5">
+                            <span className="text-slate-700">
+                              {productLabel(l.product_type)}
+                              <span className="block text-[11px] text-slate-400">{l.checker?.name || "Checker"} · {dateTime12(l.created_at, { year: false })}</span>
+                            </span>
+                            <span className={`font-mono text-right ${ordered != null && Number(ordered) !== Number(l.quantity_loaded) ? "text-amber-600 font-medium" : "text-slate-500"}`}>
+                              {l.quantity_loaded} loaded{ordered != null ? ` of ${ordered}` : ""}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
               <SameDayChanges delivery={viewing} onChanged={refreshAll} />
               {proofs[viewing.id] && <ProofSection proof={proofs[viewing.id]} />}
             </div>
@@ -876,7 +928,7 @@ export default function DeliveriesPage() {
                   This delivery is in transit. It can only be cancelled for a real emergency.
                 </p>
                 <label htmlFor="delivery-issue" className="text-[11px] text-slate-500 mb-1 block">What happened? *</label>
-                <textarea id="delivery-issue" name="cancel_reason" maxLength={255}
+                <textarea id="delivery-issue" name="cancel_reason"
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   rows={2}
@@ -886,7 +938,7 @@ export default function DeliveriesPage() {
             ) : (
               <div className="mb-4">
                 <label htmlFor="cancel-reason" className="text-[11px] text-slate-500 mb-1 block">Reason (optional)</label>
-                <input id="cancel-reason" name="cancel_reason" maxLength={255}
+                <input id="cancel-reason" name="cancel_reason"
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"

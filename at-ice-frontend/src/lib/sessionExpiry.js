@@ -5,6 +5,7 @@ import { LOGIN_PATH, clearSession } from "./auth";
 // to the login page with a short message. No individual fetch call needs changing.
 
 export const SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again.";
+export const IDLE_MESSAGE = "You were signed out because you were inactive. Please sign in again.";
 const NOTICE_KEY = "session_expired_notice";
 
 // Returns the message once, then forgets it.
@@ -78,7 +79,7 @@ function guardResponse(response, token) {
 // (see isIgnored), carries the kiosk token, or nobody is signed in. Shared by the
 // fetch wrapper below and by XMLHttpRequest uploads (lib/upload.js), which fetch
 // never sees.
-export function handleUnauthorized(rawUrl, method = "GET", kiosk = false, token) {
+export function handleUnauthorized(rawUrl, method = "GET", kiosk = false, token, message = SESSION_EXPIRED_MESSAGE) {
   if (redirecting) return;
   if (token !== undefined && !isCurrentSession(token)) return;
 
@@ -94,7 +95,7 @@ export function handleUnauthorized(rawUrl, method = "GET", kiosk = false, token)
     redirecting = true;
     clearSession();
     try {
-      sessionStorage.setItem(NOTICE_KEY, SESSION_EXPIRED_MESSAGE);
+      sessionStorage.setItem(NOTICE_KEY, message);
     } catch {
       // the redirect still happens without the message
     }
@@ -107,6 +108,30 @@ export function handleUnauthorized(rawUrl, method = "GET", kiosk = false, token)
   } catch {
     // never break the original response because of this check
   }
+}
+
+// The person was idle too long (the timer in components/IdleGuard.jsx, or the
+// computer slept past the limit): sign out here, tell the server, go to login.
+export function signOutForIdle() {
+  if (redirecting) return;
+  const token = localStorage.getItem("token");
+  if (token) {
+    // best effort; keepalive lets it finish while the page is leaving
+    fetch("/api/logout", {
+      method: "POST",
+      keepalive: true,
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    }).catch(() => {});
+  }
+  redirecting = true;
+  clearSession();
+  try {
+    sessionStorage.setItem(NOTICE_KEY, IDLE_MESSAGE);
+  } catch {
+    // the redirect still happens without the message
+  }
+  if (window.location.pathname !== LOGIN_PATH) window.location.assign(LOGIN_PATH);
+  else redirecting = false;
 }
 
 export function installSessionExpiryHandler() {
@@ -127,7 +152,10 @@ export function installSessionExpiryHandler() {
     if (response.status === 401 && !redirecting) {
       try {
         const method = String(init?.method || (typeof input === "object" && input.method) || "GET").toUpperCase();
-        handleUnauthorized(rawUrl, method, hasKioskHeader(input, init), token ?? null);
+        // the server says why: signed out for being idle, or the token just ended
+        const body = await response.clone().json().catch(() => null);
+        const message = body?.reason === "idle" ? IDLE_MESSAGE : SESSION_EXPIRED_MESSAGE;
+        handleUnauthorized(rawUrl, method, hasKioskHeader(input, init), token ?? null, message);
       } catch {
         // never break the original response because of this check
       }

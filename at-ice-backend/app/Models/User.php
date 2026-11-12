@@ -20,7 +20,6 @@ class User extends Authenticatable
         'must_change_password', // new customer accounts: change the one-time password on first login
         'is_active', // false: login refused (deactivated employee, removed customer)
     ];
-    // is_reserve_driver (Drivers only) is set by Admin, DriverAssignmentController@setReserve
 
     protected $hidden = [
         'password',
@@ -34,7 +33,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'must_change_password' => 'boolean',
             'is_active' => 'boolean',
-            'is_reserve_driver' => 'boolean',
+            'notices_read_at' => 'datetime',
         ];
     }
 
@@ -57,14 +56,6 @@ class User extends Authenticatable
     public function isDriver(): bool
     {
         return $this->role === 'driver';
-    }
-
-    // A reserve driver (owner, 2026-11-11): a Driver account with no route who
-    // takes an absent Driver's whole route when it fits the truck limits
-    // (App\Support\DeliveryDispatch).
-    public function isReserveDriver(): bool
-    {
-        return $this->role === 'driver' && (bool) $this->is_reserve_driver;
     }
 
     public function isCustomer(): bool
@@ -94,6 +85,13 @@ class User extends Authenticatable
         return $this->role === 'employee' && $this->sub_role === $subRole;
     }
 
+    // The four roles the Android app is for: Driver, Checker, Salesman, Maintenance.
+    public function usesMobileApp(): bool
+    {
+        return $this->role === 'driver'
+            || ($this->role === 'employee' && in_array($this->sub_role, ['checker', 'salesman', 'maintenance'], true));
+    }
+
     // True when this account must not be used: the login itself is disabled,
     // or it belongs to an employee HR has deactivated. The second case covers
     // accounts deactivated before deactivation also disabled the login (their
@@ -114,6 +112,12 @@ class User extends Authenticatable
     }
 
     // RELATIONSHIPS
+    // The phones this account is signed in on for push notifications (the Android app).
+    public function deviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
+
     public function employee()
     {
         return $this->hasOne(Employee::class);

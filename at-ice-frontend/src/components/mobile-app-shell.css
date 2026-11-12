@@ -21,7 +21,7 @@
 
 /* The page roots take the whole window (the 1120px desktop cap in
    neumorphism.css is for the Admin and HR pages). */
-.mas-backdrop .ice-scope > :not(style) {
+.mas-backdrop .ice-scope > :not(style, .ptr) {
   max-width: none !important;
   width: 100%;
   margin-inline: 0 !important;

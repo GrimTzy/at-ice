@@ -131,6 +131,7 @@ const emptyForm = {
   employment_type: "regular", sub_role: "",
   // New hires start probationary (no leave filing until regular)
   employment_status: "probationary", pay_basis: "daily", monthly_rate: "",
+  gov_deductions: "deduct", gov_skip_reason: "",
   shift_start: "09:00", shift_end: "18:00",
   // Edit only: the saved hours, and when and why a change starts (schedule history)
   _shiftStart0: "", _shiftEnd0: "", shift_effective_date: "", shift_reason: "",
@@ -304,6 +305,8 @@ export default function EmployeesPage() {
       employment_type: emp.employment_type || "regular",
       employment_status: emp.employment_status || "regular",
       pay_basis: emp.pay_basis || "daily",
+      gov_deductions: emp.skip_gov_deductions ? "skip" : "deduct",
+      gov_skip_reason: emp.gov_skip_reason || "",
       monthly_rate: emp.monthly_rate != null ? String(Number(emp.monthly_rate)) : "",
       shift_start: (emp.shift_start || "09:00").slice(0, 5),
       shift_end: (emp.shift_end || "18:00").slice(0, 5),
@@ -523,6 +526,7 @@ export default function EmployeesPage() {
           daily_rate: Number(form.daily_rate) || 0, date_hired: form.date_hired,
           employment_type: form.employment_type,
           employment_status: form.employment_status, pay_basis: form.pay_basis,
+          skip_gov_deductions: form.gov_deductions === "skip", gov_skip_reason: form.gov_deductions === "skip" ? form.gov_skip_reason.trim() : null,
           monthly_rate: form.pay_basis === "monthly" ? Number(form.monthly_rate) || null : null,
           shift_start: form.shift_start || null, shift_end: form.shift_end || null,
           sub_role: form.sub_role || null,
@@ -543,6 +547,7 @@ export default function EmployeesPage() {
           daily_rate: Number(form.daily_rate) || 0,
           employment_type: form.employment_type,
           employment_status: form.employment_status, pay_basis: form.pay_basis,
+          skip_gov_deductions: form.gov_deductions === "skip", gov_skip_reason: form.gov_deductions === "skip" ? form.gov_skip_reason.trim() : null,
           monthly_rate: form.pay_basis === "monthly" ? Number(form.monthly_rate) || null : null,
           shift_start: form.shift_start || null, shift_end: form.shift_end || null,
           ...(shiftEdited ? { shift_effective_date: form.shift_effective_date || null, shift_reason: form.shift_reason.trim() || null } : {}),
@@ -559,7 +564,7 @@ export default function EmployeesPage() {
       if (res.status === 422 && data?.errors) {
         // Fields that show their own error under the input. Any other
         // field error is shown at the top so it is never silently hidden.
-        const SHOWN = [...Object.keys(STEP_OF_FIELD), "first_name", "middle_initial", "last_name", "suffix", "email", "phone", "department", "daily_rate", "street", "barangay", "city", "province", "region", "barangay_code", "block_lot", "subdivision", "postal_code", "position", "sub_role", "vehicle_plate", "license_number", "license_expiry", "shift", "employment_type", "date_hired", "employment_status", "pay_basis", "monthly_rate", "shift_start", "shift_end"];
+        const SHOWN = [...Object.keys(STEP_OF_FIELD), "first_name", "middle_initial", "last_name", "suffix", "email", "phone", "department", "daily_rate", "street", "barangay", "city", "province", "region", "barangay_code", "block_lot", "subdivision", "postal_code", "position", "sub_role", "vehicle_plate", "license_number", "license_expiry", "shift", "employment_type", "date_hired", "employment_status", "pay_basis", "skip_gov_deductions", "gov_skip_reason", "monthly_rate", "shift_start", "shift_end"];
         const hidden = Object.keys(data.errors).filter((k) => !SHOWN.includes(k));
         showErrors(hidden.length ? { ...data.errors, _general: data.errors[hidden[0]] } : data.errors);
         return;
@@ -744,6 +749,12 @@ export default function EmployeesPage() {
                   <tr key={emp.id} className="border-b border-black/[0.06] last:border-0 hover:bg-slate-50/60">
                     <td className="px-5 py-3">
                       <div className="font-medium text-slate-800">{fullName(emp)}</div>
+                      {emp.missing_ids?.length > 0 && (
+                        <span className="cell-note px-2 py-0.5 rounded-full text-[10.5px] font-medium border bg-amber-50 text-amber-800 border-amber-200"
+                          title={`Missing: ${emp.missing_ids.join(", ")}. Add them with Edit before the next payroll.`}>
+                          Missing {emp.missing_ids.length === 4 ? "gov't IDs" : emp.missing_ids.join(", ")}
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-slate-600 font-mono text-[12px] whitespace-nowrap">{emp.employee_id}</td>
                     <td className="px-5 py-3 text-slate-600">
@@ -909,7 +920,7 @@ export default function EmployeesPage() {
                   <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number, address, birthday, sex, civil status, emergency contact, highest attainment, school and work history" />
                   <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
                     <Field label="First Name" required error={formErrors.first_name}>
-                      <input name="first_name" required maxLength={100} value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
+                      <input name="first_name" required maxLength={50} value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
                     </Field>
                     <Field label="M.I." error={formErrors.middle_initial}>
                       <input name="middle_initial" value={form.middle_initial} onChange={(e) => setForm((f) => ({ ...f, middle_initial: cleanInitial(e.target.value) }))}
@@ -918,7 +929,7 @@ export default function EmployeesPage() {
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
                     <Field label="Last Name" required error={formErrors.last_name}>
-                      <input name="last_name" required maxLength={100} value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
+                      <input name="last_name" required maxLength={50} value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
                     </Field>
                     <Field label="Suffix" error={formErrors.suffix}>
                       <select name="suffix" value={form.suffix} onChange={handleChange("suffix")} aria-label="Name suffix" className={inputCls}>
@@ -984,7 +995,7 @@ export default function EmployeesPage() {
                   <div className="text-[12px] font-semibold text-slate-700 mt-1">Emergency contact</div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Field label="Name" error={formErrors.emergency_name}>
-                      <input name="emergency_name" value={form.emergency_name} onChange={handleChange("emergency_name")} maxLength={120} className={inputCls} />
+                      <input name="emergency_name" value={form.emergency_name} onChange={handleChange("emergency_name")} maxLength={50} className={inputCls} />
                     </Field>
                     <Field label="Relationship" error={formErrors.emergency_relationship}>
                       <input name="emergency_relationship" value={form.emergency_relationship} onChange={handleChange("emergency_relationship")} maxLength={40} placeholder="e.g. Mother" className={inputCls} />
@@ -1030,6 +1041,18 @@ export default function EmployeesPage() {
                       </Field>
                     )}
                   </div>
+                  <Field label="SSS, PhilHealth, Pag-IBIG" required>
+                    <select name="gov_deductions" required value={form.gov_deductions} onChange={handleChange("gov_deductions")} className={inputCls}>
+                      <option value="deduct">Deduct (required by law)</option>
+                      <option value="skip">Skip for this employee (HR exemption)</option>
+                    </select>
+                  </Field>
+                  {form.gov_deductions === "skip" && (
+                    <Field label="Reason for skipping" required error={formErrors.gov_skip_reason}>
+                      <input name="gov_skip_reason" required maxLength={255} value={form.gov_skip_reason} onChange={handleChange("gov_skip_reason")} placeholder="e.g. Job order, already covered elsewhere" className={inputCls} />
+                      <span className="mt-1 block px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-700">Nothing is deducted. SSS, PhilHealth and Pag-IBIG are mandatory for covered employees, so HR is responsible for this choice. It may affect the employee's loans and benefits.</span>
+                    </Field>
+                  )}
                 </>
               )}
 

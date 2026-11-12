@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import { useParams } from "react-router-dom";
 import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
 import PhoneInput from "../components/PhoneInput";
@@ -88,8 +87,6 @@ function FilePick({ label, hint, accept, capture, multiple = false, files, onPic
 }
 
 export default function ApplyPage() {
-  // Opened from an employee's referral link: /job-applications/EMP-0001
-  const { referrer = "" } = useParams();
   // What was typed survives a refresh (files have to be attached again).
   const draft = useDraft("apply", { form: EMPTY, consent: false });
   const { form, consent } = draft.values;
@@ -125,7 +122,7 @@ export default function ApplyPage() {
     if (isDriver && licenseError(form.license_number)) errs.license_number = [licenseError(form.license_number)];
     if (isDriver && expiryError(form.license_expiry)) errs.license_expiry = [expiryError(form.license_expiry)];
     if (resume && resume.size > RESUME_MAX) errs.resume = ["The resume is too large. Use a file up to 5 MB."];
-    if ([photo, ...documents].some((f) => f && f.size > FILE_MAX)) errs.documents = ["Each file must be 10 MB or less."];
+    if ([photo, ...documents].some((f) => f && f.size > FILE_MAX)) errs.documents = ["Each file must be up to 10 MB."];
     setErrors(errs);
     if (Object.keys(errs).length) {
       document.querySelector("[data-apply-error]")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -156,7 +153,6 @@ export default function ApplyPage() {
         for (const k of ["company", "position", "from", "to"]) if (w[k]) body.append(`work_history[${i}][${k}]`, w[k]);
       });
       if (isDriver) (form.license_restrictions || []).forEach((c) => body.append("license_restrictions[]", c));
-      if (referrer) body.append("referral", referrer);
       if (resume) body.append("resume", resume);
       if (photo) body.append("photo", photo);
       documents.forEach((d) => body.append("documents[]", d));
@@ -255,7 +251,7 @@ export default function ApplyPage() {
                 <Section n={1} title="Personal information">
                   <label className="flex flex-col gap-2">
                     <span className={labelCls}>Full Name *</span>
-                    <input name="name" value={form.name} onChange={set("name")} autoComplete="name" maxLength={255} placeholder="Juan Dela Cruz" className={fieldCls} />
+                    <input name="name" value={form.name} onChange={set("name")} autoComplete="name" maxLength={50} placeholder="Juan Dela Cruz" className={fieldCls} />
                     {err("name")}
                   </label>
                   <label className="flex flex-col gap-2">
@@ -313,7 +309,7 @@ export default function ApplyPage() {
                     <AddressFields value={form} onChange={handleAddress} errors={errors} inputClassName={fieldCls} labelClassName="text-[12px] text-[var(--neu-muted)]" />
                   </div>
                   <div className={labelCls}>In case of emergency</div>
-                  <input name="emergency_name" value={form.emergency_name} onChange={set("emergency_name")} maxLength={120} placeholder="Name" aria-label="Emergency contact name" className={fieldCls} />
+                  <input name="emergency_name" value={form.emergency_name} onChange={set("emergency_name")} maxLength={50} placeholder="Name" aria-label="Emergency contact name" className={fieldCls} />
                   <input name="emergency_relationship" value={form.emergency_relationship} onChange={set("emergency_relationship")} maxLength={40} placeholder="Relationship (e.g. Mother)" aria-label="Emergency contact relationship" className={fieldCls} />
                   <PhoneInput value={form.emergency_phone} onChange={(emergency_phone) => setForm((f) => ({ ...f, emergency_phone }))} className={fieldCls}
                     invalid={!!form.emergency_phone && !MOBILE_REGEX.test(form.emergency_phone)} aria-label="Emergency contact mobile number" name="emergency_phone" />

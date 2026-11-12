@@ -68,11 +68,9 @@ class PublicApplicationController extends Controller
         $driver = $request->input('position_applied') === 'Driver';
 
         $data = $request->validate([
-            'name' => 'required|string|min:3|max:255',
+            'name' => 'required|string|min:3|max:50',
             'phone' => ['required', 'regex:'.PhoneFormatter::MOBILE_REGEX],
             'email' => ['nullable', 'email:rfc,filter', 'max:255', Rule::unique('applicants', 'email')],
-            // Employee ID from a referral link (/job-applications/EMP-0001)
-            'referral' => 'nullable|string|max:20',
             'position_applied' => ['required', Rule::in(Applicant::PUBLIC_POSITIONS)],
             'notes' => 'nullable|string|max:1000',
             // Resume or CV: PDF or Word, up to 5 MB
@@ -90,12 +88,7 @@ class PublicApplicationController extends Controller
             'photo.max' => 'The photo is too large. Use one up to 10 MB.',
             'documents.max' => 'Attach up to 4 documents.',
             'documents.*.mimes' => 'Attach documents as a PDF or a picture (JPG, PNG or WebP).',
-            'documents.*.max' => 'Each file must be 10 MB or less.',
-            // A file over the server's upload limit (10 MB) never reaches the size
-            // rule; PHP drops it and Laravel says "failed to upload". Say why.
-            'documents.*.uploaded' => 'Each file must be 10 MB or less.',
-            'photo.uploaded' => 'The photo must be 10 MB or less.',
-            'resume.uploaded' => 'The resume must be 5 MB or less.',
+            'documents.*.max' => 'Each document must be up to 10 MB.',
             'license_number.required' => "Driver applicants must give their driver's license number.",
             'license_number.regex' => DriverLicense::MESSAGE,
             'name.required' => 'Enter your full name.',
@@ -136,11 +129,6 @@ class PublicApplicationController extends Controller
                 $resumePath = $resume ? $stored->store($resume, 'resumes') : null;
                 $resumeName = $resume ? mb_substr(preg_replace('/[^\pL\pN ._()-]/u', '_', $resume->getClientOriginalName()), 0, 255) : null;
 
-                // Referral: recorded only (no automatic bonus; Admin adds one in payroll).
-                $referrer = filled($data['referral'] ?? null)
-                    ? Employee::where('employee_id', strtoupper(trim($data['referral'])))->where('is_active', true)->value('id')
-                    : null;
-
                 $applicant = Applicant::create([
                     'name' => trim($data['name']),
                     'phone' => $data['phone'],
@@ -150,7 +138,6 @@ class PublicApplicationController extends Controller
                     'notes' => filled($data['notes'] ?? null) ? 'From the applicant: '.trim($data['notes']) : null,
                     'status' => 'pending',
                     'source' => 'qr',
-                    'referred_by_employee_id' => $referrer,
                     'resume_path' => $resumePath ?: null,
                     'resume_name' => $resumePath ? $resumeName : null,
                     'consented_at' => now(),

@@ -56,7 +56,6 @@ class Applicant extends Model
         'interview_minutes',
         'status',
         'source',
-        'referred_by_employee_id',
         'notes',
         'resume_path',
         'resume_name',
@@ -135,12 +134,6 @@ class Applicant extends Model
             ->implode('|');
 
         return $address === '' ? null : preg_replace('/\s+/', ' ', mb_strtolower(trim((string) $this->name))).'#'.$address;
-    }
-
-    // The employee whose referral link the applicant used
-    public function referredBy()
-    {
-        return $this->belongsTo(Employee::class, 'referred_by_employee_id');
     }
 
     // The status as people read it: "rejected" is stored, "declined" is shown.

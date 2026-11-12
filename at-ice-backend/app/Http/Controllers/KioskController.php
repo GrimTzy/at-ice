@@ -25,10 +25,10 @@ use Illuminate\Validation\ValidationException;
 // unlocks it. HR cannot unlock a kiosk. Every attempt is logged.
 class KioskController extends Controller
 {
-    private const DEVICE_RULE = ['required', 'string', 'regex:/^[A-Za-z0-9-]{16,64}$/'];
-
     // Wrong Admin override PINs allowed from one network address in an hour.
     private const MAX_WRONG_ADMIN_PINS_PER_IP = 5;
+
+    private const DEVICE_RULE =['required', 'string', 'regex:/^[A-Za-z0-9-]{16,64}$/'];
 
     // POST /api/kiosk/unlock (public) { device_id, pin }
     public function unlock(Request $request)
@@ -173,6 +173,10 @@ class KioskController extends Controller
         $device = KioskDevice::for($request->device_id, $ip);
         $setting = KioskSetting::current();
 
+        // The Admin override PIN or HR's own override PIN (owner, 2026-11-10)
+        if (! $setting->hasAdminPin() && ! $setting->hasHrOverridePin()) {
+            return response()->json(['message' => 'No override PIN has been set. Admin sets one in Settings, HR in Kiosk PIN.'], 409);
+        }
         // The override PIN is only 4 digits, so wrong ones are also counted per
         // network address across every kiosk for an hour (the route throttle
         // only covers one minute).
@@ -186,10 +190,6 @@ class KioskController extends Controller
             ], 403);
         }
 
-        // The Admin override PIN or HR's own override PIN (owner, 2026-11-10)
-        if (! $setting->hasAdminPin() && ! $setting->hasHrOverridePin()) {
-            return response()->json(['message' => 'No override PIN has been set. Admin sets one in Settings, HR in Kiosk PIN.'], 409);
-        }
         $pin = (string) $request->admin_pin;
         $by = $setting->checkAdminPin($pin) ? 'admin' : ($setting->checkHrOverridePin($pin) ? 'hr' : null);
         if (! $by) {
@@ -247,7 +247,7 @@ class KioskController extends Controller
     public function setHrOverridePin(Request $request)
     {
         $data = $request->validate([
-            'current_password' => 'required|string',
+            'current_password' => 'required|string|max:255',
             'override_pin' => ['required', 'string', 'regex:/^\d{4}$/', 'confirmed'],
         ], [
             'override_pin.regex' => 'The HR override PIN must be exactly 4 digits.',
@@ -284,7 +284,7 @@ class KioskController extends Controller
         return response()->json(['message' => 'Kiosk PIN saved. Every kiosk must be unlocked again with the new PIN.']);
     }
 
-    // PUT /api/admin/kiosk-override-pin (Admin). The 4-digit PIN Admin types on a
+    // PUT /api/admin/kiosk-override-pin (Admin). The 6-digit PIN Admin types on a
     // locked kiosk. Needs Admin's account password.
     public function setAdminPin(Request $request)
     {

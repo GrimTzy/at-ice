@@ -10,6 +10,7 @@ use App\Http\Controllers\CustomerPortalController;
 use App\Http\Controllers\CustomerPriceController;
 use App\Http\Controllers\DeliveryAdjustmentRequestController;
 use App\Http\Controllers\DeliveryContractController;
+use App\Http\Controllers\StoreRouteController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DeliveryProofController;
 use App\Http\Controllers\DeliveryRouteController;
@@ -24,9 +25,12 @@ use App\Http\Controllers\IceLoadingController;
 use App\Http\Controllers\InventoryAlertController;
 use App\Http\Controllers\KioskController;
 use App\Http\Controllers\LeaveRequestController;
-use App\Http\Controllers\LiveFeedController;
 use App\Http\Controllers\NavCountController;
+use App\Http\Controllers\LiveFeedController;
+use App\Http\Controllers\NoticeController;
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentProofController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PerformanceController;
@@ -37,11 +41,12 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PublicApplicationController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\RetentionController;
-use App\Http\Controllers\RouteController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\StockOutRequestController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\AppVersionController;
+use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\SupportMessageController;
 use App\Http\Controllers\TimesheetController;
 use Illuminate\Support\Facades\Route;
@@ -55,6 +60,9 @@ use Illuminate\Support\Facades\Route;
 // A blocked request gets HTTP 429 "Too Many Attempts."
 
 // Public
+// The Android app asks this on opening to find out if a newer APK is offered.
+Route::get('/app-version', [AppVersionController::class, 'show'])->middleware('throttle:60,1,app-version');
+Route::get('/app-download', [AppVersionController::class, 'download'])->middleware('throttle:20,1,app-download');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1,login');
 
 // Forgot password: email a 6-digit code, then set a new password with it.
@@ -86,12 +94,22 @@ Route::post('attendances', [AttendanceController::class, 'store'])->middleware([
 // Live feed (realtime pop-up notices, polled every few seconds by every open
 // page; see App\Support\LiveFeed). Own limit so polling never eats the api one.
 Route::get('live-feed', [LiveFeedController::class, 'index'])
-    ->middleware(['auth:sanctum', 'password.changed', 'throttle:40,1,live']);
+    ->middleware(['auth:sanctum', 'idle:passive', 'password.changed', 'throttle:40,1,live']);
+// The notice bell reloads itself on a live notice, so it is not activity either
+Route::get('notices', [NoticeController::class, 'index'])
+    ->middleware(['auth:sanctum', 'idle:passive', 'password.changed', 'throttle:40,1,notices']);
 
-Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->group(function () {
+Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,api'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
+    // Push-notification address of the Android app (see DeviceTokenController)
+    Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
+    Route::delete('/device-tokens', [DeviceTokenController::class, 'destroy']);
+    Route::post('notices/read', [NoticeController::class, 'read']);
     Route::get('/me', [AuthController::class, 'me']);
+    // The web app sends this while the person is working, so a page they are
+    // reading (no requests of their own) does not count as idle.
+    Route::post('/session/ping', fn () => response()->json(['ok' => true]));
     // Whether the signed-in employee or Driver has timed in at the kiosk
     // (Checker, Salesman, Maintenance and Driver pages).
     Route::get('my-time-in', fn (\Illuminate\Http\Request $request) => response()->json([
@@ -173,12 +191,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         Route::get('deliveries/driver-availability', [DeliveryController::class, 'driverAvailability']);
         // Driver View / Store View for one day (?date=)
         Route::get('deliveries/board', [DeliveryController::class, 'board']);
-        // Waiting deliveries (no driver) and Reschedule to the next delivery day (RouteController)
-        Route::get('deliveries/waiting', [RouteController::class, 'waiting']);
-        Route::post('deliveries/reschedule', [RouteController::class, 'rescheduleMany']);
-        Route::post('deliveries/{id}/reschedule', [RouteController::class, 'reschedule']);
         Route::post('deliveries', [DeliveryController::class, 'store']);
-        // Same-day changes (App\Support\DeliveryAdjust): top-up, add/reduce sacks on one delivery
+        // Same-day changes (App\Support\DeliveryAdjust): add/reduce sacks on one delivery
         // Stores' requests to change the sacks on one delivery: Admin applies or declines
         Route::get('delivery-adjustment-requests', [DeliveryAdjustmentRequestController::class, 'index']);
         Route::post('delivery-adjustment-requests/{id}/apply', [DeliveryAdjustmentRequestController::class, 'apply']);
@@ -186,7 +200,6 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         Route::get('deliveries/{id}', [DeliveryController::class, 'show']);
         Route::put('deliveries/{id}', [DeliveryController::class, 'update']);
         Route::put('deliveries/{id}/cancel', [DeliveryController::class, 'cancel']);
-        Route::post('deliveries/{id}/top-up', [DeliveryController::class, 'topUp']);
         Route::post('deliveries/{id}/adjust', [DeliveryController::class, 'adjust']);
 
         // Delivery contracts: Admin approves, the daily deliveries are generated
@@ -198,21 +211,19 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         Route::post('delivery-contracts/{id}/approve', [DeliveryContractController::class, 'approve']);
         Route::post('delivery-contracts/{id}/cancel', [DeliveryContractController::class, 'cancel']);
 
-        // Routes A to D: regular Driver, stores in stop order, truck load per day
-        Route::get('routes', [RouteController::class, 'index']);
-        Route::get('routes/capacity', [RouteController::class, 'capacity']);
-        Route::post('routes', [RouteController::class, 'store']);
-        Route::get('routes/{id}', [RouteController::class, 'show'])->whereNumber('id');
-        Route::put('routes/{id}', [RouteController::class, 'update'])->whereNumber('id');
-        Route::delete('routes/{id}', [RouteController::class, 'destroy'])->whereNumber('id');
-        Route::put('routes/{id}/stops', [RouteController::class, 'updateStops'])->whereNumber('id');
+        // Routes: named groups of stores (Route A, Route B...)
+        Route::get('store-routes', [StoreRouteController::class, 'index']);
+        Route::post('store-routes', [StoreRouteController::class, 'store']);
+        Route::put('store-routes/{id}', [StoreRouteController::class, 'update']);
+        Route::delete('store-routes/{id}', [StoreRouteController::class, 'destroy']);
 
         // Which Driver handles which stores, and Drivers who are off (stops go first-done first)
         Route::get('driver-store-assignments', [DriverAssignmentController::class, 'index']);
         Route::post('driver-store-assignments', [DriverAssignmentController::class, 'store']);
         Route::delete('driver-store-assignments/{id}', [DriverAssignmentController::class, 'destroy']);
-        // A reserve driver (a Driver account) has no route and covers an absent Driver's route
         Route::put('drivers/{id}/reserve', [DriverAssignmentController::class, 'setReserve']);
+        Route::post('driver-route-assignments', [DriverAssignmentController::class, 'assignRoute']);
+        Route::delete('driver-route-assignments/{id}', [DriverAssignmentController::class, 'unassignRoute']);
 
         Route::get('products-summary', [ProductController::class, 'index']);
 
@@ -242,6 +253,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         Route::put('customers/{id}', [CustomerController::class, 'update']);
         Route::delete('customers/{id}', [CustomerController::class, 'destroy']);
         Route::post('customers/{id}/create-account', [CustomerController::class, 'createAccount']);
+
+
 
         // Support Tickets: customer Contact Support messages (dispatch room)
         Route::get('support-messages', [SupportMessageController::class, 'index']);
@@ -503,8 +516,6 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->g
         // customer via customers.user_id (see CustomerPortalController).
         Route::get('my-profile', [CustomerPortalController::class, 'myProfile']);
         Route::get('my-delivery-history', [CustomerPortalController::class, 'myDeliveries']);
-        // Ran out after today's delivery: ask for an urgent top-up (5 a minute)
-        Route::post('my-deliveries/{id}/top-up', [CustomerPortalController::class, 'requestTopUp'])->middleware('throttle:5,1,top-up');
         // Ask to change the sacks on a delivery not yet delivered (Admin answers)
         Route::post('my-deliveries/{id}/adjustment-requests', [CustomerPortalController::class, 'requestAdjustment'])->middleware('throttle:5,1,adjust-request');
         Route::post('my-adjustment-requests/{id}/withdraw', [CustomerPortalController::class, 'withdrawAdjustment']);

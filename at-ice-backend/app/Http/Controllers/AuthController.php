@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\LoginLockout;
+use App\Support\SessionIdle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
@@ -17,6 +18,7 @@ class AuthController extends Controller
         $request->validate([
             'email' => 'required|email|max:255',
             'password' => 'required|string|max:255',
+            'platform' => 'nullable|string|in:web,android',
         ]);
 
         $ip = (string) $request->ip();
@@ -57,10 +59,25 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // The Android app stays signed in (no idle or absolute limit); a browser
+        // gets the idle limit of its role and a token that ends after
+        // atice.web_token_hours. The flag only sets session length, never access.
+        $apk = \App\Support\AppClient::verified($request) && $user->usesMobileApp();
+        $newToken = $user->createToken(
+            $apk ? SessionIdle::APK_TOKEN : 'auth_token',
+            ['*'],
+            $apk ? null : now()->addHours((int) config('atice.web_token_hours', 12)),
+        );
+        $idleMinutes = $apk ? null : SessionIdle::minutesFor($user);
+        // Only the sign-ins that have an idle limit are tracked
+        if ($idleMinutes) {
+            SessionIdle::touch($newToken->accessToken);
+        }
 
         return response()->json([
-            'token' => $token,
+            'token' => $newToken->plainTextToken,
+            // minutes of inactivity before sign-out; null = no limit for this role
+            'idle_minutes' => $idleMinutes,
             'role' => $user->role,
             'sub_role' => $user->sub_role ?? null,
             'must_change_password' => (bool) $user->must_change_password,

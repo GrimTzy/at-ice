@@ -15,9 +15,6 @@ use Carbon\Carbon;
 //                record (shown, not selectable)
 // Each row also has open_stops (today's stops not done yet) and, for an
 // available Driver with none left, trip_completed_at (see tripCompletedAt).
-// Reserve drivers (a Driver account with users.is_reserve_driver, owner
-// 2026-11-11) are in the list with is_reserve true. They only take an absent
-// Driver's whole route (DeliveryDispatch), never the FIFO queue.
 // The rule applies to deliveries for today. A delivery for a later day can
 // go to any active Driver, since nobody has timed in for that day yet.
 class DriverAvailability

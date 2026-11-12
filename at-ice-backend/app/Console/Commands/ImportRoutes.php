@@ -4,9 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\Customer;
 use App\Models\DeliveryItem;
-use App\Models\DeliveryRoute;
 use App\Models\ReferencePrice;
-use App\Models\RouteStop;
+use App\Models\StoreRoute;
 use App\Models\User;
 use App\Support\Audit;
 use Illuminate\Console\Command;
@@ -82,7 +81,7 @@ class ImportRoutes extends Command
                 $takenEmails = [];
                 foreach ($entries as $e) {
                     $code = $e['route'];
-                    $routes[$code] ??= DeliveryRoute::firstOrCreate(['code' => $code], ['name' => "Route {$code}", 'is_active' => true]);
+                    $routes[$code] ??= StoreRoute::firstOrCreate(['name' => "Route {$code}"]);
                     $stats[$code] ??= ['stops' => [], 'customers' => 0, 'new' => 0, 'existing' => 0, 'logins' => 0];
                     $stats[$code]['stops'][$e['stop_order']] = true;
                     $stats[$code]['customers']++;
@@ -113,10 +112,10 @@ class ImportRoutes extends Command
                         $stats[$code]['logins']++;
                     }
 
-                    RouteStop::updateOrCreate(
-                        ['customer_id' => $customer->id],
-                        ['route_id' => $routes[$code]->id, 'stop_order' => $e['stop_order'], 'stop_group' => $e['stop_group']]
-                    );
+                    // A store is on one route at most: the file decides which.
+                    if ((int) $customer->store_route_id !== (int) $routes[$code]->id) {
+                        $customer->forceFill(['store_route_id' => $routes[$code]->id])->save();
+                    }
                 }
             });
 
@@ -161,9 +160,9 @@ class ImportRoutes extends Command
         }
 
         Audit::log('routes.imported', null, null, ['file' => basename($file), 'customers' => count($entries), 'logins' => count($logins)]);
-        $noDriver = DeliveryRoute::whereNull('driver_id')->orderBy('code')->pluck('code')->all();
+        $noDriver = StoreRoute::whereNull('driver_id')->orderBy('name')->pluck('name')->all();
         if ($noDriver) {
-            $this->warn('No regular driver yet for route(s) '.implode(', ', $noDriver).'. Admin sets it on Deliveries > Routes (PUT /api/routes/{id}).');
+            $this->warn('No Driver yet for '.implode(', ', $noDriver).'. Admin gives each route a Driver in Deliveries > Driver Stores.');
         }
 
         return self::SUCCESS;

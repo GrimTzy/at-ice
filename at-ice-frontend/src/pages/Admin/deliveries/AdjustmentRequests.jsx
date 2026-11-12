@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import Pagination from "../../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../../lib/usePagination";
 import { confirmAction } from "../../../lib/confirm";
 import { iceProductLabel as label } from "../../../lib/iceProducts";
 import { useLiveTick } from "../../../lib/live";
@@ -111,6 +113,7 @@ export default function AdjustmentRequests({ onChanged }) {
     return () => { stop = true; };
   }, [live, tick]);
 
+  const pager = usePagination(rows);
   if (!rows.length) return null;
   return (
     <section aria-label="Store change requests" className="bg-white border border-black/[0.09] rounded-xl">
@@ -119,8 +122,9 @@ export default function AdjustmentRequests({ onChanged }) {
         <p className="text-[12px] text-slate-500 mt-0.5">Stores asked to change the sacks on one of their deliveries. Apply changes only that delivery; decline tells the store why.</p>
       </div>
       <ul className="flex flex-col gap-2 p-3 bg-slate-50/70">
-        {rows.map((r) => <RequestRow key={r.id} r={r} onDone={() => { load(); onChanged?.(); }} />)}
+        {pager.pageItems.map((r) => <RequestRow key={r.id} r={r} onDone={() => { load(); onChanged?.(); }} />)}
       </ul>
+      {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} />}
     </section>
   );
 }

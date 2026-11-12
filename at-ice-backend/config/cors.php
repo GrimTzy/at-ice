@@ -4,6 +4,8 @@
 // Set CORS_ALLOWED_ORIGINS in .env as a comma separated list, for example:
 //   Local:   CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 //   Railway: CORS_ALLOWED_ORIGINS=https://your-app.vercel.app
+// The Android app (Capacitor) calls from http://localhost, https://localhost or
+// capacitor://localhost; list the one your build uses (see ANDROID-APK.md).
 // Without this file Laravel 11 allows every origin (*).
 
 return [
@@ -14,7 +16,7 @@ return [
 
     'allowed_origins' => array_values(array_filter(array_map(
         'trim',
-        explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173'))
+        explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173,http://localhost,https://localhost'))
     ))),
 
     'allowed_origins_patterns' => [],

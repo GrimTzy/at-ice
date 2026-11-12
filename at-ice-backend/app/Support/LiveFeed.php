@@ -4,8 +4,10 @@ namespace App\Support;
 
 use App\Models;
 use App\Models\LiveEvent;
+use App\Support\Push\PushNotifier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 // Realtime pop-up notices for every flow, module by module.
@@ -80,14 +82,20 @@ class LiveFeed
                 return;
             }
 
-            LiveEvent::create([
+            $event = LiveEvent::create([
                 'module' => $n[0],
                 'action' => $action,
                 'message' => mb_substr($n[1], 0, 255),
                 'roles' => array_values($n[2] ?? []),
                 'user_ids' => array_values(array_unique(array_filter($n[3] ?? []))),
                 'actor_id' => auth()->id(),
+                'subject_type' => self::subjectOf($m)[0],
+                'subject_id' => self::subjectOf($m)[1],
             ]);
+
+            // The same notice to the phones of the people it is addressed to, sent after the
+            // response (no queue worker needed).
+            app()->terminating(fn () => PushNotifier::forLiveEvent($event));
 
             // keep the table small: drop rows older than a week now and then (the
             // Admin dashboard lists the latest ones)
@@ -97,6 +105,20 @@ class LiveFeed
         } catch (Throwable $e) {
             Log::warning('LiveFeed: '.$e->getMessage());
         }
+    }
+
+    /** The record a notice is about: [kind, id]. A delivery's child record (proof, arrival, crew...) is the delivery. */
+    public static function subjectOf(Model $m): array
+    {
+        if ($m instanceof Models\Delivery) {
+            return ['delivery', $m->getKey()];
+        }
+        $deliveryId = $m->getAttribute('delivery_id');
+        if ($deliveryId) {
+            return ['delivery', $deliveryId];
+        }
+
+        return [Str::snake(class_basename($m)), $m->getKey()];
     }
 
     private static function label(?string $v): string
@@ -243,11 +265,14 @@ class LiveFeed
                 // Admin (always notified) reviews a new proof. On approval the
                 // invoice's own "Paid" notice reaches the customer.
                 $no = $m->receipt?->receipt_no ?? "#{$m->receipt_id}";
-                if ($a === 'created') {
+                // a proof Admin attached on Mark as Paid needs no review
+                if ($a === 'created' && $m->status === 'pending') {
                     return ['receipts', "Payment proof for Invoice {$no} sent by ".($m->customer?->name ?? 'a customer'), []];
                 }
+                // the customer re-sends it; the invoice's Salesman collects, so
+                // they are told too (QA review, 2026-11-11)
                 if ($a === 'updated' && $m->status === 'rejected') {
-                    return ['receipts', "Your payment proof for Invoice {$no} was declined: {$m->reject_reason}", [], [$m->customer?->user_id]];
+                    return ['receipts', "Payment proof for Invoice {$no} was rejected: {$m->reject_reason}", [], [$m->customer?->user_id, $m->receipt?->salesman_id]];
                 }
 
                 return null;
@@ -262,7 +287,15 @@ class LiveFeed
                     ['employee:salesman'], [$d?->driver_id]];
 
             case Models\Product::class:
-                return ['inventory', "Item {$m->name} {$verb}{$by}", ['employee:checker', 'employee:maintenance']];
+                // the Admin setting the limits of an item a Checker added says so
+                if ($a === 'updated' && $m->wasChanged(['minimum_stock', 'maximum_stock'])) {
+                    return ['inventory', "Item {$m->name} limits set to min {$m->minimum_stock}, max {$m->maximum_stock}{$by}", ['employee:checker', 'employee:maintenance']];
+                }
+
+                // a new item still waits for its limits from the Admin
+                $needs = $a === 'created' && ! $m->limits_set_at ? '. Its limits still need to be set' : '';
+
+                return ['inventory', "Item {$m->name} {$verb}{$by}{$needs}", ['employee:checker', 'employee:maintenance']];
 
             case Models\InventoryAlert::class:
                 if ($a !== 'created') {

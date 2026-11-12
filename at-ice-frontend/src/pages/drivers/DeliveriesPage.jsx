@@ -10,15 +10,15 @@ import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import { useTimedIn } from "../../lib/timeIn";
-import { formatDateShort, manilaDate, todayManila } from "../../lib/time";
 import TimeInNotice from "../../components/TimeInNotice";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
-import { StopMeta, ArrivalChips } from "../../components/RouteParts";
+import { StopMeta, ArrivalChips, RouteOrderNote } from "../../components/RouteParts";
 import { pressArrived } from "../../lib/route";
 import { toast } from "../../lib/toast";
 import FilterSelect from "../../components/FilterSelect";
 import { Icon } from "../../components/icons";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 
 // Haversine formula, gives straight line distance in km between two lat/lng points
 function haversineDistanceKm(lat1, lon1, lat2, lon2) {
@@ -171,6 +171,12 @@ export function DeliveriesPage() {
   const visible = (filter === "all" ? deliveries : deliveries.filter((d) => d.status === filter)).filter((d) =>
     matchesQuery(query, d.delivery_no, d.customer?.name, d.customer?.address, d.customer?.city, d.customer?.province));
   const pager = usePagination(visible, { initialSize: 10 });
+  useNoticeRecord(!loading, (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "delivery") return;
+    setQuery(""); setFilter("all");
+    pager.reveal((row) => String(row.id) === id);
+  });
 
   // I am at the store: the server checks the phone is near the store pin
   async function arrive(d) {
@@ -249,6 +255,7 @@ export function DeliveriesPage() {
         {!loading && visible.length === 0 && (
           <EmptyState icon="truck">No deliveries found.</EmptyState>
         )}
+        {!loading && visible.some((d) => d.route_today && d.stop_no) && <RouteOrderNote />}
         {!loading && pager.pageItems.map((d) => {
           const cfg = STATUS_CONFIG[d.status] || STATUS_CONFIG.pending;
           const open = expanded === d.id;
@@ -269,6 +276,7 @@ export function DeliveriesPage() {
               <button
                 className="w-full text-left px-4 py-4 flex items-start gap-3 cursor-pointer active:bg-slate-50 transition-colors"
                 onClick={() => setExpanded(open ? null : d.id)}
+                data-record={`delivery:${d.id}`}
               >
                 <div className="mt-1 flex-shrink-0">
                   <span className={`w-2 h-2 rounded-full inline-block ${cfg.dot}`} />
@@ -339,12 +347,7 @@ export function DeliveriesPage() {
                     </div>
                   </div>
 
-                  {d.status === "pending" && manilaDate(d.scheduled_date) > todayManila() && (
-                    <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[12px] text-slate-600">
-                      Scheduled for {formatDateShort(d.scheduled_date, { year: true })}. You can start it on that day.
-                    </div>
-                  )}
-                  {d.status === "pending" && manilaDate(d.scheduled_date) <= todayManila() && (
+                  {d.status === "pending" && (
                     <div className="flex gap-2 mt-1">
                       <button
                         onClick={() => startDelivery(d.id)}

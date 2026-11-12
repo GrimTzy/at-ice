@@ -13,7 +13,7 @@ class DeliveryContract extends Model
 
     protected $fillable = [
         'contract_no', 'name', 'chain', 'start_date', 'end_date', 'delivery_days',
-        'delivery_time', 'items', 'status', 'notes', 'created_by', 'approved_by', 'approved_at',
+        'delivery_time', 'delivery_from', 'items', 'status', 'notes', 'created_by', 'approved_by', 'approved_at',
     ];
 
     protected $casts = [

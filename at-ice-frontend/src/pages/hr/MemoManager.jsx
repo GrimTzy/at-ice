@@ -540,7 +540,7 @@ function MemoPanel({ memo, onChanged, onClose }) {
         {mode === "cancel" && (
           <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="text-[12px] font-medium text-slate-700">Why is this memo cancelled? (required)</div>
-            <textarea name="reason" rows={2} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. The kiosk was offline that evening" className={`${inputCls} resize-y`} />
+            <textarea name="reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. The kiosk was offline that evening" className={`${inputCls} resize-y`} />
             <div className="flex gap-2">
               <button type="button" disabled={busy === "cancel"} onClick={async () => (await run("cancel", `/api/memos/${memo.id}/cancel`, { method: "POST", body: { reason } }, "Memo cancelled.")) && setReason("")} title="Cancel the memo; it no longer counts as an offense" className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-rose-600 hover:bg-rose-700 text-white cursor-pointer disabled:opacity-50">Cancel memo</button>
               <button type="button" data-no-confirm onClick={() => setMode("")} className="px-3 py-1.5 rounded-lg text-[12px] border border-black/[0.09] text-slate-600 hover:bg-slate-50 cursor-pointer">Back</button>

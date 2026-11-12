@@ -51,6 +51,7 @@ class Employee extends Model
         'employment_status',
         'regularized_at',
         'pay_basis',
+        'skip_gov_deductions', 'gov_skip_reason',
         'monthly_rate',
         'shift_start',
         'shift_end',
@@ -62,8 +63,10 @@ class Employee extends Model
         'birth_date' => 'date:Y-m-d',
         'work_history' => 'array',
         'is_active' => 'boolean',
+        'skip_gov_deductions' => 'boolean',
         'deactivated_at' => 'datetime',
         'anonymized_at' => 'datetime',
+        'personal_purged_at' => 'datetime',
         'regularized_at' => 'date:Y-m-d',
         'monthly_rate' => 'decimal:2',
         'daily_rate' => 'decimal:2',
@@ -139,5 +142,14 @@ class Employee extends Model
     public function getFullNameAttribute()
     {
         return self::composeName($this->first_name, $this->middle_initial, $this->last_name, $this->suffix);
+    }
+
+    // Government numbers still to get from the employee. They stay optional
+    // (QA review, 2026-11-11), but HR and Payroll see which ones are missing.
+    public const GOV_IDS = ['sss_no' => 'SSS', 'philhealth_no' => 'PhilHealth', 'pagibig_no' => 'Pag-IBIG', 'tin_no' => 'TIN'];
+
+    public function missingGovIds(): array
+    {
+        return array_values(array_filter(self::GOV_IDS, fn ($label, $field) => blank($this->{$field}), ARRAY_FILTER_USE_BOTH));
     }
 }

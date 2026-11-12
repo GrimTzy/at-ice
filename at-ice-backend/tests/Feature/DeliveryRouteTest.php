@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attendance;
 use App\Models\Customer;
 use App\Models\Delivery;
+use App\Models\DeliveryCrew;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -47,7 +49,7 @@ class DeliveryRouteTest extends TestCase
 
     public function test_driver_and_salesman_see_the_same_route_nearest_the_plant_first(): void
     {
-        // plant at 14.7502926, 121.0739105 (Settings defaults); these stores are on no route
+        // plant at 14.8031, 121.0515 (Settings defaults)
         $far = $this->stop($this->ana, 'Far store', 14.8500, 121.0900);
         $near = $this->stop($this->ana, 'Near store', 14.8040, 121.0520);
         $middle = $this->stop($this->ana, 'Middle store', 14.8200, 121.0600);
@@ -79,6 +81,60 @@ class DeliveryRouteTest extends TestCase
         $this->assertSame($this->ben->id, $this->getJson('/api/my-route')->json('crew.driver_id'));
     }
 
+    // QA review 2026-11-11: the driver change failed with 401/403 in the demo.
+    // Each refusal here has its own reason and message.
+    public function test_changing_the_driver_needs_a_time_in_a_salesman_login_and_a_password_that_was_set(): void
+    {
+        $untimed = User::create(['name' => 'Tina', 'email' => 'tina@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'salesman']);
+        Sanctum::actingAs($untimed);
+        $this->getJson('/api/my-route')->assertOk(); // reading is allowed before the Time In
+        $this->putJson('/api/my-route/driver', ['driver_id' => $this->ana->id])
+            ->assertForbidden()->assertJsonPath('needs_time_in', true);
+
+        $this->salesman->forceFill(['must_change_password' => true])->save();
+        Sanctum::actingAs($this->salesman);
+        $this->putJson('/api/my-route/driver', ['driver_id' => $this->ana->id])
+            ->assertForbidden()->assertJsonPath('code', 'password_change_required');
+        $this->salesman->forceFill(['must_change_password' => false])->save();
+
+        // a Driver and a store cannot use the Salesman's screen
+        Sanctum::actingAs($this->ana);
+        $this->putJson('/api/my-route/driver', ['driver_id' => $this->ben->id])->assertForbidden();
+        $store = User::create(['name' => 'Store', 'email' => 'store@atice.cloud', 'password' => 'secret-password', 'role' => 'customer']);
+        Sanctum::actingAs($store);
+        $this->putJson('/api/my-route/driver', ['driver_id' => $this->ben->id])->assertForbidden();
+    }
+
+    public function test_a_logged_out_driver_change_is_401_not_403(): void
+    {
+        $this->putJson('/api/my-route/driver', ['driver_id' => $this->ana->id])->assertUnauthorized();
+    }
+
+    public function test_a_driver_who_times_out_after_the_pick_moves_the_salesman_to_one_on_shift(): void
+    {
+        $anaStop = $this->stop($this->ana, 'Ana store', 14.8040, 121.0520);
+        $this->stop($this->ben, 'Ben store', 14.8200, 121.0600);
+        Sanctum::actingAs($this->salesman);
+        $this->putJson('/api/my-route/driver', ['driver_id' => $this->ana->id])->assertOk();
+        $this->assertSame($this->ana->id, $this->getJson('/api/my-route')->json('crew.driver_id'));
+
+        // Ana times out and goes home: the screen is not left blank, the system gives Ben
+        Attendance::where('employee_id', $this->ana->employee->id)->update(['time_out' => now(config('atice.timezone'))->format('H:i:s')]);
+        $route = $this->getJson('/api/my-route')->assertOk();
+        $this->assertSame($this->ben->id, $route->json('crew.driver_id'));
+        $this->assertSame('system', $route->json('crew.chosen_by'));
+        $this->assertTrue($route->json('crew.on_shift'));
+        $this->assertCount(1, $route->json('route'));
+        $this->assertSame([$this->ben->id], collect($route->json('drivers'))->pluck('id')->all());
+
+        // Ana's stop is refused with the reason, and she cannot be picked while off shift
+        $this->postJson("/api/my-route/deliveries/{$anaStop->id}/arrive", ['latitude' => 14.8040, 'longitude' => 121.0520])
+            ->assertForbidden()->assertJsonPath('message', "This stop is on another Driver's route. Change your Driver first.");
+        $this->putJson('/api/my-route/driver', ['driver_id' => $this->ana->id])->assertUnprocessable();
+
+        // one crew row for the day, however often the Driver changed
+        $this->assertSame(1, DeliveryCrew::where('salesman_id', $this->salesman->id)->count());
+    }
     public function test_arrived_needs_the_phone_near_the_store_pin(): void
     {
         $stop = $this->stop($this->ana, 'Alfamart Muzon', 14.8100, 121.0500, 'in_transit');

@@ -2,9 +2,11 @@
 //
 // HR Leave Requests. Employees file their own leave (/my-leave); HR only
 // approves or rejects here (docs/REVIEW-DECISIONS.md):
-//   Approve  optional remarks. The days are paid from the employee's leave
-//            credits as far as they go, the rest is unpaid. A sick leave can be
-//            marked unpaid.
+//   Approve  optional remarks. VL and EL are paid from the vacation credits,
+//            SL from the sick credits, as far as they go; the rest is unpaid.
+//            A sick leave can be marked unpaid. Leave the law gives (maternity,
+//            paternity, solo parent, VAWC, special leave for women) is paid in
+//            full and uses no credits.
 //   Reject   a reason is required.
 // Every decision is written to the audit log. The list follows the live feed.
 
@@ -47,11 +49,21 @@ async function api(url, options = {}) {
 }
 
 const toList = (d) => (Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : []);
-const TYPE_LABEL = { sick: "Sick (SL)", vacation: "Vacation (VL)", emergency: "Emergency (EL)", maternity: "Maternity", paternity: "Paternity", other: "Other" };
+const TYPE_LABEL = {
+  sick: "Sick (SL)", vacation: "Vacation (VL)", emergency: "Emergency (EL)", maternity: "Maternity", paternity: "Paternity",
+  solo_parent: "Solo parent", vawc: "VAWC", special_women: "Special leave for women", other: "Other",
+};
+// the credits a type uses; the others are leave the law gives
+const POOL = { vacation: "vacation", emergency: "vacation", sick: "sick" };
+const LAW_TYPES = ["maternity", "paternity", "solo_parent", "vawc", "special_women"];
+// the credits left for this request's own leave type, or "By law"
+const creditsLeft = (l) => (!l.credits ? "—" : POOL[l.leave_type]
+  ? `${num(l.credits[POOL[l.leave_type]]?.available ?? 0)} ${POOL[l.leave_type] === "sick" ? "SL" : "VL"}`
+  : "By law");
 const typeLabel = (v) => TYPE_LABEL[v] || v || "—";
-const STATUS_LABEL = { pending: "Pending", approved: "Approved", rejected: "Declined" };
+const STATUS_LABEL = { pending: "Pending", approved: "Approved", rejected: "Rejected" };
 const STATUS_CLASS = { pending: "bg-amber-100 text-amber-700", approved: "bg-emerald-100 text-emerald-700", rejected: "bg-red-100 text-red-600" };
-const TABS = [["pending", "Pending"], ["approved", "Approved"], ["rejected", "Declined"], ["all", "All"]];
+const TABS = [["pending", "Pending"], ["approved", "Approved"], ["rejected", "Rejected"], ["all", "All"]];
 
 const empName = (e) => (e ? [e.first_name, e.middle_initial ? `${e.middle_initial}.` : "", e.last_name, e.suffix].filter(Boolean).join(" ") : "—");
 const empCode = (e) => (typeof e?.employee_id === "string" ? e.employee_id : "");
@@ -79,8 +91,8 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-// Leave balance of every active employee this year: credits earned, used by
-// type (approved leave) and left. Credits are one pool (LeaveCredits).
+// Leave balance of every active employee this year: VL and SL credits earned,
+// used and left (LeaveCredits), and the days of leave the law gives taken.
 function LeaveBalances({ live }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -100,14 +112,14 @@ function LeaveBalances({ live }) {
     return (data?.employees || []).filter((e) => !term || `${e.employee_id} ${e.name}`.toLowerCase().includes(term));
   }, [data, q]);
   const pager = usePagination(rows);
-  const types = Object.entries(data?.types || {});
+  const lawDays = (e) => LAW_TYPES.reduce((s, t) => s + Number(e.used_by_type?.[t] || 0), 0);
 
   return (
     <div className="mt-4 bg-white border border-black/[0.09] rounded-xl overflow-hidden">
       <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
         <div>
           <div className="text-[13px] font-semibold text-slate-800">Leave Balances{data ? ` · ${data.year}` : ""}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Credits are one pool for all leave types. Used counts approved leave only.</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">15 VL and 15 SL a year once regular; EL uses VL. Used counts approved, paid leave only.</div>
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-2 px-2.5 py-1.5 border border-black/[0.09] rounded-md text-slate-400 w-full sm:w-64">
@@ -129,9 +141,13 @@ function LeaveBalances({ live }) {
               <tr className="text-slate-400 border-b border-black/[0.09]">
                 <th className="px-[18px] py-2.5 font-medium">Employee ID</th>
                 <th className="px-[18px] py-2.5 font-medium">Name</th>
-                <th className="px-[18px] py-2.5 font-medium">Earned</th>
-                {types.map(([key, label]) => <th key={key} className="px-[18px] py-2.5 font-medium whitespace-nowrap">{label.replace(/ leave.*$/i, "")} used</th>)}
-                <th className="px-[18px] py-2.5 font-medium">Remaining</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">VL earned</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">VL used</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">VL left</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">SL earned</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">SL used</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap">SL left</th>
+                <th className="px-[18px] py-2.5 font-medium whitespace-nowrap" title="Maternity, paternity, solo parent, VAWC and special leave for women">Leave by law</th>
               </tr>
             </thead>
             <tbody>
@@ -142,9 +158,13 @@ function LeaveBalances({ live }) {
                     {e.name}
                     {e.probationary && <div className="text-[10px] text-slate-400 font-normal">Probationary: no credits yet</div>}
                   </td>
-                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.earned)}</td>
-                  {types.map(([key]) => <td key={key} className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.used_by_type[key] || 0)}</td>)}
-                  <td className="px-[18px] py-2.5 text-slate-800 font-mono font-semibold">{num(e.available)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.vacation?.earned ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.vacation?.used ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-800 font-mono font-semibold">{num(e.vacation?.available ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.sick?.earned ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(e.sick?.used ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-800 font-mono font-semibold">{num(e.sick?.available ?? 0)}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600 font-mono">{num(lawDays(e))}</td>
                 </tr>
               ))}
             </tbody>
@@ -249,7 +269,10 @@ export default function LeaveRequestsPage() {
   };
 
   const dl = decision?.leave;
-  const credit = dl?.credits?.available ?? 0;
+  const dlPool = dl ? POOL[dl.leave_type] : null;
+  const dlLaw = dl ? LAW_TYPES.includes(dl.leave_type) : false;
+  const credit = dlPool ? (dl?.credits?.[dlPool]?.available ?? 0) : 0;
+  const creditName = dlPool === "sick" ? "sick leave" : "vacation leave";
   const dlDays = dl ? Number(dl.total_days) : 0; // EL is already in days (hours ÷ hours per day)
 
   const pager = usePagination(filtered);
@@ -268,7 +291,7 @@ export default function LeaveRequestsPage() {
       <KpiGrid cols={5}>
         <KpiCard heroKey="pending" label="To review" icon="clock" tone="amber" value={counts.pending} sub="Waiting for your decision" bar={share(counts.pending)} onClick={() => setTab("pending")} active={tab === "pending"} live={counts.pending > 0} />
         <KpiCard heroKey="approved" label="Approved" icon="check" tone="emerald" value={counts.approved} sub={`${Math.round(share(counts.approved) * 100)}% of requests`} bar={share(counts.approved)} onClick={() => setTab("approved")} active={tab === "approved"} />
-        <KpiCard heroKey="rejected" label="Declined" icon="x" tone="rose" value={counts.rejected} sub="With a reason given" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
+        <KpiCard heroKey="rejected" label="Rejected" icon="x" tone="rose" value={counts.rejected} sub="With a reason given" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
         <KpiCard label="On leave today" icon="calendar" tone="violet" value={onLeaveToday} sub="Approved leave covering today" />
         <KpiCard heroKey="all" label="All requests" icon="file" tone="cyan" value={counts.all} sub="Filed by employees" onClick={() => setTab("all")} active={tab === "all"} />
       </KpiGrid>
@@ -279,7 +302,7 @@ export default function LeaveRequestsPage() {
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
           <div>
             <div className="text-[13px] font-semibold text-slate-800">Leave Requests</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Filed by employees from their own page. Approve or decline them here.</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">Filed by employees from their own page. Approve or reject them here.</div>
           </div>
           <div className="flex-1" />
           <div className="flex items-center gap-2 px-2.5 py-1.5 border border-black/[0.09] rounded-md text-slate-400 w-full sm:w-64">
@@ -329,7 +352,7 @@ export default function LeaveRequestsPage() {
                       </td>
                       <td className="px-[18px] py-2.5 text-slate-600 whitespace-nowrap">{dates(l)}</td>
                       <td className="px-[18px] py-2.5 text-slate-600 font-mono whitespace-nowrap">{length(l)}</td>
-                      <td className="px-[18px] py-2.5 text-slate-600 font-mono">{l.credits ? num(l.credits.available) : "—"}</td>
+                      <td className="px-[18px] py-2.5 text-slate-600 font-mono whitespace-nowrap">{creditsLeft(l)}</td>
                       <td className="px-[18px] py-2.5">
                         <div className="status-stack">
                           <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_CLASS[l.status] || "bg-slate-100 text-slate-500"}`}>{STATUS_LABEL[l.status] || l.status}</span>
@@ -342,7 +365,7 @@ export default function LeaveRequestsPage() {
                           {l.status === "pending" && (
                             <>
                               <button data-no-confirm onClick={() => openDecision(l, "approved")} className="px-2.5 py-1 bg-cyan-500 hover:bg-cyan-600 rounded-md text-[11px] font-semibold text-white cursor-pointer">Approve</button>
-                              <button data-no-confirm onClick={() => openDecision(l, "rejected")} className="px-2.5 py-1 bg-red-500 text-white rounded-md text-[11px] font-semibold cursor-pointer">Decline</button>
+                              <button data-no-confirm onClick={() => openDecision(l, "rejected")} className="px-2.5 py-1 bg-red-500 text-white rounded-md text-[11px] font-semibold cursor-pointer">Reject</button>
                             </>
                           )}
                         </div>
@@ -364,14 +387,14 @@ export default function LeaveRequestsPage() {
         <TipsWidget tips={[
           { title: "Sick leave needs a med cert", text: "SL is filed at most 1 day after returning; check the medical certificate before approving.", tone: "rose", icon: "file" },
           { title: "Credits are paid first", text: "Approved days are paid from the employee's credits; the rest are unpaid and feed payroll.", tone: "cyan", icon: "wallet" },
-          { title: "A reason is required to decline", text: "The employee sees it on their Leave Request page.", tone: "amber", icon: "message" },
+          { title: "A reason is required to reject", text: "The employee sees it on their Leave Request page.", tone: "amber", icon: "message" },
         ]} />
       </aside>
       </div>
 
       {/* APPROVE / REJECT */}
       {decision && (
-        <Modal title={decision.status === "approved" ? "Approve leave" : "Decline leave"} onClose={() => !deciding && setDecision(null)}>
+        <Modal title={decision.status === "approved" ? "Approve leave" : "Reject leave"} onClose={() => !deciding && setDecision(null)}>
           <div className="p-5 flex flex-col gap-3 text-xs">
             <DraftHint draft={decisionDraft} />
             <div className="text-slate-700">
@@ -379,14 +402,20 @@ export default function LeaveRequestsPage() {
             </div>
             {dl.attachment_path && (
               <button type="button" onClick={() => openProtectedFile(`/api/leave-requests/${dl.id}/attachment`, "attachment")} className="self-start text-cyan-600 font-semibold cursor-pointer">
-                {dl.leave_type === "sick" ? "View medical certificate" : "View attachment"}
+                {dl.leave_type === "sick" ? "View medical certificate" : dlLaw ? "View proof" : "View attachment"}
               </button>
             )}
             {decision.status === "approved" ? (
               <>
-                <p className={`px-3 py-2 rounded-lg border ${credit >= dlDays ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
-                  {num(credit)} day(s) of leave credits left. {credit >= dlDays ? "This leave will be paid from them." : `${num(Math.max(0, dlDays - credit))} day(s) will be unpaid and deducted in payroll.`}
-                </p>
+                {dlLaw ? (
+                  <p className="px-3 py-2 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700">
+                    Leave given by law: paid in full, no credits used. Check the attached proof before approving.
+                  </p>
+                ) : (
+                  <p className={`px-3 py-2 rounded-lg border ${credit >= dlDays ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+                    {num(credit)} day(s) of {creditName} credits left. {credit >= dlDays ? "This leave will be paid from them." : `${num(Math.max(0, dlDays - credit))} day(s) will be unpaid and deducted in payroll.`}
+                  </p>
+                )}
                 {dl.leave_type === "sick" && (
                   <label className="flex items-center gap-2 text-slate-700">
                     <input name="sl_paid" type="checkbox" data-native checked={slPaid} onChange={(e) => setSlPaid(e.target.checked)} />
@@ -400,7 +429,7 @@ export default function LeaveRequestsPage() {
               </>
             ) : (
               <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-slate-500">Reason for declining (required)</span>
+                <span className="text-[11px] font-medium text-slate-500">Reason for rejecting (required)</span>
                 <textarea name="reject_reason" rows={3} maxLength={300} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="px-2.5 py-2 border border-black/[0.09] rounded-md text-xs" autoFocus />
               </label>
             )}
@@ -409,7 +438,7 @@ export default function LeaveRequestsPage() {
               <button onClick={() => setDecision(null)} disabled={deciding} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 cursor-pointer">Cancel</button>
               <button onClick={submitDecision} disabled={deciding || (decision.status === "rejected" && rejectReason.trim().length < 3)}
                 className={`px-3.5 py-1.5 rounded-md text-white font-semibold disabled:opacity-50 cursor-pointer ${decision.status === "approved" ? "bg-cyan-500 hover:bg-cyan-600" : "bg-red-500 hover:bg-red-600"}`}>
-                {deciding ? "Saving…" : decision.status === "approved" ? "Approve" : "Decline"}
+                {deciding ? "Saving…" : decision.status === "approved" ? "Approve" : "Reject"}
               </button>
             </div>
           </div>
@@ -427,7 +456,7 @@ export default function LeaveRequestsPage() {
               ["Dates", dates(viewing)],
               ["Length", length(viewing)],
               ["Status", `${STATUS_LABEL[viewing.status] || viewing.status}${payLabel(viewing) ? ` · ${payLabel(viewing)}` : ""}`],
-              ["Credits left", viewing.credits ? `${num(viewing.credits.available)} day(s)` : "—"],
+              ["Credits left", creditsLeft(viewing)],
               ["Filed", fmtDateTime(viewing.created_at)],
             ].map(([label, value]) => (
               <div key={label} className="flex items-start justify-between gap-4">

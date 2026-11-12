@@ -4,16 +4,13 @@ namespace App\Support;
 
 use App\Models\Delivery;
 use App\Models\DeliveryCrew;
-use App\Models\RouteStop;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
 // Today's route of a Driver, shared by the Driver and the Salesmen riding with
 // them (owner, 2026-10-20):
-//   - stores on a fixed route (App\Models\DeliveryRoute, client 2026-11-10)
-//     are listed in the route's stop order; other stores after them, nearest
-//     to the plant first (plant.latitude and plant.longitude in Settings; a
-//     store without a pin goes last)
+//   - the stops are listed nearest to the plant first (plant.latitude and
+//     plant.longitude in Settings; a store without a pin goes last)
 //   - a Salesman rides with one Driver a day (delivery_crews): the system picks
 //     one who has timed in, and the Salesman may change it to any other Driver
 //     who has timed in
@@ -49,25 +46,7 @@ class DeliveryRoute
         })->sortBy(fn ($d) => [$d->distance_km === null ? 1 : 0, $d->distance_km ?? 0, (string) $d->ordered_at])->values();
     }
 
-    // Route stores in stop order (each delivery gets route_code, stop_order
-    // and stop_group), then the others nearest the plant first.
-    public static function sortByRoute(Collection $deliveries): Collection
-    {
-        $routes = RouteStop::forCustomers($deliveries->pluck('customer_id')->filter()->unique()->values()->all());
-        $deliveries = self::sortByDistance($deliveries)->each(function ($d) use ($routes) {
-            $r = $routes[$d->customer_id] ?? null;
-            $d->setAttribute('route_code', $r['route_code'] ?? null);
-            $d->setAttribute('stop_order', $r['stop_order'] ?? null);
-            $d->setAttribute('stop_group', $r['stop_group'] ?? null);
-        });
-
-        // stable: the distance order stays within a stop and for stores off a route
-        return $deliveries->values()->map(fn ($d, $i) => [$d, $i])
-            ->sortBy(fn ($p) => [$p[0]->stop_order === null ? 1 : 0, (string) $p[0]->route_code, $p[0]->stop_order ?? 0, $p[1]])
-            ->map(fn ($p) => $p[0])->values();
-    }
-
-    // Today's stops of a Driver: open ones due today or earlier, in route order,
+    // Today's stops of a Driver: open ones due today or earlier, nearest first,
     // then the ones delivered today. Same list for the Driver and the Salesman.
     public static function todayFor(int $driverId): Collection
     {
@@ -86,7 +65,7 @@ class DeliveryRoute
             ->orderByDesc('delivered_at')
             ->get();
 
-        $route = self::sortByRoute($open)->concat(self::sortByRoute($done)->sortByDesc('delivered_at')->values());
+        $route = self::sortByDistance($open)->concat(self::sortByDistance($done)->sortByDesc('delivered_at')->values());
 
         return $route->values()->each(fn ($d, $i) => $d->setAttribute('stop_no', $i + 1));
     }
@@ -96,10 +75,7 @@ class DeliveryRoute
     public static function driversOnShift(): Collection
     {
         $today = DriverAvailability::today();
-        // the reserve driver only on a day they are driving (they have stops)
-        $rows = collect(DriverAvailability::all())->whereIn('status', ['available', 'in_transit'])
-            ->reject(fn ($r) => ! empty($r['is_reserve']) && $r['open_stops'] === 0 && $r['status'] !== 'in_transit')
-            ->values();
+        $rows = collect(DriverAvailability::all())->whereIn('status', ['available', 'in_transit'])->values();
         if ($rows->isEmpty()) {
             return collect();
         }

@@ -63,7 +63,7 @@ class SharedUtilitiesTest extends TestCase
 
     public function test_settings_have_defaults_hr_can_change_them_and_it_is_audited(): void
     {
-        $this->assertSame('SPLIT_FIRST_TWO', Settings::get('payroll.gov_deduction_strategy'));
+        $this->assertSame('SECOND_PAYROLL_OF_MONTH', Settings::get('payroll.gov_deduction_strategy'));
         $this->assertSame(0, Settings::get('attendance.grace_minutes'));
 
         $hr = User::factory()->create(['role' => 'hr']);
@@ -128,10 +128,7 @@ class SharedUtilitiesTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
         $this->getJson('/api/settings/attendance')->assertForbidden();
         $keys = collect($this->getJson('/api/admin-settings/deliveries')->assertOk()->json())->pluck('key');
-        // rolling truck stock is off and hidden (client, 2026-11-10); the truck limits are here
-        $this->assertNotContains('delivery.allow_rolling_stock_fifo', $keys);
-        $this->assertContains('delivery.truck_big_sacks', $keys);
-        $this->assertContains('delivery.max_stores_per_driver_day', $keys);
+        $this->assertContains('delivery.allow_rolling_stock_fifo', $keys);
         $this->assertContains('delivery.auto_queue_on_trip_completion', $keys);
         $this->assertContains('plant.latitude', $keys);
         $this->assertContains('support.overdue_hours', collect($this->getJson('/api/admin-settings/support')->assertOk()->json())->pluck('key'));

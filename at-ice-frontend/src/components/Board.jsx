@@ -1,4 +1,6 @@
 import { TONES } from "../lib/boardTones";
+import Pagination from "./Pagination";
+import { PAGE_SIZES, usePagination } from "../lib/usePagination";
 
 // Board building blocks for Admin pages, in the style of monday.com boards:
 // a group has a colored title and a colored left edge on every row, and each
@@ -28,9 +30,13 @@ export function StatusCell({ tone = "idle", children, className = "", title }) {
 // uses the same fixed column template, so the columns of stacked groups line
 // up from top to bottom whatever their contents. minWidth keeps that template
 // readable on a phone (the group scrolls sideways instead).
-export function BoardGroup({ title, tone = "info", count, columns, children, footer, empty = "Nothing here.", minWidth }) {
+// paged: 10 rows a page with the shared pagination bar under the group, for a
+// group that keeps growing (every list over 10 rows is paged).
+export function BoardGroup({ title, tone = "info", count, columns, children, footer, empty = "Nothing here.", minWidth, paged = false }) {
   const t = TONES[tone] || TONES.info;
   const rows = Array.isArray(children) ? children.filter(Boolean) : children ? [children] : [];
+  const pager = usePagination(rows);
+  const shown = paged ? pager.pageItems : rows;
   const fixed = columns.some((c) => c.width);
   return (
     <section className="min-w-0">
@@ -62,7 +68,7 @@ export function BoardGroup({ title, tone = "info", count, columns, children, foo
             </tr>
           </thead>
           <tbody>
-            {rows.length ? rows : (
+            {shown.length ? shown : (
               <tr>
                 <td colSpan={columns.length} className="px-3 py-3 text-[11px] text-slate-400" style={{ boxShadow: `inset 4px 0 0 ${t.edge}` }}>{empty}</td>
               </tr>
@@ -70,6 +76,7 @@ export function BoardGroup({ title, tone = "info", count, columns, children, foo
           </tbody>
         </table>
       </div>
+      {paged && pager.total > PAGE_SIZES[0] && <Pagination pager={pager} />}
       {footer}
     </section>
   );

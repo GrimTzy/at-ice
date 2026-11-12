@@ -37,19 +37,19 @@ class LongTextValidationTest extends TestCase
         ];
     }
 
-    public function test_employee_names_longer_than_100_characters_are_refused(): void
+    public function test_employee_names_longer_than_50_characters_are_refused(): void
     {
         Sanctum::actingAs(User::create(['name' => 'HR', 'email' => 'hr@atice.cloud', 'password' => 'secret-password', 'role' => 'hr']));
 
-        $this->postJson('/api/employees', $this->employeePayload(['first_name' => str_repeat('A', 101), 'last_name' => str_repeat('B', 101)]))
+        $this->postJson('/api/employees', $this->employeePayload(['first_name' => str_repeat('A', 51), 'last_name' => str_repeat('B', 51)]))
             ->assertUnprocessable()->assertJsonValidationErrors(['first_name', 'last_name']);
         $this->assertSame(0, Employee::count());
 
-        // 100 characters each still fit the login name and email (users.name, users.email)
-        $id = $this->postJson('/api/employees', $this->employeePayload(['first_name' => str_repeat('A', 100), 'last_name' => str_repeat('B', 100)]))
+        // 50 characters each (the name limit) still fit the login name and email (users.name, users.email)
+        $id = $this->postJson('/api/employees', $this->employeePayload(['first_name' => str_repeat('A', 50), 'last_name' => str_repeat('B', 50)]))
             ->assertCreated()->json('employee.id');
 
-        $this->putJson("/api/employees/{$id}", ['first_name' => str_repeat('C', 101)])
+        $this->putJson("/api/employees/{$id}", ['first_name' => str_repeat('C', 51)])
             ->assertUnprocessable()->assertJsonValidationErrors('first_name');
     }
 

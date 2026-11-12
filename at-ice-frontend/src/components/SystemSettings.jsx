@@ -15,6 +15,20 @@ import { confirmAction } from "../lib/confirm";
 
 const PAY_RATES_ID = "settings-rates-pay";
 
+// Readable names for the choice settings (the stored values stay as they are)
+const ENUM_LABELS = {
+  CARRY_OVER: "Carry over to the next cut-off",
+  EMPLOYER_SHOULDERED: "The employer pays the shortfall",
+  SECOND_PAYROLL_OF_MONTH: "All on the second pay day of the month (end-of-month cut-off)",
+  FIRST_PAYROLL_OF_MONTH: "All on the first pay day of the month",
+  SPLIT_FIRST_TWO: "Half on each of the first two pay days",
+  REVIEW: "Admin reviews them",
+  ANONYMIZE: "Anonymize them",
+  PURGE: "Delete them",
+};
+const enumLabel = (v) => ENUM_LABELS[v] || String(v).replace(/_/g, " ").toLowerCase().replace(/^./, (c) => c.toUpperCase());
+const shownValue = (s, v) => (s.type.startsWith("enum:") ? enumLabel(v) : s.type === "bool" ? (String(v) === "true" ? "Yes" : "No") : v);
+
 const inputCls = "w-full px-2.5 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20";
 
 async function api(url, options = {}) {
@@ -61,7 +75,7 @@ export function SettingRow({ s, onSaved, endpoint = "/api/settings" }) {
   } else if (s.type.startsWith("enum:")) {
     field = (
       <select id={id} value={value} onChange={(e) => setValue(e.target.value)} className={inputCls}>
-        {s.type.slice(5).split(",").map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
+        {s.type.slice(5).split(",").map((o) => <option key={o} value={o}>{enumLabel(o)}</option>)}
       </select>
     );
   } else if (s.type === "time") {
@@ -86,9 +100,9 @@ export function SettingRow({ s, onSaved, endpoint = "/api/settings" }) {
     <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_180px_auto] gap-2 sm:items-center py-2.5 border-b border-black/[0.06] last:border-b-0">
       <label htmlFor={id} className="min-w-0">
         <span className="block text-[12px] text-slate-700">{s.label}</span>
-        <span className="block text-[10px] text-slate-400 font-mono">
-          {s.key}{String(s.value) !== String(s.default) ? ` · default ${s.default}` : ""}
-        </span>
+        {String(s.value) !== String(s.default) && (
+          <span className="block text-[10.5px] text-slate-400">Changed · default {shownValue(s, s.default)}</span>
+        )}
       </label>
       {field}
       <button

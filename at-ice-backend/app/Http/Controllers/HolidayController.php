@@ -14,6 +14,9 @@ use Illuminate\Validation\ValidationException;
 // The holiday calendar (HR and Admin). Add, edit, delete, list by year.
 class HolidayController extends Controller
 {
+    // Most a date range can cover (e.g. a Holy Week or a declared break).
+    public const MAX_RANGE_DAYS = 31;
+
     // GET /api/holidays?year=2026
     public function index(Request $request)
     {
@@ -26,18 +29,13 @@ class HolidayController extends Controller
         ]);
     }
 
-    // Most a date range can cover (e.g. a Holy Week or a declared break).
-    public const MAX_RANGE_DAYS = 31;
-
-    // POST /api/holidays { date, end_date?, name, type, is_double? }
-    // One date, or a range from `date` to `end_date`: one holiday row per date.
-    // Each date is checked for an existing holiday; nothing is saved if any is taken.
     public function store(Request $request)
     {
+        $data = $this->validated($request);
         $request->validate([
             'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date'],
         ], ['end_date.after_or_equal' => 'The end date must be on or after the start date.']);
-        $data = $this->validated($request);
+
         $from = Carbon::parse($data['date']);
         $to = Carbon::parse($request->input('end_date') ?: $data['date']);
 
@@ -93,7 +91,7 @@ class HolidayController extends Controller
     {
         $data = $request->validate([
             'date' => ['required', 'date_format:Y-m-d', Rule::unique('holidays', 'date')->ignore($ignore)],
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:50',
             'type' => ['required', Rule::in(Holiday::TYPES)],
             'is_double' => 'nullable|boolean',
         ], [

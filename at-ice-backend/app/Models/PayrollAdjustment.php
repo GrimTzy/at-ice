@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-// An extra earning on one payroll (bonus, incentive, referral bonus), added by
+// An extra earning on one payroll (bonus, incentive, allowance), added by
 // Admin before the pay is released. Taxable or not.
 class PayrollAdjustment extends Model
 {

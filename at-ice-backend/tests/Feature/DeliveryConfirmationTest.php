@@ -97,7 +97,7 @@ class DeliveryConfirmationTest extends TestCase
         $this->assertNotNull($row);
         $this->assertSame('delivered', $row['status']);
         // Invoice number: the customer's invoice code, today's date, then 001.
-        $this->assertSame('PG-'.now(config('atice.timezone'))->format('Ymd').'-001', $row['proofs'][0]['receipt']['receipt_no']);
+        $this->assertSame('PG-'.now()->format('Ymd').'-001', $row['proofs'][0]['receipt']['receipt_no']);
         $this->assertSame(2, (int) $row['proofs'][0]['receipt']['items'][0]['quantity']);
 
         // another Salesman does not see it

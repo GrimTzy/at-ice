@@ -248,7 +248,7 @@
   margin-inline: auto;
 }
 /* A tag or short note that goes with a cell's main text (PROBATIONARY, Night,
-   MED CERT, DOUBLE, Top-up): on its own line under the text, centered, so a
+   MED CERT, DOUBLE): on its own line under the text, centered, so a
    row never gets wider because of it. Every table uses this one rule. */
 .cell-note {
   display: block;
@@ -555,6 +555,8 @@ aside.rail:not(.is-open) .sidenav-sub { grid-template-rows: 0fr; }
   outline: none;
   box-shadow: var(--focus-ring);
 }
+/* The sliding-card titles on the login page (Login / Download AT-ICE App) draw no ring. */
+#root button.slide-title:focus-visible { box-shadow: none; }
 
 /* Headings: slightly tighter tracking. */
 :is(.ice-main, .ice-scope) :is(h1, h2, h3) {

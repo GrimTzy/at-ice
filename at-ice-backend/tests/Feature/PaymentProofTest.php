@@ -72,7 +72,9 @@ class PaymentProofTest extends TestCase
         $this->submit()->assertStatus(422);
 
         // The customer sees it on the invoice and can open their own file.
-        $this->getJson('/api/my-receipts')->assertOk()->assertJsonPath('0.payment_proofs.0.status', 'pending');
+        $this->getJson('/api/my-receipts')->assertOk()->assertJsonPath('0.payment_proofs.0.status', 'pending')
+            // the printed invoice names the salesman like the Admin's copy; only the name is sent
+            ->assertJsonPath('0.salesman.name', 'Salesman')->assertJsonMissingPath('0.salesman.email');
         $this->get("/api/my-payment-proofs/{$proof->id}/file")->assertOk();
     }
 
@@ -115,7 +117,9 @@ class PaymentProofTest extends TestCase
         // The overdue count is not reset: the invoice date is unchanged.
         $this->assertTrue($receipt->created_at->eq($created));
         $this->assertTrue(DB::table('audit_logs')->where('action', 'payment_proof.rejected')->where('subject_id', $proof->id)->exists());
-        $this->assertTrue(LiveEvent::where('message', 'like', '%was declined: The reference number does not match.')->exists());
+        $notice = LiveEvent::where('message', 'like', '%was rejected: The reference number does not match.')->firstOrFail();
+        // the customer re-sends it and the invoice's Salesman, who collects, is told too
+        $this->assertEqualsCanonicalizing([$this->customerUser->id, $receipt->salesman_id], $notice->user_ids);
 
         // The customer sees the reason and may send a new proof.
         Sanctum::actingAs($this->customerUser);
@@ -181,6 +185,41 @@ class PaymentProofTest extends TestCase
             ->assertOk()->assertJsonPath('chain', null)->assertJsonPath('customer_type', 'dealer');
         $this->putJson("/api/customers/{$other->id}", ['customer_type' => 'spaceship'] + $contact)
             ->assertStatus(422)->assertJsonValidationErrors('customer_type');
+    }
+
+    public function test_mark_paid_by_gcash_needs_a_proof_and_keeps_it_with_the_invoice(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $this->patchJson("/api/receipts/{$this->receipt->id}/paid", ['payment_method' => 'gcash'])
+            ->assertStatus(422)->assertJsonValidationErrors('proof');
+        $this->assertSame('unpaid', $this->receipt->fresh()->payment_status);
+
+        // the form sends a POST with _method so the file can go with it
+        $this->post("/api/receipts/{$this->receipt->id}/paid", [
+            '_method' => 'PATCH',
+            'payment_method' => 'gcash',
+            'reference_no' => '3014 552 870 116',
+            'proof' => UploadedFile::fake()->create('gcash.jpg', 120, 'image/jpeg'),
+        ], ['Accept' => 'application/json'])->assertOk();
+
+        $this->assertSame('paid', $this->receipt->fresh()->payment_status);
+        $proof = PaymentProof::where('receipt_id', $this->receipt->id)->firstOrFail();
+        $this->assertSame('approved', $proof->status);
+        $this->assertSame($this->admin->id, $proof->reviewed_by);
+        $this->assertSame('3014 552 870 116', $proof->reference_no);
+        Storage::disk('local')->assertExists($proof->file_path);
+        // Admin's own proof is not put in front of Admin as one to review
+        $this->assertFalse(LiveEvent::where('message', 'like', 'Payment proof for Invoice%sent by%')->exists());
+    }
+
+    public function test_mark_paid_in_cash_needs_no_proof(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $this->patchJson("/api/receipts/{$this->receipt->id}/paid", ['payment_method' => 'cash'])->assertOk();
+
+        $this->assertSame('paid', $this->receipt->fresh()->payment_status);
+        $this->assertSame(0, PaymentProof::count());
     }
 
     public function test_support_topics_include_the_new_reasons(): void

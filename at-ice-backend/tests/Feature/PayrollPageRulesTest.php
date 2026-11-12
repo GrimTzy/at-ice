@@ -70,7 +70,7 @@ class PayrollPageRulesTest extends TestCase
     {
         $employee = Employee::create(['employee_id' => 'EMP-0002', 'first_name' => 'Ben', 'last_name' => 'Cruz', 'position' => 'Guard', 'daily_rate' => 700, 'date_hired' => '2026-01-05', 'is_active' => true]);
         $payroll = Payroll::create(['employee_id' => $employee->id, 'period_start' => '2026-10-01', 'period_end' => '2026-10-14', 'gross_pay' => 5000, 'net_pay' => 4500, 'status' => 'unpaid', 'prepared_by' => User::factory()->create(['role' => 'hr'])->id]);
-        $adjustment = $payroll->adjustments()->create(['label' => 'Referral bonus', 'amount' => 100, 'taxable' => false]);
+        $adjustment = $payroll->adjustments()->create(['label' => 'Bonus', 'amount' => 100, 'taxable' => false]);
 
         return [$payroll->id, $adjustment->id];
     }

@@ -252,7 +252,7 @@ export default function ProjectsPage() {
           const rows = filtered.filter((p) => p.status === key);
           if (key === "done" && !rows.length) return null;
           return (
-            <BoardGroup key={key} title={s.label} tone={s.tone} count={rows.length} columns={columns} minWidth="760px" empty={key === "planned" ? "No planned projects. Maintenance adds them from their portal." : "None."}>
+            <BoardGroup key={key} title={s.label} tone={s.tone} count={rows.length} columns={columns} minWidth="760px" paged empty={key === "planned" ? "No planned projects. Maintenance adds them from their portal." : "None."}>
               {rows.map((p) => (
                 <Fragment key={p.id}>
                   <BoardRow
@@ -345,7 +345,7 @@ export default function ProjectsPage() {
               ].map(([key, label, type, ph, wide]) => (
                 <label key={key} className={`flex flex-col gap-1 ${wide ? "col-span-2" : ""}`}>
                   <span className="text-[11px] text-slate-500">{label}</span>
-                  <input name={key}
+                  <input name={key} maxLength={key === "owner" ? 50 : undefined}
                     type={type}
                     value={form[key]}
                     min={type === "number" ? 0 : key === "due_date" ? form.start_date || undefined : undefined}

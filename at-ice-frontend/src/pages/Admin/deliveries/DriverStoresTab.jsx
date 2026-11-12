@@ -3,29 +3,17 @@ import { toast } from "../../../lib/toast";
 import { api, nextMonday, todayStr, ymd, shortDate, storeName, inputCls, labelCls, btnPrimary } from "./utils";
 import Req from "../../../components/Req";
 
-// Driver Stores: Admin gives a Route (its stores in stop order, Routes tab) to
-// a Driver (PUT routes/{id}):
-//   No end date        the route's regular Driver { driver_id, driver_from,
-//                      driver_to? }: with an Until (optional, owner
-//                      2026-11-12) the route has no regular Driver after it
-//                      (reserve or Waiting); Admin is alerted 3 days before
-//   One day / One week a temporary cover { cover_driver_id, cover_from,
-//                      cover_to }; when it ends the regular Driver is back
-//                      on his own (owner, 2026-11-11)
-// The upcoming deliveries of its stores follow; the stores are told. A Driver
-// is the regular Driver of one route at most. Reserve drivers (PUT
-// drivers/{id}/reserve) have no regular route but may cover one; when a
-// Driver is off, a reserve who has timed in takes the whole route if it fits
-// the truck limits, otherwise its stops wait for Admin.
+// Driver Stores: Admin hands a Route (a group of stores, Routes tab) to a
+// Driver, from a date (usually next week or the next pay period). The stores'
+// daily deliveries follow it, on the days of each store's contract.
 // Below: Drivers who are off today. Nobody marks this: a Driver still not
 // timed in a while after their shift starts, or on approved leave, is off and
 // their stops are reassigned (owner, 2026-10-20).
 // The page toolbar passes `search` and `type` (customer type) to narrow "Stores per driver".
 // How long an assignment runs (owner, 2026-11-10, from Kevin's change). The
 // dates stay hidden until one is picked, then fill in: one day is today; one
-// week is today to six days later (both a cover); no end date starts next
-// Monday and makes the regular driver, with an optional Until. Moving the
-// start moves the end with it (one day, one week).
+// week is today to six days later; no end date starts next Monday and is the
+// route's regular driver until changed. Moving the start moves the end with it.
 const LENGTHS = [
   { value: "day", label: "One day" },
   { value: "week", label: "One week" },
@@ -40,17 +28,12 @@ export default function DriverStoresTab({ drivers, live, onChanged, search = "",
   const [form, setForm] = useState({ driver_id: "", route_id: "", length: "", effective_from: "", effective_to: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  // Reserve flags just saved, shown until the board (drivers) reloads with them
-  const [reserveSaved, setReserveSaved] = useState({});
-  useEffect(() => { setReserveSaved({}); }, [drivers]);
-  const isReserve = (dr) => (dr.id in reserveSaved ? reserveSaved[dr.id] : !!dr.is_reserve);
 
   const load = useCallback(async () => {
     try {
-      const [a, r] = await Promise.all([api("driver-store-assignments"), api("routes")]);
+      const [a, r] = await Promise.all([api("driver-store-assignments"), api("store-routes")]);
       setAssignments(a);
-      // the stores of each route, from its stops
-      setRoutes(r.map((route) => ({ ...route, stores: (route.stops || []).map((st) => ({ id: st.customer_id, ...(st.customer || {}) })) })));
+      setRoutes(r);
     } catch (err) {
       toast.error(err.message);
     }
@@ -65,15 +48,12 @@ export default function DriverStoresTab({ drivers, live, onChanged, search = "",
     setForm({ ...form, length, effective_from: from, effective_to: untilFor(length, from) });
     setError("");
   }
-  // A new start moves the Until date with it for one day and one week; for no
-  // end date an Until before the new start is cleared
+  // A new start moves the Until date with it for one day and one week
   function pickFrom(from) {
-    const to = form.length === "open" ? (form.effective_to && form.effective_to < from ? "" : form.effective_to) : untilFor(form.length, from);
-    setForm({ ...form, effective_from: from, effective_to: to });
+    setForm({ ...form, effective_from: from, effective_to: form.length === "open" ? (form.effective_to && form.effective_to < from ? "" : form.effective_to) : untilFor(form.length, from) });
     setError("");
   }
-  const isCover = form.length === "day" || form.length === "week";
-  const pickedReserve = drivers.some((dr) => String(dr.id) === String(form.driver_id) && isReserve(dr));
+  const fixedUntil = form.length !== "open";
 
   async function save(e) {
     e.preventDefault();
@@ -82,19 +62,13 @@ export default function DriverStoresTab({ drivers, live, onChanged, search = "",
     if (!form.length) return setError("Pick how long: one day, one week or no end date.");
     if (!form.effective_from) return setError("Pick the date it starts.");
     if (form.effective_from < todayStr()) return setError("The start date cannot be in the past.");
-    if (form.effective_to && form.effective_to < form.effective_from) return setError("Until must be on or after From.");
-    if (!isCover && pickedReserve) return setError("A reserve driver can only cover a route for one day or one week.");
+    if (form.effective_to && form.effective_to < form.effective_from) return setError("The end date must be on or after the start date.");
     setSaving(true);
     setError("");
     try {
-      // One day / One week: a cover, then the regular driver is back; No end date: the regular driver
-      const body = isCover
-        ? { cover_driver_id: Number(form.driver_id), cover_from: form.effective_from, cover_to: form.effective_to }
-        : { driver_id: Number(form.driver_id), driver_from: form.effective_from, driver_to: form.effective_to || null };
-      const res = await api(`routes/${form.route_id}`, { method: "PUT", body });
+      const res = await api("driver-route-assignments", { method: "POST", body: { driver_id: form.driver_id, route_id: form.route_id, effective_from: form.effective_from, effective_to: form.effective_to || null } });
       toast.success(res.message);
-      if (res.warning) toast.info(res.warning);
-      setForm({ ...form, driver_id: "", route_id: "", length: "", effective_from: "", effective_to: "" });
+      setForm({ ...form, route_id: "", length: "", effective_from: "", effective_to: "" });
       load();
       onChanged();
     } catch (err) {
@@ -117,20 +91,8 @@ export default function DriverStoresTab({ drivers, live, onChanged, search = "",
 
   async function endRoute(r) {
     try {
-      await api(`routes/${r.id}`, { method: "PUT", body: { driver_id: null } });
-      toast.success(`${r.name} was taken off ${r.driver?.name || "the driver"}. Days without a cover go to the stores' Driver Stores driver, if any.`);
-      load();
-      onChanged();
-    } catch (err) {
-      toast.error(err.message);
-    }
-  }
-
-  // Ends a temporary cover early; the regular driver has the route again
-  async function endCover(r) {
-    try {
-      await api(`routes/${r.id}`, { method: "PUT", body: { cover_driver_id: null } });
-      toast.success(`${r.cover?.driver?.name || "The cover"} no longer covers ${r.name}.${r.driver ? ` ${r.driver.name} has it again.` : ""}`);
+      await api(`driver-route-assignments/${r.id}`, { method: "DELETE" });
+      toast.success(`${r.name} was taken off ${r.driver?.name || "the driver"}.`);
       load();
       onChanged();
     } catch (err) {
@@ -140,9 +102,7 @@ export default function DriverStoresTab({ drivers, live, onChanged, search = "",
 
   async function toggleReserve(dr) {
     try {
-      const next = !isReserve(dr);
-      const res = await api(`drivers/${dr.id}/reserve`, { method: "PUT", body: { is_reserve: next } });
-      setReserveSaved((m) => ({ ...m, [dr.id]: next }));
+      const res = await api(`drivers/${dr.id}/reserve`, { method: "PUT", body: { is_reserve: !dr.is_reserve } });
       toast.success(res.message);
       onChanged();
     } catch (err) {
@@ -156,41 +116,39 @@ export default function DriverStoresTab({ drivers, live, onChanged, search = "",
   // type filter keeps routes that have a store of that type.
   const routeHit = (r) => (!type || r.stores.some((s) => (s.customer_type || "dealer") === type))
     && (!search || `${r.name} ${r.stores.map((s) => `${s.name} ${s.branch_code || ""}`).join(" ")}`.toLowerCase().includes(search));
-  // Stores handed to a driver one by one (not on an active route)
-  const onRoute = new Set(routes.filter((r) => r.is_active).flatMap((r) => r.stores.map((st) => st.id)));
-  const loose = (a) => !onRoute.has(a.store_id);
+  // Stores handed to a driver one by one before routes existed (not on a route)
+  const loose = (a) => !a.store?.store_route_id;
   const byDriver = drivers
     .map((dr) => {
       const driverHit = !!search && `${dr.name} ${dr.employee_id || ""}`.toLowerCase().includes(search);
       const driverRoutes = routes.filter((r) => String(r.driver?.id) === String(dr.id) && (driverHit || routeHit(r)));
-      const covers = routes.filter((r) => r.cover && String(r.cover.driver.id) === String(dr.id) && (driverHit || routeHit(r)));
       const list = assignments.filter((a) => String(a.driver_id) === String(dr.id) && loose(a)
         && (!type || (a.store?.customer_type || "dealer") === type)
         && (!search || driverHit || `${a.store?.name || ""} ${a.store?.chain || ""} ${a.store?.branch_code || ""}`.toLowerCase().includes(search)));
-      return { driver: dr, driverRoutes, covers, list, driverHit };
+      return { driver: dr, driverRoutes, list, driverHit };
     })
-    .filter((x) => !narrowed || x.driverRoutes.length > 0 || x.covers.length > 0 || x.list.length > 0 || (x.driverHit && !type));
+    .filter((x) => !narrowed || x.driverRoutes.length > 0 || x.list.length > 0 || (x.driverHit && !type));
 
   return (
     <div className="p-[18px] grid gap-4 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
       <form onSubmit={save} className="rounded-xl border border-black/[0.09] p-4 flex flex-col gap-3 self-start" noValidate>
         <div>
           <h3 className="text-[13px] font-semibold text-slate-800">Assign a route to a driver</h3>
-          <p className="text-[11.5px] text-slate-500 mt-0.5">No end date makes the route's regular driver, until changed or until an optional end date. One day or one week is a cover: on those days the route's stores go to this driver, then the regular driver is back on his own. A delivery reassigned because of a leave keeps its new driver.</p>
+          <p className="text-[11.5px] text-slate-500 mt-0.5">Every store on the route goes to this driver from the start date, on the days of its contract. Stores added to the route later follow too. A delivery reassigned because of a leave keeps its new driver.</p>
         </div>
         {error && <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div>
           <label htmlFor="assign-driver" className={labelCls}>Driver<Req /></label>
           <select id="assign-driver" name="driver_id" required value={form.driver_id} onChange={(e) => { setForm({ ...form, driver_id: e.target.value }); setError(""); }} className={inputCls}>
             <option value="">Select driver…</option>
-            {drivers.map((dr) => <option key={dr.id} value={dr.id} disabled={isReserve(dr) && form.length === "open"}>{dr.name}{dr.employee_id ? ` · ${dr.employee_id}` : ""}{isReserve(dr) ? " · reserve (cover only)" : ""}</option>)}
+            {drivers.filter((dr) => !dr.is_reserve).map((dr) => <option key={dr.id} value={dr.id}>{dr.name}{dr.employee_id ? ` · ${dr.employee_id}` : ""}</option>)}
           </select>
         </div>
         <div>
           <label htmlFor="assign-route" className={labelCls}>Route<Req /></label>
           <select id="assign-route" name="route_id" required value={form.route_id} onChange={(e) => { setForm({ ...form, route_id: e.target.value }); setError(""); }} className={inputCls}>
             <option value="">Select route…</option>
-            {routes.filter((r) => r.is_active).map((r) => <option key={r.id} value={r.id}>{r.name} · {r.stop_count} {r.stop_count === 1 ? "stop" : "stops"}{r.driver ? ` · regular: ${r.driver.name}${r.driver_to ? ` until ${shortDate(r.driver_to)}` : ""}` : " · no regular driver"}{r.cover ? ` · cover: ${r.cover.driver.name}` : ""}</option>)}
+            {routes.map((r) => <option key={r.id} value={r.id}>{r.name} · {r.stores.length} {r.stores.length === 1 ? "store" : "stores"}{r.driver ? ` · now: ${r.driver.name}` : " · no driver"}</option>)}
           </select>
           {routes.length === 0 && <p className="text-[11px] text-slate-400 mt-1">No routes yet. Make one in the Routes tab first.</p>}
         </div>
@@ -207,22 +165,13 @@ export default function DriverStoresTab({ drivers, live, onChanged, search = "",
               <label htmlFor="assign-from" className={labelCls}>From<Req /></label>
               <input id="assign-from" name="effective_from" type="date" required min={today} value={form.effective_from} onChange={(e) => pickFrom(e.target.value)} className={inputCls} />
             </div>
-            {isCover ? (
-              <div>
-                <label htmlFor="assign-until" className={labelCls}>Until</label>
-                <input id="assign-until" name="effective_to" type="date" value={form.effective_to} readOnly aria-readonly="true" aria-describedby="assign-until-hint" className={`${inputCls} cursor-default`} />
-              </div>
-            ) : (
-              <div>
-                <label htmlFor="assign-until" className={labelCls}>Until (optional)</label>
-                <input id="assign-until" name="effective_to" type="date" min={form.effective_from || today} value={form.effective_to}
-                  onChange={(e) => { setForm({ ...form, effective_to: e.target.value }); setError(""); }} aria-describedby="assign-until-hint" className={inputCls} />
-              </div>
-            )}
+            <div>
+              <label htmlFor="assign-until" className={labelCls}>{fixedUntil ? "Until" : "Until (optional)"}</label>
+              <input id="assign-until" name="effective_to" type="date" min={form.effective_from} value={form.effective_to} readOnly={fixedUntil} aria-readonly={fixedUntil || undefined}
+                onChange={(e) => setForm({ ...form, effective_to: e.target.value })} aria-describedby="assign-until-hint" className={`${inputCls} ${fixedUntil ? "cursor-default" : ""}`} />
+            </div>
             <p id="assign-until-hint" className="col-span-2 -mt-1.5 text-[11px] text-slate-400">
-              {form.length === "day" ? "One day: a cover for that day; then the regular driver is back." : form.length === "week" ? "One week: a cover until six days after From; then the regular driver is back."
-                : form.effective_to ? "The regular driver from From to Until. After Until the route has no regular driver: its stops go to the reserve driver or Waiting. You are alerted 3 days before so you can assign a new driver."
-                : "Leave Until empty to keep this driver until changed. Before From, the current regular driver keeps the route."}
+              {form.length === "day" ? "One day: Until is the same day." : form.length === "week" ? "One week: Until moves with From, six days after it." : "Leave Until empty to keep this driver until changed."}
             </p>
           </div>
         )}
@@ -233,27 +182,18 @@ export default function DriverStoresTab({ drivers, live, onChanged, search = "",
         <div className="rounded-xl border border-black/[0.09]">
           <div className="px-4 py-2.5 border-b border-black/[0.09] bg-slate-50 rounded-t-xl text-[12.5px] font-semibold text-slate-700">Routes per driver</div>
           {byDriver.length === 0 && <div className="px-4 py-6 text-[13px] text-slate-400">{narrowed && drivers.length ? "No driver or store matches this filter." : "No drivers yet."}</div>}
-          {byDriver.map(({ driver, driverRoutes, covers, list }) => (
+          {byDriver.map(({ driver, driverRoutes, list }) => (
             <div key={driver.id} className="px-4 py-3 border-t first:border-t-0 border-black/[0.06]">
-              <div className="text-[13px] font-semibold text-slate-800">{driver.name} <span className="font-normal text-slate-400">· {driverRoutes.length} {driverRoutes.length === 1 ? "route" : "routes"}{covers.length > 0 && `, ${covers.length} ${covers.length === 1 ? "cover" : "covers"}`}{list.length > 0 && `, ${list.length} other ${list.length === 1 ? "store" : "stores"}`}</span></div>
-              {driverRoutes.length === 0 && covers.length === 0 && list.length === 0 && <div className="text-[12px] text-slate-400 mt-1">No route assigned.</div>}
+              <div className="text-[13px] font-semibold text-slate-800">{driver.name} <span className="font-normal text-slate-400">· {driverRoutes.length} {driverRoutes.length === 1 ? "route" : "routes"}{list.length > 0 && `, ${list.length} other ${list.length === 1 ? "store" : "stores"}`}</span></div>
+              {driverRoutes.length === 0 && list.length === 0 && <div className="text-[12px] text-slate-400 mt-1">No route assigned.</div>}
               <ul className="mt-1.5 flex flex-wrap gap-1.5">
                 {driverRoutes.map((r) => (
                   <li key={`r${r.id}`} className="flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-md bg-slate-50 border border-black/[0.07] text-[12px] text-slate-700">
                     <span>{r.name}</span>
                     <span className="text-[10.5px] text-slate-400">
-                      {r.stop_count} {r.stop_count === 1 ? "stop" : "stops"} · regular{r.driver_from && r.driver_from > today ? ` from ${shortDate(r.driver_from)}` : ""}{r.driver_to ? ` until ${shortDate(r.driver_to)}` : ""}{r.is_active ? "" : " · inactive"}
+                      {r.stores.length} {r.stores.length === 1 ? "store" : "stores"} · {r.effective_from && r.effective_from > today ? `from ${shortDate(r.effective_from)}` : "now"}{r.effective_to ? ` to ${shortDate(r.effective_to)}` : ""}
                     </span>
                     <button type="button" onClick={() => endRoute(r)} aria-label={`Take ${r.name} off ${driver.name}`} className="px-1 text-slate-400 hover:text-red-600">×</button>
-                  </li>
-                ))}
-                {covers.map((r) => (
-                  <li key={`c${r.id}`} className="flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-md bg-amber-50 border border-amber-200 text-[12px] text-slate-700">
-                    <span>{r.name}</span>
-                    <span className="text-[10.5px] text-amber-700">
-                      cover {r.cover.from > today ? `from ${shortDate(r.cover.from)} ` : ""}to {shortDate(r.cover.to)}{r.driver ? `, then ${r.driver.name}` : ""}
-                    </span>
-                    <button type="button" onClick={() => endCover(r)} aria-label={`End ${driver.name}'s cover of ${r.name}`} className="px-1 text-slate-400 hover:text-red-600">×</button>
                   </li>
                 ))}
                 {list.map((a) => (
@@ -273,23 +213,19 @@ export default function DriverStoresTab({ drivers, live, onChanged, search = "",
         <div className="rounded-xl border border-black/[0.09]">
           <div className="px-4 py-2.5 border-b border-black/[0.09] bg-slate-50 rounded-t-xl">
             <span className="text-[12.5px] font-semibold text-slate-700">Reserve drivers</span>
-            <p className="text-[11px] text-slate-500 mt-0.5">A reserve driver has no route. When a driver is off, a reserve driver who has timed in takes their whole route if it fits the truck limits. Otherwise the stops are Waiting: assign a driver or reschedule them on the board.</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">A reserve driver has no route. When a driver is off, their stops go to a reserve driver who has timed in first, then to the other drivers.</p>
           </div>
           {drivers.length === 0 && <div className="px-4 py-6 text-[13px] text-slate-400">No drivers yet.</div>}
           <ul>
-            {drivers.map((dr) => {
-              const own = routes.find((r) => String(r.driver?.id) === String(dr.id));
-              return (
-                <li key={dr.id} className="px-4 py-2 border-t first:border-t-0 border-black/[0.06]">
-                  <label className={`flex items-center gap-2 text-[13px] text-slate-800 ${own && !isReserve(dr) ? "cursor-not-allowed" : "cursor-pointer"}`}>
-                    <input name={`reserve-${dr.id}`} type="checkbox" checked={isReserve(dr)} disabled={!!own && !isReserve(dr)} onChange={() => toggleReserve(dr)} />
-                    <span>{dr.name}</span>
-                    {isReserve(dr) && <span className="text-[11px] text-slate-400">reserve</span>}
-                    {own && !isReserve(dr) && <span className="text-[11px] text-slate-400">has {own.name}; take it off to make them a reserve</span>}
-                  </label>
-                </li>
-              );
-            })}
+            {drivers.map((dr) => (
+              <li key={dr.id} className="px-4 py-2 border-t first:border-t-0 border-black/[0.06]">
+                <label className="flex items-center gap-2 text-[13px] text-slate-800 cursor-pointer">
+                  <input name={`reserve-${dr.id}`} type="checkbox" checked={!!dr.is_reserve} onChange={() => toggleReserve(dr)} />
+                  <span>{dr.name}</span>
+                  {dr.is_reserve && <span className="text-[11px] text-slate-400">reserve</span>}
+                </label>
+              </li>
+            ))}
           </ul>
         </div>
 

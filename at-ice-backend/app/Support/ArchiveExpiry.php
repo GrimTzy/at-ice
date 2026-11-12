@@ -11,13 +11,19 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
-// Inactive employees past the retention period (retention.years, R3).
-// archive.expiry_action decides what happens to them each day:
-//   REVIEW     nothing on its own; Admin decides in Settings (the default)
-//   ANONYMIZE  personal details removed; employee ID, dates and pay history kept
-//   PURGE      the employee and their records deleted
-// Every action is audited. There is no scheduler: the live-feed poll runs it
-// once a day while HR or Admin is online (php artisan archive:expire too).
+// Deactivated employees, in two steps (QA review, 2026-11-11):
+// 1. retention.personal_purge_days (30) after deactivation, the personal data is
+//    deleted for data privacy: login, face, uploaded documents and leave
+//    attachments, phone, address, emergency contact and biodata. What the Labor
+//    Code makes the employer keep stays: name, employee ID, position, dates, pay
+//    rates, government numbers, attendance, leave and payroll.
+// 2. Past the retention period (retention.years, 3: the DOLE minimum for
+//    employment and payroll records) archive.expiry_action decides:
+//      ANONYMIZE  the rest of the personal details removed and the employee code
+//                 freed for a new hire; dates and pay history kept (the default)
+//      REVIEW     nothing on its own; Admin decides in Settings
+//      PURGE      the employee and their records deleted
+// Every action is audited. The scheduler runs it once a day.
 class ArchiveExpiry
 {
     public static function cutoff(): string
@@ -38,13 +44,27 @@ class ArchiveExpiry
             ->whereNotIn('id', $held);
     }
 
-    // Once a day, from the live-feed poll.
+    // Deactivated long enough ago for step 1, and not done yet.
+    public static function dueForPersonalPurge()
+    {
+        $before = now(config('atice.timezone'))->subDays((int) Settings::get('retention.personal_purge_days'))->toDateString();
+
+        return Employee::where('is_active', false)
+            ->whereNotNull('deactivated_at')
+            ->whereNull('personal_purged_at')
+            ->whereNull('anonymized_at')
+            ->whereDate('deactivated_at', '<=', $before);
+    }
+
+    // Once a day, from the scheduler.
     public static function daily(): void
     {
         try {
-            if (Settings::get('archive.expiry_action') === 'REVIEW'
-                || ! Cache::add('archive-expiry:'.now(config('atice.timezone'))->toDateString(), true, now()->addDays(2))) {
+            if (! Cache::add('archive-expiry:'.now(config('atice.timezone'))->toDateString(), true, now()->addDays(2))) {
                 return;
+            }
+            foreach (self::dueForPersonalPurge()->get() as $employee) {
+                self::purgePersonal($employee);
             }
             self::run();
         } catch (Throwable $e) {
@@ -66,6 +86,48 @@ class ArchiveExpiry
         }
 
         return $count;
+    }
+
+    // Step 1: the personal data goes, the records DOLE needs stay.
+    public static function purgePersonal(Employee $employee): void
+    {
+        DB::transaction(function () use ($employee) {
+            FaceData::where('employee_id', $employee->id)->delete();
+            foreach (LeaveRequest::where('employee_id', $employee->id)->whereNotNull('attachment_path')->get() as $leave) {
+                StoredFiles::deleteAfterCommit($leave->attachment_disk ?: 'public', $leave->attachment_path);
+                $leave->forceFill(['attachment_path' => null])->save();
+            }
+            if ($employee->user) {
+                $employee->user->tokens()->delete();
+                $employee->user->forceFill([
+                    'email' => "removed-{$employee->user->id}@atice.invalid",
+                    'password' => bcrypt(Str::random(40)),
+                    'is_active' => false,
+                ])->save();
+            }
+            $employee->forceFill([
+                'phone' => null,
+                'address' => null,
+                'block_lot' => null,
+                'street' => null,
+                'subdivision' => null,
+                'barangay' => null,
+                'city' => null,
+                'province' => null,
+                'region' => null,
+                'barangay_code' => null,
+                'postal_code' => null,
+                'vehicle_plate' => null,
+                'license_number' => null,
+                'license_expiry' => null,
+                'personal_purged_at' => now(),
+            ] + array_fill_keys(\App\Support\Biodata::FIELDS, null))->save();
+            foreach ($employee->documents()->get() as $doc) {
+                $doc->delete();
+                StoredFiles::deleteAfterCommit('local', $doc->path);
+            }
+        });
+        Audit::log('retention.personal_purged', $employee, ['employee' => "{$employee->employee_id} {$employee->full_name}"], ['auto' => true]);
     }
 
     public static function anonymize(Employee $employee, bool $auto = false): void
@@ -104,6 +166,8 @@ class ArchiveExpiry
                 'vehicle_plate' => null,
                 'license_number' => null,
                 'license_expiry' => null,
+                // the code is freed for a new hire (QA review, 2026-11-11)
+                'employee_id' => 'FMR-'.str_pad((string) $employee->id, 5, '0', STR_PAD_LEFT),
                 'anonymized_at' => now(),
             ] + array_fill_keys(array_merge(\App\Support\Biodata::FIELDS, \App\Support\Biodata::GOV_FIELDS), null))->save();
             // attached biodata files go too (private disk)

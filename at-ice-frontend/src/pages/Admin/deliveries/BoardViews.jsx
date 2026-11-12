@@ -3,7 +3,7 @@ import { toast } from "../../../lib/toast";
 import { PILL } from "../../../lib/statusTones";
 import { api, DRIVER_STATUS, STATUS_STYLE, byDriverGroup, driverGroup, storeName, productLabel, PRODUCT_TYPES, inputCls, labelCls, btnPrimary, btnGhost } from "./utils";
 import { ReassignedTag, StatusCell, Modal, DeliverByCell } from "./shared";
-import { timingPill, deliverByTime, deliverByValue } from "../../../lib/deliverBy";
+import { timingPill, deliverByValue, windowLabel } from "../../../lib/deliverBy";
 import Req from "../../../components/Req";
 import { useMaxQuantity } from "../../../lib/limits";
 import { QTY_INPUT_PROPS, cleanQty } from "../../../lib/quantity";
@@ -20,7 +20,7 @@ const GROUP_PILL = {
 
 // Status pill of a card in the Driver View
 function cardPill(g, isToday) {
-  if (g.key === "queued") return { cls: STATUS_STYLE.queued, label: "Waiting" };
+  if (g.key === "queued") return { cls: STATUS_STYLE.queued, label: "Queued" };
   if (g.key === "none") return { cls: STATUS_STYLE.pending, label: "No driver" };
   const st = DRIVER_STATUS[g.driver.status];
   if (!st || !(isToday || g.driver.status === "off")) return null;
@@ -38,12 +38,9 @@ function cardPill(g, isToday) {
 // Driver View: a card per Driver; clicking one lists the stores they deliver
 // to that day. "Queued" and "No driver" cards hold what still needs a driver.
 // Cards go timed in, in transit, not timed in, off (byDriverGroup); the page's
-// Driver status filter narrows them. Waiting deliveries (an absent Driver's
-// route no reserve could take) can be rescheduled to their next delivery day
-// (POST deliveries/{id}/reschedule, or deliveries/reschedule for several).
-export function DriverView({ board, loading, onView, onEdit, onCancel, onChanged }) {
+// Driver status filter narrows them.
+export function DriverView({ board, loading, onView, onEdit, onCancel }) {
   const [picked, setPicked] = useState(null); // driver id, "queued" or "none"
-  const [busy, setBusy] = useState(false);
   const deliveries = board?.deliveries || [];
   const drivers = [...(board?.drivers || [])].sort(byDriverGroup);
   const isToday = board?.date === board?.today;
@@ -55,26 +52,10 @@ export function DriverView({ board, loading, onView, onEdit, onCancel, onChanged
 
   const groups = [
     ...drivers.map((dr) => ({ key: String(dr.id), driver: dr, list: byDriver(dr.id) })),
-    ...(queued.length ? [{ key: "queued", title: "Waiting", hint: "No driver yet: its driver is off and no reserve could take the route. Edit to pick a driver, or Reschedule.", list: queued }] : []),
+    ...(queued.length ? [{ key: "queued", title: "Queued", hint: "Waiting for a free driver (oldest order first)", list: queued }] : []),
     ...(noDriver.length ? [{ key: "none", title: "No driver", hint: "The store has no assigned driver. Edit to pick one.", list: noDriver }] : []),
   ];
   const current = groups.find((g) => g.key === String(picked)) || null;
-
-  async function reschedule(list) {
-    setBusy(true);
-    try {
-      const res = list.length === 1
-        ? await api(`deliveries/${list[0].id}/reschedule`, { method: "POST", body: {} })
-        : await api("deliveries/reschedule", { method: "POST", body: { ids: list.map((d) => d.id) } });
-      toast.success(res.message);
-      if (res.warning) toast.info(res.warning);
-      onChanged?.();
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   if (loading && !board) return <div className="p-6 text-[13px] text-slate-400">Loading…</div>;
   if (!(board?.drivers || []).length && !filtered) return <div className="p-6 text-[13px] text-slate-400">No drivers yet. Add a Driver in HRIS &gt; Employees.</div>;
@@ -135,16 +116,29 @@ export function DriverView({ board, loading, onView, onEdit, onCancel, onChanged
             {current.driver?.status === "off" && (
               <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[11px] font-semibold">{current.driver.reason || "Off"}</span>
             )}
-            {current.key === "queued" && current.list.length > 1 && (
-              <button type="button" disabled={busy} onClick={() => reschedule(current.list)} className={btnGhost} title="Each moves to its next delivery day, with that day's driver">
-                {busy ? "Rescheduling…" : `Reschedule all ${current.list.length}`}
-              </button>
-            )}
           </div>
-          <DeliveryRows list={current.list} showDriver={!current.driver} onView={onView} onEdit={onEdit} onCancel={onCancel}
-            onReschedule={current.key === "queued" ? (d) => reschedule([d]) : null} busy={busy}
-            empty="No deliveries for this driver on this day." />
+          {current.driver && <TruckStockLine batches={current.driver.truck_stock} />}
+          <DeliveryRows list={current.list} showDriver={!current.driver} onView={onView} onEdit={onEdit} onCancel={onCancel} empty="No deliveries for this driver on this day." />
         </div>
+      )}
+    </div>
+  );
+}
+
+// Ice still on the Driver's truck, oldest batch first (FIFO): the trucks are
+// refrigerated and stay out, so what was not delivered goes out first next time.
+function TruckStockLine({ batches = [] }) {
+  const when = (v) => new Date(v).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return (
+    <div className="px-4 py-2.5 border-b border-black/[0.06] text-[12px]">
+      <span className="font-medium text-slate-700">Ice on the truck: </span>
+      {batches.length === 0 ? (
+        <span className="text-slate-400">none left from earlier loads</span>
+      ) : (
+        <span className="text-slate-600">
+          {batches.map((b) => `${b.quantity_left} × ${productLabel(b.product_type)} (loaded ${when(b.loaded_at)})`).join(" · ")}
+          <span className="block text-[11px] text-slate-400 mt-0.5">The oldest load is delivered first.</span>
+        </span>
       )}
     </div>
   );
@@ -167,7 +161,7 @@ export function StoreView({ board, loading, filtered, onView, onEdit, onCancel }
           <thead>
             <tr className="text-left text-slate-400 text-[11px] uppercase tracking-widest">
               <th className="px-3 py-2.5 font-medium">Store</th>
-              <th className="px-3 py-2.5 font-medium">Deliver by</th>
+              <th className="px-3 py-2.5 font-medium">Time window</th>
               <th className="px-3 py-2.5 font-medium">Driver</th>
               <th className="px-3 py-2.5 font-medium">Regular driver</th>
               <th className="px-3 py-2.5 font-medium">Status</th>
@@ -199,7 +193,7 @@ export function StoreView({ board, loading, filtered, onView, onEdit, onCancel }
   );
 }
 
-function DeliveryRows({ list, showDriver, onView, onEdit, onCancel, onReschedule = null, busy = false, empty }) {
+function DeliveryRows({ list, showDriver, onView, onEdit, onCancel, empty }) {
   if (!list.length) return <div className="px-4 py-6 text-center text-[13px] text-slate-400">{empty}</div>;
   return (
     <ul>
@@ -208,7 +202,7 @@ function DeliveryRows({ list, showDriver, onView, onEdit, onCancel, onReschedule
           <div className="min-w-[200px] flex-1">
             <div className="text-[13px] text-slate-800">{storeName(d.customer)}</div>
             <div className="text-[11px] text-slate-400">
-              {[d.delivery_no, d.due_at && `by ${deliverByTime(d.due_at)}`, showDriver && d.driver?.name].filter(Boolean).join(" · ")}
+              {[d.delivery_no, d.due_at && windowLabel(d.due_from, d.due_at), showDriver && d.driver?.name].filter(Boolean).join(" · ")}
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">
               {(d.items || []).map((it) => `${it.quantity_ordered} × ${productLabel(it.product_type)}`).join(", ")}
@@ -217,11 +211,6 @@ function DeliveryRows({ list, showDriver, onView, onEdit, onCancel, onReschedule
           <ReassignedTag delivery={d} />
           {timingPill(d.timing) && <span className={`px-1.5 py-px rounded-full text-[10px] font-semibold ${timingPill(d.timing).cls}`}>{timingPill(d.timing).label}</span>}
           <StatusCell status={d.status} />
-          {onReschedule && (
-            <button type="button" disabled={busy} onClick={() => onReschedule(d)} title="Move to its next delivery day, with that day's driver" className="px-2 py-1 rounded-md border border-black/[0.09] text-cyan-700 text-[11.5px] hover:bg-cyan-50 disabled:opacity-40">
-              Reschedule
-            </button>
-          )}
           <RowActions d={d} onView={onView} onEdit={onEdit} onCancel={onCancel} />
         </li>
       ))}
@@ -251,6 +240,7 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
   const [items, setItems] = useState((delivery.items || []).map((it) => ({ product_type: it.product_type, quantity_ordered: String(it.quantity_ordered) })));
   const [notes, setNotes] = useState(delivery.notes || "");
   const [deliverBy, setDeliverBy] = useState(deliverByValue(delivery.due_at));
+  const [deliverFrom, setDeliverFrom] = useState(deliverByValue(delivery.due_from));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -260,12 +250,16 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
       setError("Pick a product and a quantity of at least 1 for every item.");
       return;
     }
+    if (deliverFrom && deliverBy && deliverFrom >= deliverBy) {
+      setError("The window must open before the Deliver by time.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       await api(`deliveries/${delivery.id}`, {
         method: "PUT",
-        body: { driver_id: driverId || null, notes: notes || null, ...(deliverBy ? { deliver_by: deliverBy } : {}), items: items.map((it) => ({ ...it, quantity_ordered: Number(it.quantity_ordered) })) },
+        body: { driver_id: driverId || null, notes: notes || null, ...(deliverBy ? { deliver_by: deliverBy, deliver_from: deliverFrom || null } : {}), items: items.map((it) => ({ ...it, quantity_ordered: Number(it.quantity_ordered) })) },
       });
       toast.success(`Delivery ${delivery.delivery_no} was updated.`);
       onSaved();
@@ -296,10 +290,16 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
           </select>
           {isToday && <p className="text-[11px] text-slate-400 mt-1">Today only an available driver can be picked.</p>}
         </div>
-        <div>
-          <label htmlFor="edit-delivery-deliver-by" className={labelCls}>Deliver by{delivery.due_at && <Req />}</label>
-          <input id="edit-delivery-deliver-by" name="deliver_by" type="time" required={!!delivery.due_at} value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} aria-describedby="edit-delivery-deliver-by-hint" className={inputCls} />
-          <p id="edit-delivery-deliver-by-hint" className="text-[11px] text-slate-400 mt-1">The latest time the ice reaches the store. A new time is sent to the store.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="edit-delivery-deliver-from" className={labelCls}>Deliver from</label>
+            <input id="edit-delivery-deliver-from" name="deliver_from" type="time" max={deliverBy || undefined} value={deliverFrom} onChange={(e) => setDeliverFrom(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label htmlFor="edit-delivery-deliver-by" className={labelCls}>Deliver by (latest){delivery.due_at && <Req />}</label>
+            <input id="edit-delivery-deliver-by" name="deliver_by" type="time" required={!!delivery.due_at} value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} aria-describedby="edit-delivery-deliver-by-hint" className={inputCls} />
+          </div>
+          <p id="edit-delivery-deliver-by-hint" className="col-span-2 -mt-1.5 text-[11px] text-slate-400">The time window at the store. A new time is sent to the store.</p>
         </div>
         <div>
           <div className={labelCls}>Items</div>
@@ -321,7 +321,7 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
         </div>
         <div>
           <label htmlFor="edit-delivery-notes" className={labelCls}>Notes</label>
-          <textarea id="edit-delivery-notes" name="notes" maxLength={1000} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
+          <textarea id="edit-delivery-notes" name="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
           <button type="button" onClick={onClose} className={btnGhost}>Close</button>

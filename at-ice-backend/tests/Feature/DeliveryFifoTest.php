@@ -130,7 +130,6 @@ class DeliveryFifoTest extends TestCase
 
     public function test_ice_left_on_the_truck_is_sold_before_newer_ice(): void
     {
-        Settings::set('delivery.allow_rolling_stock_fifo', true); // off by default since 2026-11-10, still works
         $driver = $this->driver('Ana', '06:30:00');
         $yesterday = $this->delivery($driver, 'delivered', '07:00:00');
         $today = $this->delivery($driver, 'in_transit', '09:00:00');
@@ -152,7 +151,6 @@ class DeliveryFifoTest extends TestCase
 
     public function test_a_quantity_no_loading_covered_is_still_recorded(): void
     {
-        Settings::set('delivery.allow_rolling_stock_fifo', true); // off by default since 2026-11-10, still works
         $driver = $this->driver('Ana', '06:30:00');
         $d = $this->delivery($driver, 'in_transit', '09:00:00');
         TruckStockBatch::create(['driver_id' => $driver->id, 'product_type' => 'bags', 'quantity_loaded' => 5, 'quantity_left' => 5, 'loaded_at' => '2026-10-20 06:00:00']);
@@ -205,7 +203,6 @@ class DeliveryFifoTest extends TestCase
 
     public function test_a_loading_count_goes_on_the_drivers_truck(): void
     {
-        Settings::set('delivery.allow_rolling_stock_fifo', true); // off by default since 2026-11-10, still works
         $driver = $this->driver('Ana', '06:30:00');
         $d = $this->delivery($driver, 'pending', '09:00:00');
         $checker = User::create(['name' => 'Checker', 'email' => 'checker@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'checker']);
@@ -221,16 +218,13 @@ class DeliveryFifoTest extends TestCase
         $batches = TruckStockBatch::where('driver_id', $driver->id)->orderBy('product_type')->get();
         $this->assertSame([['bags', 40], ['big_sack', 2]], $batches->map(fn ($b) => [$b->product_type, $b->quantity_left])->all());
     }
-
-    // A reserve driver only takes an absent Driver's whole route
-    // (ReserveDriverTest), so they are not in the FIFO pool.
-    public function test_a_reserve_driver_is_not_in_the_fifo_pool(): void
+    public function test_a_reserve_driver_covers_before_the_regular_drivers(): void
     {
         $ana = $this->driver('Ana', '06:30:00');   // free since 06:30
         $ben = $this->driver('Ben', '07:00:00');   // free later than Ana
         $this->putJson("/api/drivers/{$ben->id}/reserve", ['is_reserve' => true])->assertOk();
 
-        $this->assertSame([$ana->id], DeliveryDispatch::availableDrivers());
+        $this->assertSame([$ben->id, $ana->id], DeliveryDispatch::availableDrivers());
 
         $this->putJson("/api/drivers/{$ben->id}/reserve", ['is_reserve' => false])->assertOk();
         $this->assertSame([$ana->id, $ben->id], DeliveryDispatch::availableDrivers());

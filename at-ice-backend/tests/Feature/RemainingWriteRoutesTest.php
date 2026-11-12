@@ -91,7 +91,7 @@ class RemainingWriteRoutesTest extends TestCase
         $this->assertSame(25, PickupLog::find($id)->quantity);
 
         $this->deleteJson("/api/pickup-logs/{$id}")->assertOk();
-        $this->assertDatabaseMissing('pickup_logs', ['id' => $id, 'deleted_at' => null]);
+        $this->assertDatabaseMissing('pickup_logs', ['id' => $id]);
     }
 
     public function test_only_allowed_roles_get_a_realtime_channel_login(): void

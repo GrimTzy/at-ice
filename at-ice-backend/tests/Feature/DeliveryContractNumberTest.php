@@ -38,7 +38,6 @@ class DeliveryContractNumberTest extends TestCase
         foreach ($storeIds as $id) {
             \App\Models\CustomerPrice::firstOrCreate(['customer_id' => $id, 'product_type' => 'bags'], ['unit_price' => 40]);
         }
-
         return $this->postJson('/api/delivery-contracts', [
             'name' => 'Weekly run', 'chain' => $chain, 'store_ids' => $storeIds,
             'start_date' => DriverAvailability::today(),

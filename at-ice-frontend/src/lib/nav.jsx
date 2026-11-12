@@ -59,7 +59,6 @@ export const HR_NAV = [
       { label: "Timesheets", to: "/hr/timesheets" },
       { label: "Payroll", to: "/hr/payroll" },
       { label: "Holidays", to: "/hr/holidays" },
-      { label: "Kiosk PIN", to: "/hr/kiosk-pin" },
     ] },
   // Rates and rules, one page per item (pages/hr/RatesRulesPage.jsx), like
   // Admin's Settings menu (owner, 2026-11-10). hoverOnly: this menu alone opens

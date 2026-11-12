@@ -153,7 +153,7 @@ class PublicApplicationTest extends TestCase
 
         // Only a hired applicant can be made an employee
         $a->update(['status' => 'hired']);
-        $employee = $this->postJson('/api/employees', [
+        $employee =$this->postJson('/api/employees', [
             'first_name' => 'Maria Clara', 'last_name' => 'Reyes', 'phone' => '09171234567', 'position' => 'Bagger',
             'street' => 'Rizal St', 'barangay' => 'Muzon', 'city' => 'San Jose Del Monte', 'province' => 'Bulacan',
             'daily_rate' => 600, 'date_hired' => now()->toDateString(), 'shift_start' => '08:00', 'shift_end' => '17:00',
@@ -167,28 +167,5 @@ class PublicApplicationTest extends TestCase
         $this->assertSame('12-345678901-2', $employee['philhealth_no']);
         $this->assertSame('1212-3456-7890', $employee['pagibig_no']);
         $this->assertCount(2, $this->getJson("/api/employees/{$employee['id']}/documents")->assertOk()->json());
-    }
-
-    // A file over the server's upload limit (PHP upload_max_filesize, 10 MB in
-    // production) is dropped before the size rule runs; the applicant gets a
-    // plain message instead of "The documents.0 failed to upload."
-    public function test_a_file_over_the_upload_limit_gets_a_plain_message(): void
-    {
-        Storage::fake('local');
-        $tooBig = fn (string $name, string $mime) => new UploadedFile(
-            tempnam(sys_get_temp_dir(), 'up'), $name, $mime, UPLOAD_ERR_INI_SIZE, true
-        );
-
-        $this->post('/api/apply', $this->form([
-            'license_number' => 'N01-23-456789',
-            'documents' => [$tooBig('nbi.pdf', 'application/pdf')],
-            'photo' => $tooBig('me.jpg', 'image/jpeg'),
-            'resume' => $tooBig('cv.pdf', 'application/pdf'),
-        ]), ['Accept' => 'application/json'])
-            ->assertUnprocessable()
-            ->assertJsonPath('errors', fn ($e) => $e['documents.0'] === ['Each file must be 10 MB or less.']
-                && $e['photo'] === ['The photo must be 10 MB or less.']
-                && $e['resume'] === ['The resume must be 5 MB or less.']);
-        $this->assertSame(0, Applicant::count());
     }
 }

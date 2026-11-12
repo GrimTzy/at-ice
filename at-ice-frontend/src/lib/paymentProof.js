@@ -16,7 +16,7 @@ export const PROOF_METHODS = {
 export const PROOF_STATUS = {
   pending: { label: "Under review", cls: "bg-sky-500/10 text-sky-700 border-sky-500/20" },
   approved: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" },
-  rejected: { label: "Declined", cls: "bg-red-500/10 text-red-600 border-red-500/20" },
+  rejected: { label: "Rejected", cls: "bg-red-500/10 text-red-600 border-red-500/20" },
 };
 
 // Photo or PDF, up to 5 MB (PaymentProof::FILE_RULE).

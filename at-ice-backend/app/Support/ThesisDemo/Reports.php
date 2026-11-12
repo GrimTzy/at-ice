@@ -299,7 +299,7 @@ class Reports
         }
         $ok(! $bad, 'every hired applicant has an employee record'.($bad ? ' (missing: '.implode(', ', $bad).')' : ''));
 
-        // leave ranges hold only work days, except L-16 (weekend counted: defect D3)
+        // leave ranges hold only work days, except L-16 (spans a weekend on purpose; only its work days count)
         $bad = [];
         $leaveKeys = $m->keys('leave_requests');
         foreach (DB::table('leave_requests')->whereIn('id', array_keys($leaveKeys) ?: [0])->get(['id', 'start_date', 'end_date']) as $l) {
@@ -344,8 +344,9 @@ class Reports
 
         // leave credits: independent count vs the app
         foreach (['E12', 'E13'] as $code) {
-            // independent: 0.5 per 14-day period that ended, counted from the
-            // period holding max(regularized, Jan 1), capped at 15
+            // independent: 15 VL and 15 SL a year, a 26th of each per 14-day
+            // period that ended, counted from the period holding
+            // max(regularized, Jan 1); EL is taken from VL
             $e = Employee::find($c->emp[$code]);
             $from = max(substr((string) $e->regularized_at, 0, 10), $c->asOf->startOfYear()->toDateString());
             $anchor = CarbonImmutable::parse((string) Settings::get('payroll.anchor'));
@@ -354,11 +355,15 @@ class Reports
             for ($end = $start->addDays(13); $end->toDateString() <= $c->asOf->toDateString(); $end = $end->addDays(14)) {
                 $n++;
             }
-            $earned = min(15, $n * 0.5);
-            $used = (float) DB::table('leave_requests')->where('employee_id', $e->id)->where('status', 'approved')->whereYear('start_date', $c->asOf->year)->sum('paid_days');
+            $earned = round(min(15, $n * 15 / 26), 2);
+            $paid = fn (array $types) => (float) DB::table('leave_requests')->where('employee_id', $e->id)->where('status', 'approved')
+                ->whereYear('start_date', $c->asOf->year)->whereIn('leave_type', $types)->sum('paid_days');
+            $usedVl = $paid(['vacation', 'emergency']);
+            $usedSl = $paid(['sick']);
             $app = LeaveCredits::for($e, $c->asOf->toDateString());
-            $ok(abs($app['earned'] - $earned) < 0.001 && abs($app['used'] - $used) < 0.01,
-                "{$code} leave credits: independent earned {$earned}, used {$used}; app earned {$app['earned']}, used {$app['used']}, available {$app['available']}");
+            $ok(abs($app['vacation']['earned'] - $earned) < 0.001 && abs($app['sick']['earned'] - $earned) < 0.001
+                && abs($app['vacation']['used'] - $usedVl) < 0.01 && abs($app['sick']['used'] - $usedSl) < 0.01,
+                "{$code} leave credits: independent VL/SL earned {$earned}, used VL {$usedVl} SL {$usedSl}; app VL {$app['vacation']['earned']}/{$app['vacation']['used']}, SL {$app['sick']['earned']}/{$app['sick']['used']}");
         }
 
         // memos

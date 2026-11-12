@@ -42,14 +42,16 @@ return [
     | Expiration Minutes
     |--------------------------------------------------------------------------
     |
-    | Login tokens expire after this many minutes (default 1440 = 24 hours),
-    | so a leaked or forgotten token does not work forever. The plant runs
-    | 12 hour shifts, so 24 hours never cuts a shift short. Override with
-    | SANCTUM_EXPIRATION in .env. After it expires, the user signs in again.
+    | A website session ends after atice.web_token_hours (default 12 hours).
+    | The time is stamped on each token when it is made (AuthController), which
+    | is why the global 'expiration' is off: a login from the Android app, for
+    | the four mobile roles, gets a token with no end date so the phone stays
+    | signed in until Log out, a password change or deactivation.
     |
     */
 
-    'expiration' => (int) env('SANCTUM_EXPIRATION', 1440),
+    // Off here: expiry is set per token at login (AuthController), so the Android app is not cut short.
+    'expiration' => null,
 
     /*
     |--------------------------------------------------------------------------

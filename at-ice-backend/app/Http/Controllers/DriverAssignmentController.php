@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Delivery;
-use App\Models\DeliveryRoute;
 use App\Models\DriverStoreAssignment;
 use App\Models\LiveEvent;
+use App\Models\StoreRoute;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\DeliveryDispatch;
@@ -24,7 +24,7 @@ class DriverAssignmentController extends Controller
     public function index()
     {
         return response()->json(
-            DriverStoreAssignment::with(['driver:id,name', 'store:id,name,chain,branch_code,customer_type'])
+            DriverStoreAssignment::with(['driver:id,name', 'store:id,name,chain,branch_code,customer_type,store_route_id'])
                 ->where(fn ($q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', DriverAvailability::today()))
                 ->orderBy('effective_from')
                 ->get()
@@ -68,18 +68,60 @@ class DriverAssignmentController extends Controller
         ], 201);
     }
 
-    // PUT drivers/{id}/reserve { is_reserve } (owner, 2026-11-11): marks a
-    // Driver as a reserve driver or back to a regular one. A reserve has no
-    // route; they take an absent Driver's whole route when it fits the truck
-    // limits (DeliveryDispatch::reassignRoute).
+    // Hands a whole route to a Driver (Driver Stores tab): every store on the
+    // route follows the Driver from the start date, on the days of its contract.
+    // Stores added to the route later follow too (StoreRouteController).
+    public function assignRoute(Request $request)
+    {
+        $data = $request->validate([
+            'route_id' => 'required|integer|exists:store_routes,id',
+            'driver_id' => ['required', Rule::exists('users', 'id')->where('role', 'driver')->where('is_active', 1)->where('is_reserve_driver', 0)],
+            'effective_from' => 'required|date|after_or_equal:'.DriverAvailability::today(),
+            'effective_to' => 'nullable|date|after_or_equal:effective_from',
+        ], ['driver_id.exists' => 'Pick an active driver who is not a reserve driver.', 'route_id.required' => 'Please select a route.', 'route_id.exists' => 'This route no longer exists.']);
+
+        $route = StoreRoute::with('stores:customers.id,customers.store_route_id')->findOrFail($data['route_id']);
+        $from = Carbon::parse($data['effective_from'])->toDateString();
+        $moved = 0;
+        $changedIds = [];
+        $stores = $route->stores->pluck('id')->all();
+
+        DB::transaction(function () use ($route, $data, $from, $stores, $request, &$moved, &$changedIds) {
+            // the route's old driver stops handling it from the new start date
+            if ($route->driver_id && (int) $route->driver_id !== (int) $data['driver_id']) {
+                self::endRouteDriver($route, $stores);
+            }
+            $route->update(['driver_id' => $data['driver_id'], 'effective_from' => $from, 'effective_to' => $data['effective_to'] ?? null]);
+            if ($stores) {
+                self::assignStores((int) $data['driver_id'], $stores, $from, $data['effective_to'] ?? null, $request->user()->id, $moved, $changedIds);
+            }
+        });
+
+        $driver = User::find($data['driver_id']);
+        LiveEvent::create([
+            'module' => 'deliveries',
+            'action' => 'updated',
+            'message' => "{$driver->name} now handles {$route->name} from ".Carbon::parse($from)->format('M j'),
+            'roles' => ['employee:salesman', 'employee:checker'],
+            'user_ids' => [$driver->id],
+            'actor_id' => $request->user()->id,
+        ]);
+        Audit::log('driver_assignment.route_saved', $driver, null, $data + ['stores' => count($stores), 'deliveries_updated' => $moved]);
+        self::tellStores($changedIds, fn ($first, $n) => "From {$first}, ".($n === 1 ? 'your delivery' : "your {$n} upcoming deliveries")." will be handled by driver {$driver->name}.");
+
+        return response()->json([
+            'message' => "{$route->name} was given to {$driver->name}. {$moved} upcoming deliveries now go to them.".(count($stores) ? '' : ' The route has no stores yet; stores you add will follow.'),
+        ], 201);
+    }
+
+    // Marks a Driver as a reserve (no route; covers a driver who is off, before
+    // the regular drivers) or back to a regular driver.
     public function setReserve(Request $request, $id)
     {
         $data = $request->validate(['is_reserve' => 'required|boolean']);
         $driver = User::where('role', 'driver')->findOrFail($id);
-        if ($data['is_reserve'] && ($routeName = DeliveryRoute::where('driver_id', $driver->id)->value('name'))) {
-            $why = "{$driver->name} has {$routeName}. Take the route off this driver first; a reserve driver has no route.";
-
-            return response()->json(['message' => $why, 'errors' => ['is_reserve' => [$why]]], 422);
+        if ($data['is_reserve'] && StoreRoute::where('driver_id', $driver->id)->exists()) {
+            return response()->json(['message' => "{$driver->name} has a route. Take the route off first; a reserve driver has no route.", 'errors' => ['is_reserve' => ['Take the route off this driver first.']]], 422);
         }
         $driver->forceFill(['is_reserve_driver' => (bool) $data['is_reserve']])->save();
         Audit::log('driver.reserve_set', $driver, null, ['is_reserve' => (bool) $data['is_reserve']]);
@@ -87,6 +129,38 @@ class DriverAssignmentController extends Controller
         return response()->json(['message' => $driver->name.($data['is_reserve'] ? ' is now a reserve driver.' : ' is a regular driver again.')]);
     }
 
+    // Takes the route off its Driver: the stores' current assignments to that Driver end.
+    public function unassignRoute($id)
+    {
+        $route = StoreRoute::with('stores:customers.id,customers.store_route_id')->findOrFail($id);
+        $freed = [];
+        DB::transaction(function () use ($route, &$freed) {
+            $freed = self::endRouteDriver($route, $route->stores->pluck('id')->all());
+            $route->update(['driver_id' => null, 'effective_from' => null, 'effective_to' => null]);
+        });
+        Audit::log('driver_assignment.route_ended', $route);
+        self::tellStores($freed, fn ($first, $n) => "From {$first}, ".($n === 1 ? 'your delivery is' : "your {$n} upcoming deliveries are")." being moved to another driver. The schedule stays the same.");
+
+        return response()->json(['message' => "{$route->name} was taken off its driver."]);
+    }
+
+    // Ends the route Driver's current or future assignment for these stores.
+    // Returns the freed delivery ids.
+    public static function endRouteDriver(StoreRoute $route, array $storeIds): array
+    {
+        if (! $route->driver_id || ! $storeIds) {
+            return [];
+        }
+        $freed = [];
+        DriverStoreAssignment::where('driver_id', $route->driver_id)->whereIn('store_id', $storeIds)
+            ->where(fn ($q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', DriverAvailability::today()))
+            ->get()
+            ->each(function ($a) use (&$freed) {
+                $freed = array_merge($freed, self::endOne($a));
+            });
+
+        return $freed;
+    }
     // Ends an assignment: one that has not started is removed, a current one
     // ends yesterday. The store's deliveries after today have no driver until
     // Admin assigns one.
@@ -95,7 +169,7 @@ class DriverAssignmentController extends Controller
         $a = DriverStoreAssignment::findOrFail($id);
         $freed = self::endOne($a);
         Audit::log('driver_assignment.ended', $a);
-        self::tellStores($freed, fn ($first, $n) => "From {$first}, ".($n === 1 ? 'your delivery is' : "your {$n} upcoming deliveries are").' being moved to another driver. The schedule stays the same.');
+        self::tellStores($freed, fn ($first, $n) => "From {$first}, ".($n === 1 ? 'your delivery is' : "your {$n} upcoming deliveries are")." being moved to another driver. The schedule stays the same.");
 
         return response()->json(['message' => 'Assignment ended.']);
     }
@@ -151,7 +225,6 @@ class DriverAssignmentController extends Controller
                 ->where('driver_id', $a->driver_id)
                 ->where('status', 'pending')
                 ->whereNull('reassigned_from_driver_id')
-                ->whereNull('route_id') // a route stop keeps the route's Driver
                 ->whereDate('scheduled_date', '>', $today);
             $freed = (clone $q)->pluck('id')->all();
             $q->update(['driver_id' => null, 'updated_at' => now()]);

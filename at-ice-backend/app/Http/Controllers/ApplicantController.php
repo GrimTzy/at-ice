@@ -146,7 +146,7 @@ class ApplicantController extends Controller
         }
 
         $applicants = $query
-            ->with(['referredBy:id,employee_id,first_name,middle_initial,last_name,suffix', 'employee:id,employee_id,first_name,middle_initial,last_name,suffix', 'documents'])
+            ->with(['employee:id,employee_id,first_name,middle_initial,last_name,suffix', 'documents'])
             ->orderByRaw('interview_date IS NULL')   // scheduled first
             ->orderBy('interview_date', 'asc')
             ->orderBy('created_at', 'desc')
@@ -183,7 +183,7 @@ class ApplicantController extends Controller
         $request->merge(['email' => Applicant::normalizeEmail($request->input('email'))]);
 
         $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:50',
             'email' => ['bail', 'nullable', Rule::unique('applicants', 'email')->ignore($id ?? null), 'email:rfc,filter,dns', 'max:255'],
             'phone' => ['nullable', 'regex:'.self::PHONE_REGEX],
             'position_applied' => 'required|string|max:255',
@@ -249,7 +249,7 @@ class ApplicantController extends Controller
         $request->merge(['email' => Applicant::normalizeEmail($request->input('email'))]);
 
         $request->validate([
-            'name' => 'sometimes|required|string|max:255',
+            'name' => 'sometimes|required|string|max:50',
             'email' => ['bail', 'nullable', Rule::unique('applicants', 'email')->ignore($id ?? null), 'email:rfc,filter,dns', 'max:255'],
             'phone' => ['nullable', 'regex:'.self::PHONE_REGEX],
             'position_applied' => 'sometimes|required|string|max:255',

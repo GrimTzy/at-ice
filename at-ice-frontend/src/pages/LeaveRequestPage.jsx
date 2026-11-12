@@ -10,6 +10,8 @@
 //   per pay period once regular); without credits EL and VL are unpaid.
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import Pagination from "../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../lib/usePagination";
 import { SkeletonList } from "../components/Skeleton";
 import { toast } from "../lib/toast";
 import { useLiveTick } from "../lib/live";
@@ -24,6 +26,7 @@ import { UploadBar } from "../components/FileDropZone";
 import { sendForm } from "../lib/upload";
 import { confirmAction } from "../lib/confirm";
 import { PILL } from "../lib/statusTones";
+import { useNoticeRecord } from "../lib/noticeRecord";
 
 const TYPE_LABEL = {
   sick: "Sick Leave (SL)",
@@ -31,8 +34,15 @@ const TYPE_LABEL = {
   vacation: "Vacation Leave (VL)",
   maternity: "Maternity Leave",
   paternity: "Paternity Leave",
+  solo_parent: "Solo Parent Leave",
+  vawc: "VAWC Leave",
+  special_women: "Special Leave for Women",
   other: "Other",
 };
+
+// VL and EL use the vacation credits, SL the sick credits; the rest is leave
+// the law gives (credits.statutory), paid in full
+const POOL = { vacation: "vacation", emergency: "vacation", sick: "sick" };
 
 const STATUS_STYLE = {
   pending: PILL.warning,
@@ -102,18 +112,27 @@ export default function LeaveRequestPage() {
   const slWindow = credits?.sl_filing_window_days ?? 1;
   const vlNotice = credits?.vl_notice_days ?? 14;
   const hoursPerDay = credits?.hours_per_day ?? 8;
-  const limits = {
+  const statutory = credits?.statutory || {};
+  const lawRule = statutory[leaveType] || null;
+  const canCredit = !credits?.probationary;
+  const yearAhead = addDays(today, 365);
+  const limits = lawRule ? { min: undefined, max: yearAhead } : {
     sick: { min: addDays(today, -slWindow), max: addDays(today, -1) },
-    vacation: { min: addDays(today, vlNotice), max: undefined },
-    emergency: { min: addDays(today, -slWindow), max: undefined },
-  }[leaveType];
+    vacation: { min: addDays(today, vlNotice), max: yearAhead },
+    emergency: { min: addDays(today, -slWindow), max: yearAhead },
+  }[leaveType] || {};
+  // a probationary employee only sees the leave the law gives
+  const firstType = canCredit ? "vacation" : Object.keys(statutory)[0] || "";
+  useEffect(() => {
+    if (credits && leaveType && !lawRule && !canCredit) raw.leaveType(firstType);
+  }, [credits, leaveType, lawRule, canCredit, firstType, raw]);
 
   // Start on a valid date whenever the type changes. A date already there for
   // the same type (a restored draft, or the credits just loaded) is kept while
   // it still fits.
   const lastType = useRef(null);
   useEffect(() => {
-    const first = leaveType === "sick" ? addDays(todayStr(), -1) : leaveType === "vacation" ? addDays(todayStr(), vlNotice) : todayStr();
+    const first = leaveType === "sick" ? addDays(todayStr(), -1) : leaveType === "vacation" ? addDays(todayStr(), vlNotice) : todayStr(); // EL and the law's leave: today
     const sameType = lastType.current === null || lastType.current === leaveType;
     lastType.current = leaveType;
     if (sameType && startDate && (leaveType !== "vacation" || startDate >= first)) return;
@@ -123,20 +142,39 @@ export default function LeaveRequestPage() {
     setFormError("");
   }, [leaveType, vlNotice, startDate, raw]);
 
+  // Work days of the range (rest days left out; the server also leaves out
+  // holidays). Maternity and the special leave for women count calendar days.
+  const workDays = credits?.work_days || [1, 2, 3, 4, 5];
+  const countDays = (from, to) => {
+    if (!from || !to || to < from) return 0;
+    if (lawRule?.calendar) return Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
+    let n = 0;
+    for (let d = from; d <= to; d = addDays(d, 1)) {
+      const iso = new Date(`${d}T00:00:00Z`).getUTCDay() || 7;
+      if (workDays.includes(iso)) n++;
+    }
+    return n;
+  };
   const length = leaveType === "emergency"
     ? (Number(hours) || 0) / hoursPerDay
-    : halfDay ? 0.5 : startDate && endDate ? Math.round((new Date(endDate) - new Date(startDate)) / 86400000) + 1 : 0;
-  const available = credits?.available ?? 0;
-  const paidHint = length <= 0 ? "" : available >= length
-    ? "Paid from your leave credits once HR approves it."
-    : leaveType === "sick" ? "Not enough leave credits: sick leave cannot be filed." : `Only ${num(available)} day(s) of credits: the rest will be unpaid.`;
+    : halfDay ? 0.5 : countDays(startDate, endDate);
+  const pool = POOL[leaveType];
+  const available = pool ? (credits?.[pool]?.available ?? 0) : length;
+  const poolName = pool === "sick" ? "sick leave" : "vacation leave";
+  const paidHint = length <= 0 ? "" : lawRule
+    ? `Given by law (${lawRule.law}), paid in full once HR approves it. At most ${lawRule.days} ${lawRule.calendar ? "days" : "work days"}.`
+    : available >= length
+      ? `Paid from your ${poolName} credits once HR approves it.`
+      : leaveType === "sick" ? "Not enough sick leave credits: sick leave cannot be filed." : `Only ${num(available)} day(s) of ${poolName} credits: the rest will be unpaid.`;
 
   const submit = async () => {
     setFormError("");
     if (!reason.trim()) return setFormError("Please write the reason for your leave.");
     if (leaveType === "emergency" && !(Number(hours) > 0)) return setFormError("Enter how many hours of emergency leave.");
     if (leaveType === "sick" && !file) return setFormError("Attach your medical certificate.");
-    if (leaveType === "sick" && available < length) return setFormError("Not enough leave credits for sick leave.");
+    if (leaveType === "sick" && available < length) return setFormError("Not enough sick leave credits.");
+    if (lawRule && !file) return setFormError(`Attach the proof: ${lawRule.proof}.`);
+    if (lawRule && length > lawRule.days) return setFormError(`${TYPE_LABEL[leaveType]} is at most ${lawRule.days} ${lawRule.calendar ? "days" : "work days"} (${lawRule.law}).`);
 
     const fd = new FormData();
     fd.append("leave_type", leaveType);
@@ -180,6 +218,14 @@ export default function LeaveRequestPage() {
 
   const inputCls = "w-full px-3 py-2.5 text-[13px] bg-slate-50 border border-black/[0.09] rounded-lg focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20";
 
+  const pager = usePagination(leaves);
+  useNoticeRecord(!loading, (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "leave_request") return;
+
+    pager.reveal((row) => String(row.id) === id);
+  });
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <div className="w-full max-w-xl mx-auto px-4 py-5 flex flex-col gap-4">
@@ -193,39 +239,57 @@ export default function LeaveRequestPage() {
         <ScopeStatusRow className="-mt-1" />
 
         {/* Leave credits this year */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {[
-            ["Available", credits?.available, "days of leave credits"],
-            ["Earned", credits?.earned, `in ${credits?.year ?? new Date().getFullYear()} (0.5 per pay period)`],
-            ["Used", credits?.used, "paid leave days"],
-          ].map(([label, value, note]) => (
+            ["Vacation leave", credits?.vacation, "VL and EL"],
+            ["Sick leave", credits?.sick, "SL"],
+          ].map(([label, c, uses]) => (
             <div key={label} className="bg-white border border-black/[0.09] rounded-xl p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-              <p className="text-[18px] font-bold font-mono text-slate-800 mt-1">{credits && credits.employee_linked !== false ? num(value) : "—"}</p>
-              <p className="text-[11px] text-slate-500">{note}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label} left</p>
+              <p className="text-[18px] font-bold font-mono text-slate-800 mt-1">{credits && credits.employee_linked !== false ? num(c?.available ?? 0) : "—"}</p>
+              <p className="text-[11px] text-slate-500">
+                {credits && credits.employee_linked !== false ? `${num(c?.earned ?? 0)} earned, ${num(c?.used ?? 0)} used in ${credits.year}` : "—"} · {uses}
+              </p>
             </div>
           ))}
         </div>
+        <p className="-mt-2 text-[11px] text-slate-500 px-1">15 vacation and 15 sick leave days a year once regular, earned a little each pay period. They start again every January.</p>
 
         {credits?.employee_linked === false ? (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[13px] text-amber-800">
             This login has no employee record yet, so leave cannot be filed. Please ask HR to link your account.
           </div>
-        ) : credits?.probationary ? (
+        ) : credits?.probationary && !Object.keys(statutory).length ? (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[13px] text-amber-800">
-            You are still on probation, so leave cannot be filed yet. Absences during probation are unpaid. Leave credits start once you become regular.
+            You are still on probation, so vacation, emergency and sick leave cannot be filed yet. Absences during probation are unpaid. Leave credits start once you become regular.
           </div>
         ) : (
           <div className="bg-white border border-black/[0.09] rounded-2xl p-4 flex flex-col gap-3">
             <p className="text-[14px] font-bold text-slate-800">New Leave Application</p>
+            {credits?.probationary && (
+              <p className="text-[12px] px-3 py-2 rounded-lg border text-amber-800 bg-amber-50 border-amber-200">
+                You are still on probation: vacation, emergency and sick leave start once you become regular. The leave the law gives can be filed now.
+              </p>
+            )}
             <DraftHint draft={draft} onDiscard={() => { setFile(null); setFormError(""); }} />
 
             <div>
               <label htmlFor="lv-type" className="block text-[12px] font-semibold text-slate-600 mb-1">Leave Type</label>
               <select id="lv-type" value={leaveType} onChange={(e) => setLeaveType(e.target.value)} className={inputCls}>
-                <option value="vacation">Vacation Leave (VL): at least {vlNotice} days ahead</option>
-                <option value="emergency">Emergency Leave (EL): in hours</option>
-                <option value="sick">Sick Leave (SL): after you return, with a medical certificate</option>
+                {canCredit && (
+                  <optgroup label="From your leave credits">
+                    <option value="vacation">Vacation Leave (VL): at least {vlNotice} days ahead</option>
+                    <option value="emergency">Emergency Leave (EL): in hours, uses VL credits</option>
+                    <option value="sick">Sick Leave (SL): after you return, with a medical certificate</option>
+                  </optgroup>
+                )}
+                {Object.keys(statutory).length > 0 && (
+                  <optgroup label="Given by law, paid in full">
+                    {Object.entries(statutory).map(([type, rule]) => (
+                      <option key={type} value={type}>{rule.label}: up to {rule.days} {rule.calendar ? "days" : "work days"} ({rule.law})</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
 
@@ -242,14 +306,14 @@ export default function LeaveRequestPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-2">
+                {!lawRule && <div className="grid grid-cols-2 gap-2">
                   {[{ v: false, label: "Full Day" }, { v: true, label: "Half Day (0.5)" }].map((o) => (
                     <button key={o.label} type="button" aria-pressed={halfDay === o.v} onClick={() => { setHalfDay(o.v); if (o.v) setEndDate(startDate); }}
                       className={`py-2.5 text-[13px] font-semibold rounded-lg border ${halfDay === o.v ? "bg-cyan-500 text-white border-cyan-500" : "bg-white text-slate-600 border-black/[0.09]"}`}>
                       {o.label}
                     </button>
                   ))}
-                </div>
+                </div>}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label htmlFor="lv-start" className="block text-[12px] font-semibold text-slate-600 mb-1">Start Date</label>
@@ -267,7 +331,7 @@ export default function LeaveRequestPage() {
 
             {paidHint && (
               <p className={`text-[12px] px-3 py-2 rounded-lg border ${available >= length ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-amber-700 bg-amber-50 border-amber-200"}`}>
-                {num(length)} day{length === 1 ? "" : "s"}{leaveType === "emergency" && hours ? ` (${hours} h)` : ""}. {paidHint}
+                {num(length)} {lawRule?.calendar || leaveType === "emergency" ? "day" : "work day"}{length === 1 ? "" : "s"}{leaveType === "emergency" && hours ? ` (${hours} h)` : ""}. {paidHint}
               </p>
             )}
 
@@ -278,7 +342,9 @@ export default function LeaveRequestPage() {
 
             <div>
               <label htmlFor="lv-file" className="block text-[12px] font-semibold text-slate-600 mb-1">
-                {leaveType === "sick" ? "Medical certificate (required, PNG, JPG or PDF, max 5MB)" : "Supporting document (optional, PNG, JPG or PDF, max 5MB)"}
+                {leaveType === "sick" ? "Medical certificate (required, PNG, JPG or PDF, max 5MB)"
+                  : lawRule ? `Proof (required): ${lawRule.proof}. PNG, JPG or PDF, max 5MB`
+                  : "Supporting document (optional, PNG, JPG or PDF, max 5MB)"}
               </label>
               <FileField id="lv-file" file={file} onChange={setFile} accept=".png,.jpg,.jpeg,.pdf" maxBytes={5 * 1024 * 1024}
                 onError={setFormError} label="Choose a file" hint="PNG, JPG or PDF, up to 5MB" />
@@ -303,8 +369,8 @@ export default function LeaveRequestPage() {
         {loadError && <div className="px-3 py-2 text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-lg">{loadError}</div>}
         {!loading && !loadError && leaves.length === 0 && <EmptyState icon="calendar">No leave requests yet.</EmptyState>}
 
-        {leaves.map((l) => (
-          <div key={l.id} className="bg-white border border-black/[0.09] rounded-xl p-4 flex flex-col gap-1.5">
+        {pager.pageItems.map((l) => (
+          <div key={l.id} data-record={`leave_request:${l.id}`} data-record-scroll className="bg-white border border-black/[0.09] rounded-xl p-4 flex flex-col gap-1.5">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[14px] font-bold text-slate-800">{TYPE_LABEL[l.leave_type] || l.leave_type}</span>
@@ -317,13 +383,13 @@ export default function LeaveRequestPage() {
                   </span>
                 )}
               </div>
-              <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${STATUS_STYLE[l.status] || ""}`}>{l.status === "rejected" ? "declined" : l.status}</span>
+              <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${STATUS_STYLE[l.status] || ""}`}>{l.status}</span>
             </div>
             <p className="text-[12px] text-slate-500">{l.start_date === l.end_date ? fmtDate(l.start_date) : `${fmtDate(l.start_date)} to ${fmtDate(l.end_date)}`}</p>
             <div className="flex flex-col gap-2.5 mt-1">
               <MessageBubble mine from="You" role="Reason" at={l.created_at}>{l.reason}</MessageBubble>
               {l.status === "rejected" && l.reject_reason && (
-                <MessageBubble from={(l.approved_by && typeof l.approved_by === "object" && l.approved_by.name) || "HR"} role="Reason for declining" at={l.approved_at}>{l.reject_reason}</MessageBubble>
+                <MessageBubble from={(l.approved_by && typeof l.approved_by === "object" && l.approved_by.name) || "HR"} role="Reason for rejection" at={l.approved_at}>{l.reject_reason}</MessageBubble>
               )}
               {l.status !== "pending" && l.admin_notes && (
                 <MessageBubble from={(l.approved_by && typeof l.approved_by === "object" && l.approved_by.name) || "HR"} role="HR remarks" at={l.approved_at}>{l.admin_notes}</MessageBubble>
@@ -341,6 +407,7 @@ export default function LeaveRequestPage() {
             </div>
           </div>
         ))}
+        {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} />}
       </div>
     </div>
   );

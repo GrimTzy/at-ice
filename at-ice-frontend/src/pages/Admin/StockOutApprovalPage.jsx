@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { SkeletonList } from "../../components/Skeleton";
@@ -25,7 +27,7 @@ function StatusBadge({ status }) {
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-      {status === "rejected" ? "Declined" : String(status || "pending").charAt(0).toUpperCase() + String(status || "pending").slice(1)}
+      {String(status || "pending").charAt(0).toUpperCase() + String(status || "pending").slice(1)}
     </span>
   );
 }
@@ -97,7 +99,7 @@ export default function StockOutApprovalPage() {
 
   const handleRejectSubmit = async (id) => {
     if (!rejectionReason.trim()) {
-      setError('Give the reason for declining.');
+      setError('Rejection reason is required.');
       return;
     }
     setActionLoading(id);
@@ -115,7 +117,7 @@ export default function StockOutApprovalPage() {
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.message || 'Decline failed.');
+        throw new Error(data.message || 'Reject failed.');
       }
       setRejectingId(null);
       setRejectionReason('');
@@ -159,6 +161,7 @@ export default function StockOutApprovalPage() {
   const filtered = activeTab === 'all'
     ? requests
     : requests.filter((r) => r.status === activeTab);
+  const pager = usePagination(filtered);
 
   // Summary for the KPI cards and side panels
   const countOf = (s) => requests.filter((r) => r.status === s).length;
@@ -172,7 +175,7 @@ export default function StockOutApprovalPage() {
     .map((r) => ({
       id: r.id,
       title: `${r.product?.name || r.item_name} × ${r.quantity}`,
-      meta: `${r.status === 'rejected' ? 'Declined' : r.status.charAt(0).toUpperCase() + r.status.slice(1)} · ${r.requested_by?.name || 'Maintenance'}`,
+      meta: `${r.status.charAt(0).toUpperCase() + r.status.slice(1)} · ${r.requested_by?.name || 'Maintenance'}`,
       when: formatDateTime(r.updated_at || r.created_at, { year: false }),
       tone: { pending: 'amber', approved: 'cyan', released: 'emerald', rejected: 'rose' }[r.status] || 'slate',
       icon: { pending: 'clock', approved: 'check', released: 'box', rejected: 'x' }[r.status] || 'box',
@@ -192,7 +195,7 @@ export default function StockOutApprovalPage() {
         <KpiCard label="Waiting approval" icon="clock" tone="amber" value={countOf('pending')} sub={`${plural(requests.length, "request")} in all`} bar={share(countOf('pending'))} onClick={() => setActiveTab('pending')} active={activeTab === 'pending'} />
         <KpiCard label="To release" icon="check" tone="cyan" value={countOf('approved')} sub="Approved, items not out yet" bar={open ? countOf('approved') / open : 0} onClick={() => setActiveTab('approved')} active={activeTab === 'approved'} />
         <KpiCard label="Released" icon="box" tone="emerald" value={countOf('released')} sub={`${releasedThisMonth} this month`} bar={share(countOf('released'))} onClick={() => setActiveTab('released')} active={activeTab === 'released'} />
-        <KpiCard label="Declined" icon="x" tone="rose" value={countOf('rejected')} sub="With a reason for Maintenance" bar={share(countOf('rejected'))} onClick={() => setActiveTab('rejected')} active={activeTab === 'rejected'} />
+        <KpiCard label="Rejected" icon="x" tone="rose" value={countOf('rejected')} sub="With a reason for Maintenance" bar={share(countOf('rejected'))} onClick={() => setActiveTab('rejected')} active={activeTab === 'rejected'} />
         <KpiCard label="Short on stock" icon="alert" tone={short.length ? 'rose' : 'emerald'} value={short.length} sub={short.length ? 'Open requests above what is on hand' : 'Every open request can be filled'} />
       </KpiGrid>
 
@@ -214,7 +217,7 @@ export default function StockOutApprovalPage() {
         </div>
         <div className="px-[18px] py-3">
           <FilterSelect label="Status" value={activeTab} onChange={setActiveTab}
-            options={TABS.map((tab) => ({ value: tab, label: tab === 'rejected' ? 'Declined' : tab.charAt(0).toUpperCase() + tab.slice(1), count: tab === 'all' ? requests.length : requests.filter((r) => r.status === tab).length }))} />
+            options={TABS.map((tab) => ({ value: tab, label: tab.charAt(0).toUpperCase() + tab.slice(1), count: tab === 'all' ? requests.length : requests.filter((r) => r.status === tab).length }))} />
         </div>
       </div>
 
@@ -237,12 +240,12 @@ export default function StockOutApprovalPage() {
         ) : filtered.length === 0 ? (
           <div className="bg-white border border-black/[0.09] rounded-xl">
             <EmptyState icon="box" title={activeTab === 'pending' ? 'Nothing waiting for approval' : 'No requests here'}>
-              {activeTab === 'pending' ? 'New stock-out requests from Maintenance show up here for you to approve or decline.' : 'Pick another status above to see the other requests.'}
+              {activeTab === 'pending' ? 'New stock-out requests from Maintenance show up here for you to approve or reject.' : 'Pick another status above to see the other requests.'}
             </EmptyState>
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map((req) => {
+            {pager.pageItems.map((req) => {
               const notEnough = req.product && req.product.current_stock < req.quantity;
               return (
                 <div
@@ -303,7 +306,7 @@ export default function StockOutApprovalPage() {
                           <textarea name="rejection_reason"
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
-                            placeholder="Reason for declining..."
+                            placeholder="Reason for rejection..."
                             className="w-full text-sm border border-black/[0.09] rounded-lg px-3 py-2 resize-y"
                             rows={2}
                           />
@@ -313,7 +316,7 @@ export default function StockOutApprovalPage() {
                               disabled={actionLoading === req.id}
                               className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-sm font-medium disabled:opacity-50"
                             >
-                              Confirm Decline
+                              Confirm Reject
                             </button>
                             <button
                               onClick={() => {
@@ -340,7 +343,7 @@ export default function StockOutApprovalPage() {
                             onClick={() => setRejectingId(req.id)}
                             className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-sm font-medium"
                           >
-                            Decline
+                            Reject
                           </button>
                         </div>
                       )}
@@ -395,6 +398,7 @@ export default function StockOutApprovalPage() {
                 </div>
               );
             })}
+            {pager.total > PAGE_SIZES[0] && <Pagination pager={pager} />}
           </div>
         )}
       </div>
@@ -408,7 +412,7 @@ export default function StockOutApprovalPage() {
             { key: 'pending', label: 'Waiting approval', count: countOf('pending'), tone: 'amber' },
             { key: 'approved', label: 'To release', count: countOf('approved'), tone: 'cyan' },
             { key: 'released', label: 'Released', count: countOf('released'), tone: 'emerald' },
-            { key: 'rejected', label: 'Declined', count: countOf('rejected'), tone: 'rose' },
+            { key: 'rejected', label: 'Rejected', count: countOf('rejected'), tone: 'rose' },
           ]}
           onPick={(i) => setActiveTab(i.key)}
           active={activeTab}

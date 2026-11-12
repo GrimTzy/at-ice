@@ -28,10 +28,8 @@ class DeliveryLifecycleTest extends TestCase
         $today = now('Asia/Manila')->toDateString();
 
         Sanctum::actingAs($admin);
-        // our routes (delivery_routes + route_stops): the store is stop 1, the driver drives it from today
-        $route = $this->postJson('/api/routes', ['name' => 'Lifecycle route'])->assertCreated()->json('id');
-        $this->putJson("/api/routes/{$route}/stops", ['stops' => [['customer_id' => $store->id, 'stop_order' => 1]]])->assertOk();
-        $this->putJson("/api/routes/{$route}", ['driver_id' => $driver->id, 'driver_from' => $today])->assertOk();
+        $route = $this->postJson('/api/store-routes', ['name' => 'Lifecycle route', 'store_ids' => [$store->id]])->assertCreated()->json('id');
+        $this->postJson('/api/driver-route-assignments', ['driver_id' => $driver->id, 'route_id' => $route, 'effective_from' => $today])->assertSuccessful();
         $payload = ['name' => $store->name, 'store_ids' => [$store->id], 'start_date' => $today, 'end_date' => $today, 'delivery_days' => ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], 'delivery_time' => '23:59', 'items' => [['product_type' => 'bags', 'quantity' => 10]]];
         $contract = $this->postJson('/api/delivery-contracts', $payload)->assertCreated()->json('id');
         $payload['items'][0]['quantity'] = 12;

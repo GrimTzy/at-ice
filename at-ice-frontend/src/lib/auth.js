@@ -3,14 +3,35 @@
 // user's session can leak into the next one.
 
 import { clearAllDrafts } from "./useDraft";
+import { isMobileRole, isNativeApp } from "./native";
+import { removePushToken } from "./push";
 
 export const LOGIN_PATH = "/login";
 
-const SESSION_KEYS = ["token", "role", "sub_role", "user", "must_change_password"];
+// Last time the person did something, in ms. In localStorage so every open tab
+// of the same sign-in shares it (see components/IdleGuard.jsx).
+export const ACTIVITY_KEY = "last_activity";
+// Last real mouse/key/touch input. A page left open untouched is signed out
+// after OPEN_TAB_LIMIT_MS of this (see components/IdleGuard.jsx).
+export const INPUT_KEY = "last_input";
+
+const SESSION_KEYS = ["token", "role", "sub_role", "user", "must_change_password", "idle_minutes", ACTIVITY_KEY, INPUT_KEY];
 
 // Saves the response of POST /api/login.
 export function saveSession(data) {
   localStorage.setItem("token", data.token);
+  // Minutes of inactivity before sign-out for this role; no value = no limit
+  // (the employees on their phones: nothing about idle is stored or tracked for
+  // them). The server enforces the same limit.
+  if (data.idle_minutes > 0) {
+    localStorage.setItem("idle_minutes", String(data.idle_minutes));
+    localStorage.setItem(ACTIVITY_KEY, String(Date.now()));
+    localStorage.setItem(INPUT_KEY, String(Date.now()));
+  } else {
+    localStorage.removeItem("idle_minutes");
+    localStorage.removeItem(ACTIVITY_KEY);
+    localStorage.removeItem(INPUT_KEY);
+  }
   localStorage.setItem("role", data.role || data.user?.role || "");
   localStorage.setItem("sub_role", data.sub_role || "");
   localStorage.setItem("user", JSON.stringify(data.user || {}));
@@ -22,6 +43,22 @@ export function saveSession(data) {
 }
 
 export function clearSession() {
+  // Ending the session on the server too: its token must stop working on this phone, and this
+  // phone stops getting notices for this person. A token the server no longer knows is refused,
+  // which is harmless here.
+  const bearer = localStorage.getItem("token");
+  if (bearer) {
+    removePushToken(bearer);
+    try {
+      fetch("/api/logout", {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: `Bearer ${bearer}` },
+        keepalive: true,
+      }).catch(() => {});
+    } catch {
+      // no network: the token is forgotten on this phone either way
+    }
+  }
   SESSION_KEYS.forEach((k) => localStorage.removeItem(k));
   // Unsaved form drafts (lib/useDraft.js) never outlive the session.
   clearAllDrafts();
@@ -43,6 +80,8 @@ const HOME_PATH_BY_SUB_ROLE = {
 // Where a user lands after login: their own dashboard. Returns null for an
 // employee with no known sub_role, or an unknown role.
 export function homePathFor(role, subRole) {
+  // the Android app only opens the four mobile roles
+  if (isNativeApp() && !isMobileRole(role, subRole)) return null;
   if (role === "employee") return HOME_PATH_BY_SUB_ROLE[subRole] || null;
   return HOME_PATH_BY_ROLE[role] || null;
 }

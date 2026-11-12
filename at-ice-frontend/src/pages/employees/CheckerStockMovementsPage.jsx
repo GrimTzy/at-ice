@@ -1,11 +1,14 @@
 import { useEffect, useState, useCallback } from "react";
 import RoleShell from "../../components/RoleShell";
+import Pagination from "../../components/Pagination";
+import { PAGE_SIZES, usePagination } from "../../lib/usePagination";
 import { StatusBadge, LoadingButton, BottomSheet, ActionBar, Stepper, ErrorBanner, EmptyCard, CardSkeleton, SearchBar, Icon } from "../../components/MobileUi";
 import { CARD, FIELD, TEXTAREA, LABEL, matchesQuery } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
+import { useNoticeRecord } from "../../lib/noticeRecord";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import { formatDateTime } from "../../lib/time";
@@ -121,11 +124,21 @@ export default function CheckerStockMovementsPage() {
   const visible = (filter === "pending" ? movements.filter((m) => m.status === "pending") : movements).filter((m) =>
     matchesQuery(query, m.product?.name, m.type === "stock_in" ? "stock in" : "stock out", m.type, m.id, m.reference, m.reason, m.notes, m.entered_by?.name));
   const pendingCount = movements.filter((m) => m.status === "pending").length;
+  // 10 a page like every list; the bar docks above the bottom navigation
+  const pager = usePagination(visible);
+  useNoticeRecord(status === "ready", (record) => {
+    const [kind, id] = record.split(":");
+    if (kind !== "stock_movement") return;
+    setQuery(""); setFilter("all");
+    pager.reveal((row) => String(row.id) === id);
+  });
+  const paged = status === "ready" && pager.total > PAGE_SIZES[0];
 
   return (
     <RoleShell
       role="checker"
       title="Stock in / out"
+      paged={paged}
       actionBar={<ActionBar><LoadingButton onClick={() => setShowForm(true)} disabled={timedIn === false}><Icon name="plus" /> Log a movement</LoadingButton></ActionBar>}
     >
       <TimeInNotice timedIn={timedIn} />
@@ -145,8 +158,8 @@ export default function CheckerStockMovementsPage() {
 
       {status === "ready" && (
         <div className="grid grid-cols-1 gap-3">
-          {visible.map((m) => (
-            <article key={m.id} className={`${CARD} ${m.status === "confirmed" ? "border-emerald-200" : ""}`}>
+          {pager.pageItems.map((m) => (
+            <article key={m.id} data-record={`stock_movement:${m.id}`} data-record-scroll className={`${CARD} ${m.status === "confirmed" ? "border-emerald-200" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-[15px] font-semibold text-slate-900 truncate">{m.product?.name || "Unknown item"}</h2>
@@ -180,6 +193,7 @@ export default function CheckerStockMovementsPage() {
         </div>
       )}
 
+      {paged && <Pagination pager={pager} fixed dock dockBottom="4rem" />}
       <BottomSheet
         open={showForm}
         onClose={() => !submitting && setShowForm(false)}
@@ -210,7 +224,7 @@ export default function CheckerStockMovementsPage() {
           </div>
           <div>
             <label htmlFor="mv-notes" className={LABEL}>Notes</label>
-            <textarea id="mv-notes" rows={2} maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Delivered by supplier, DR no. 1234" className={TEXTAREA} />
+            <textarea id="mv-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Delivered by supplier, DR no. 1234" className={TEXTAREA} />
           </div>
         </form>
       </BottomSheet>

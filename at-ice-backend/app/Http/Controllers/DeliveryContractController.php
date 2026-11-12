@@ -13,11 +13,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
-// Admin > Deliveries > Contracts: one delivery schedule per customer (a whole
+// Admin > CRM > Customers > Contracts: one delivery schedule per customer (a whole
 // chain such as SM, or a single store) with a date range and delivery days.
-// One contract per store, approved on save and editable (owner, 2026-11-11);
-// saving or editing makes the daily deliveries (App\Support\DeliveryDispatch)
-// and returns the truck-limit warnings (App\Support\RouteCapacity).
+// Approving it makes the daily deliveries (App\Support\DeliveryDispatch).
 class DeliveryContractController extends Controller
 {
     public function index()
@@ -38,7 +36,7 @@ class DeliveryContractController extends Controller
     public function nextNumber(Request $request)
     {
         $data = $request->validate([
-            'chain' => 'nullable|string|max:100',
+            'chain' => 'nullable|string|max:50',
             'store_ids' => 'required|array|min:1',
             'store_ids.*' => 'integer|exists:customers,id',
         ]);
@@ -49,14 +47,16 @@ class DeliveryContractController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name' => 'required|string|max:150',
-            'chain' => 'nullable|string|max:100',
+            'name' => 'required|string|max:50',
+            'chain' => 'nullable|string|max:50',
             'store_ids' => 'required|array|min:1',
             'store_ids.*' => 'integer|distinct|exists:customers,id',
             'start_date' => 'required|date|after_or_equal:'.DriverAvailability::today(),
             'end_date' => 'required|date|after_or_equal:start_date|before_or_equal:'.now(config('atice.timezone'))->addYear()->toDateString(),
             'delivery_days' => 'required|array|min:1',
             'delivery_days.*' => ['string', 'distinct', Rule::in(DeliveryContract::DAYS)],
+            // the time window: from (optional) to Deliver by, a deadline
+            'delivery_from' => ['nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
             'delivery_time' => ['required', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|distinct|in:bags,small_sack,big_sack',
@@ -66,8 +66,11 @@ class DeliveryContractController extends Controller
             'store_ids.required' => 'Pick at least one store.',
             'delivery_days.required' => 'Pick at least one delivery day.',
             'end_date.before_or_equal' => 'A contract can run for at most one year.',
+            'delivery_from.regex' => 'Pick the time the window opens.',
             'items.*.product_type.distinct' => 'Each product can only be added once.',
         ]);
+
+        $this->checkWindow($data);
 
         // One contract per store (owner, 2026-11-11): a store that has one running
         // or coming up is edited instead of getting a second.
@@ -79,7 +82,7 @@ class DeliveryContractController extends Controller
         // Admin makes the contract, so it is approved at once: the daily deliveries
         // are made now (owner, 2026-11-11). No price for a store stops it before anything is saved.
         $result = [];
-        $check = [];
+        $check = ['warnings' => [], 'without_driver' => 0];
         $contract = DB::transaction(function () use ($data, $request, &$result, &$check) {
             $contract = DeliveryContract::create([
                 'contract_no' => DeliveryContract::nextNumber($data['chain'] ?? null, $data['store_ids']),
@@ -90,6 +93,7 @@ class DeliveryContractController extends Controller
                 // kept in Mon..Sun order
                 'delivery_days' => array_values(array_intersect(DeliveryContract::DAYS, $data['delivery_days'])),
                 'delivery_time' => $data['delivery_time'].':00',
+                'delivery_from' => ! empty($data['delivery_from']) ? $data['delivery_from'].':00' : null,
                 'items' => array_map(fn ($i) => ['product_type' => $i['product_type'], 'quantity' => (int) $i['quantity']], $data['items']),
                 'notes' => $data['notes'] ?? null,
                 'status' => 'pending',
@@ -127,22 +131,21 @@ class DeliveryContractController extends Controller
     }
 
     // GET delivery-contracts/{id}/capacity-check: before Approve, what the
-    // contract would put on each Driver's truck over the truck limits
+    // contract would add to each Driver's days against the truck limits
     // (RouteCapacity), and how many store-days would have no Driver. Only a
     // warning: Admin may still approve.
     public function capacityCheck($id)
     {
-        $contract = DeliveryContract::findOrFail($id);
+        $contract = DeliveryContract::with('stores')->findOrFail($id);
         $check = RouteCapacity::forContract($contract);
 
-        return response()->json($check + [
+        return response()->json([
             'limits' => RouteCapacity::limits(),
             'warning' => RouteCapacity::message($check['warnings']),
-        ]);
+        ] + $check);
     }
 
-    // Admin approves: the daily deliveries are generated at once. Going over
-    // a truck limit does not stop it; the warnings come back with the result.
+    // Admin approves: the daily deliveries are generated at once.
     public function approve(Request $request, $id)
     {
         $contract = DeliveryContract::with('stores')->findOrFail($id);
@@ -176,6 +179,14 @@ class DeliveryContractController extends Controller
         return response()->json(['message' => $text.self::capacityText($check)] + $result + self::capacityFields($check));
     }
 
+    // The window must open before its Deliver by time.
+    private function checkWindow(array $data): void
+    {
+        if (! empty($data['delivery_from']) && $data['delivery_from'] >= $data['delivery_time']) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['delivery_from' => ['The window must open before the Deliver by time.']]);
+        }
+    }
+
     // Edit the store's contract (owner, 2026-11-11: one contract per store, editable).
     // The upcoming deliveries that have not started are made again from the new
     // details; deliveries in transit or delivered stay as they are.
@@ -187,11 +198,13 @@ class DeliveryContractController extends Controller
         }
 
         $data = $request->validate([
-            'name' => 'required|string|max:150',
+            'name' => 'required|string|max:50',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date|before_or_equal:'.now(config('atice.timezone'))->addYear()->toDateString(),
             'delivery_days' => 'required|array|min:1',
             'delivery_days.*' => ['string', 'distinct', Rule::in(DeliveryContract::DAYS)],
+            // the time window: from (optional) to Deliver by, a deadline
+            'delivery_from' => ['nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
             'delivery_time' => ['required', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|distinct|in:bags,small_sack,big_sack',
@@ -200,20 +213,23 @@ class DeliveryContractController extends Controller
         ], [
             'delivery_days.required' => 'Pick at least one delivery day.',
             'end_date.before_or_equal' => 'A contract can run for at most one year.',
+            'delivery_from.regex' => 'Pick the time the window opens.',
             'items.*.product_type.distinct' => 'Each product can only be added once.',
         ]);
 
-        $before = $contract->only(['name', 'start_date', 'end_date', 'delivery_days', 'delivery_time', 'items']);
-        $result = ['created' => 0, 'skipped' => 0];
-        $check = ['warnings' => [], 'without_driver' => 0];
+        $this->checkWindow($data);
+        $before = $contract->only(['name', 'start_date', 'end_date', 'delivery_days', 'delivery_from', 'delivery_time', 'items']);
+        $result = [];
         $cancelled = 0;
-        DB::transaction(function () use ($contract, $data, $request, &$result, &$check, &$cancelled) {
+        $check = ['warnings' => [], 'without_driver' => 0];
+        DB::transaction(function () use ($contract, $data, $request, &$result, &$cancelled, &$check) {
             $contract->fill([
                 'name' => $data['name'],
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'delivery_days' => array_values(array_intersect(DeliveryContract::DAYS, $data['delivery_days'])),
                 'delivery_time' => $data['delivery_time'].':00',
+                'delivery_from' => ! empty($data['delivery_from']) ? $data['delivery_from'].':00' : null,
                 'items' => array_map(fn ($i) => ['product_type' => $i['product_type'], 'quantity' => (int) $i['quantity']], $data['items']),
                 'notes' => $data['notes'] ?? null,
             ]);
@@ -227,50 +243,20 @@ class DeliveryContractController extends Controller
                 ], 422));
             }
 
-            $contract->save();
-            // a contract still waiting for approval has no deliveries yet
-            if ($contract->status !== 'approved') {
-                return;
-            }
             $cancelled = Delivery::where('contract_id', $contract->id)
                 ->whereIn('status', ['pending', 'queued'])
                 ->whereDate('scheduled_date', '>=', DriverAvailability::today())
                 ->update(['status' => 'cancelled', 'cancel_reason' => "Contract {$contract->contract_no} edited", 'updated_at' => now()]);
+            $contract->save();
             // truck-limit warnings (RouteCapacity) for the deliveries made again
             $check = RouteCapacity::forContract($contract);
             $result = DeliveryDispatch::generate($contract, $request->user()->id);
         });
         Audit::log('delivery_contract.updated', $contract, $before, $contract->only(['name', 'start_date', 'end_date', 'delivery_days', 'delivery_time', 'items']) + $result);
 
-        $text = $contract->status === 'approved'
-            ? "Contract saved. {$result['created']} upcoming deliveries were made again from the new details."
-            : 'Contract saved.';
-
-        return response()->json($contract->load('stores:customers.id,customers.name')->toArray()
-            + ['message' => $text.self::capacityText($check)] + self::capacityFields($check));
-    }
-
-    // RouteCapacity::forContract() result as toast text and response fields.
-    private static function capacityText(array $check): string
-    {
-        $text = '';
-        if ($check['without_driver'] ?? 0) {
-            $text .= " {$check['without_driver']} have no driver yet: put those stores on a route or assign a driver.";
-        }
-        if ($warning = RouteCapacity::message($check['warnings'] ?? [])) {
-            $text .= ' '.$warning;
-        }
-
-        return $text;
-    }
-
-    private static function capacityFields(array $check): array
-    {
-        return [
-            'warnings' => $check['warnings'] ?? [],
-            'without_driver' => $check['without_driver'] ?? 0,
-            'warning' => RouteCapacity::message($check['warnings'] ?? []),
-        ];
+        return response()->json($contract->load('stores:customers.id,customers.name')->toArray() + [
+            'message' => "Contract saved. {$result['created']} upcoming deliveries were made again from the new details.".self::capacityText($check),
+        ] + self::capacityFields($check));
     }
 
     // The message to show when one of these stores already has a contract that
@@ -288,7 +274,6 @@ class DeliveryContractController extends Controller
 
         return ($c->stores->first()?->name ?? 'This store')." already has a contract ({$c->contract_no}). Edit that one instead of making another.";
     }
-
     // Cancels the contract and its deliveries from today on that have not
     // started yet. Deliveries in transit or delivered are kept.
     public function cancel($id)
@@ -312,5 +297,28 @@ class DeliveryContractController extends Controller
         }
 
         return response()->json(['message' => "Contract cancelled. {$count} upcoming deliveries were cancelled."]);
+    }
+
+    // The RouteCapacity::forContract() result as toast text and response fields.
+    private static function capacityText(array $check): string
+    {
+        $text = '';
+        if (! empty($check['without_driver'])) {
+            $text .= " {$check['without_driver']} store days have no Driver yet.";
+        }
+        if ($warning = RouteCapacity::message($check['warnings'] ?? [])) {
+            $text .= ' '.$warning;
+        }
+
+        return $text;
+    }
+
+    private static function capacityFields(array $check): array
+    {
+        return [
+            'warnings' => $check['warnings'] ?? [],
+            'without_driver' => $check['without_driver'] ?? 0,
+            'warning' => RouteCapacity::message($check['warnings'] ?? []),
+        ];
     }
 }

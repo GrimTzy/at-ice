@@ -17,7 +17,6 @@ export const SUPPORT_TOPICS = [
   { key: "short_delivery", label: "Short Delivery (Fewer Sacks Than Invoiced)" },
   { key: "damaged_ice", label: "Damaged or Melted Ice" },
   { key: "ice_quality", label: "Ice Quality / Temperature Verification" },
-  { key: "emergency_supply", label: "Emergency Ice Shortage / Urgent Additional Sacks" },
   { key: "new_order", label: "New Order Request" },
   { key: "cancel_order", label: "Cancel an Order or Delivery" },
   { key: "change_schedule", label: "Change Delivery Schedule" },

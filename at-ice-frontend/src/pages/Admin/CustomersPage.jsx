@@ -20,7 +20,7 @@ import { ActivityFeed, ProgressRing, StatusBreakdown } from "../../components/In
 import { Icon } from "../../components/icons";
 import { focusRecord } from "../../lib/destination";
 import { plural } from "../../lib/plural";
-import { ContractForm } from "./deliveries/ContractsTab";
+import { ContractForm, StoreContracts } from "./deliveries/StoreContracts";
 import { todayStr, daysLabel } from "./deliveries/utils";
 
 const API_BASE = "/api";
@@ -119,7 +119,8 @@ export default function CustomersPage() {
   const [creatingAccountFor, setCreatingAccountFor] = useState(null);
   // Why Create Login failed, shown under that customer's button: { id, message }
   const [accountError, setAccountError] = useState(null);
-  const [contractFor, setContractFor] = useState(null); // customer whose delivery contract is being made
+  const [contractFor, setContractFor] = useState(null); // customer whose contract form is open
+  const [historyFor, setHistoryFor] = useState(null); // customer whose contract history is open
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -140,21 +141,9 @@ export default function CustomersPage() {
   // Delivery days per store, from its running or pending contracts (Days column)
   const [daysByStore, setDaysByStore] = useState({});
   const [contractByStore, setContractByStore] = useState({}); // the store's one running contract (Contract button edits it)
-  const [routeByStore, setRouteByStore] = useState({}); // store id => route name, active routes only ("No route" badge)
   const fetchContractDays = useCallback(async () => {
     try {
-      const [res, routesRes] = await Promise.all([
-        fetch(`${API_BASE}/delivery-contracts`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/routes`, { headers: authHeaders() }),
-      ]);
-      if (routesRes.ok) {
-        const routes = await routesRes.json();
-        const onRoute = {};
-        (Array.isArray(routes) ? routes : []).filter((r) => r.is_active).forEach((r) => {
-          (r.stops || []).forEach((s) => { onRoute[s.customer_id] = r.name; });
-        });
-        setRouteByStore(onRoute);
-      }
+      const res = await fetch(`${API_BASE}/delivery-contracts`, { headers: authHeaders() });
       if (!res.ok) return;
       const list = await res.json();
       const today = todayStr();
@@ -485,7 +474,7 @@ export default function CustomersPage() {
               {!loading && pager.pageItems.map((c) => (
                 <tr key={c.id} data-row-key={c.id} className="border-t border-black/[0.06]">
                   <td className="px-[18px] py-2.5">
-                    <div className="font-medium text-slate-800">{c.name}</div>
+                    <button type="button" onClick={() => setHistoryFor(c)} title="Contract history" className="font-medium text-slate-800 text-left hover:text-cyan-700 hover:underline underline-offset-2">{c.name}</button>
                     <div className="text-[11px] text-slate-400">{c.invoice_code && <span className="mr-1 px-1.5 py-px rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-semibold">{c.invoice_code}</span>}{c.customer_code}{c.branch_code ? ` · ${c.branch_code}` : ""}</div>
                   </td>
                   <td className="px-[18px] py-2.5 text-slate-600">
@@ -533,7 +522,7 @@ export default function CustomersPage() {
                   </td>
                   <td className="px-[18px] py-2.5 text-slate-600 whitespace-nowrap">
                     {daysByStore[c.id]?.length ? daysLabel(daysByStore[c.id]) : <span className="text-slate-300">—</span>}
-                    {contractByStore[c.id] && !routeByStore[c.id] && (
+                    {contractByStore[c.id] && !c.store_route_id && (
                       <div className="text-[11px] text-amber-600" title="Add this store to a route (Deliveries > Routes) so its deliveries get a driver">No route</div>
                     )}
                   </td>
@@ -596,6 +585,7 @@ export default function CustomersPage() {
                 <div className="col-span-2">
                   <Field
                     label="Branch / Business Name"
+                    maxLength={50}
                     value={form.name}
                     onChange={(v) => setForm((f) => {
                       // The type follows the name while it is blank or still
@@ -644,7 +634,7 @@ export default function CustomersPage() {
                     Customer Code and Branch Code are generated when you save.
                   </p>
                 )}
-                <Field label="Contact Person" value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required={need("contact_person")} />
+                <Field label="Contact Person" maxLength={50} value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required={need("contact_person")} />
                 <div>
                   <label htmlFor="customer-contact-number" className="text-[11px] text-slate-500 mb-1 block">Contact Number{need("contact_number") && <Req />}</label>
                   <PhoneInput
@@ -711,7 +701,7 @@ export default function CustomersPage() {
                   inputClassName="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
                 />
                 <div className="col-span-2">
-                  <Field label="Notes" multiline maxLength={1000} placeholder="Delivery instructions, landmarks, contact hours…" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
+                  <Field label="Notes" multiline placeholder="Delivery instructions, landmarks, contact hours…" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
                 </div>
               </div>
               </div>
@@ -729,13 +719,23 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Delivery contract for one store (same form as Deliveries > Contracts) */}
+      {/* The store's one contract: a new one, or its running one to edit */}
       {contractFor && (
         <ContractForm
           store={contractFor}
           contract={contractByStore[contractFor.id] || null}
           onClose={() => setContractFor(null)}
           onSaved={() => { setContractFor(null); fetchContractDays(); }}
+        />
+      )}
+
+      {/* Every contract the store has had, from its name (history, Cancel) */}
+      {historyFor && (
+        <StoreContracts
+          store={historyFor}
+          contract={contractByStore[historyFor.id] || null}
+          onClose={() => setHistoryFor(null)}
+          onChanged={fetchContractDays}
         />
       )}
 
@@ -836,7 +836,7 @@ function Field({ label, value, onChange, required, disabled, placeholder, inputM
         disabled={disabled}
         placeholder={placeholder}
         inputMode={inputMode}
-        maxLength={maxLength ?? (multiline ? 1000 : 255)}
+        maxLength={maxLength}
         className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
       />
     </div>

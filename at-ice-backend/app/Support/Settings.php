@@ -28,7 +28,7 @@ class Settings
         // R3, undecided: the 21.83 (261-day) divisor assumes paid regular holidays
         'payroll.monthly_unworked_holiday_deduct' => [false, 'bool', 'Deduct an unworked holiday from monthly-rated pay'],
         'payroll.negative_net_handling' => ['CARRY_OVER', 'enum:CARRY_OVER,EMPLOYER_SHOULDERED', 'When deductions are more than the pay: carry the shortfall to the next cut-off, or the employer pays it'],
-        'payroll.gov_deduction_strategy' => ['SPLIT_FIRST_TWO', 'enum:FIRST_PAYROLL_OF_MONTH,SPLIT_FIRST_TWO', 'When SSS, PhilHealth and Pag-IBIG are deducted'],
+        'payroll.gov_deduction_strategy' => ['SECOND_PAYROLL_OF_MONTH', 'enum:SECOND_PAYROLL_OF_MONTH,FIRST_PAYROLL_OF_MONTH,SPLIT_FIRST_TWO', 'When SSS, PhilHealth and Pag-IBIG are deducted'],
         // Night differential (Labor Code Art. 86): for every hour worked from
         // 10:00 PM to 6:00 AM, at least 10% of the hourly rate of that hour.
         'payroll.night_diff_rate' => [0.10, 'number', 'Night differential: extra pay for each hour worked from 10:00 PM to 6:00 AM, as a share of that hour\'s rate (0.10 = 10%, the legal minimum)'],
@@ -45,20 +45,18 @@ class Settings
         'kiosk.max_wrong_pins' => [5, 'int', 'Wrong PINs in a row that lock a kiosk until Admin unlocks it'],
         'kiosk.max_wrong_pins_per_ip' => [10, 'int', 'Wrong PINs from one network address in an hour (any kiosk) before that address is blocked for the hour'],
         // Leave
-        'leave.credits_per_cutoff' => [0.5, 'number', 'Leave credits (days) earned each pay period once regular'],
-        'leave.credits_cap' => [15, 'number', 'Most leave credits an employee can hold'],
+        'leave.vl_days_per_year' => [15, 'number', 'Vacation leave days a year once regular, earned a share each pay period (emergency leave uses these)'],
+        'leave.sl_days_per_year' => [15, 'number', 'Sick leave days a year once regular, earned a share each pay period'],
         'leave.sl_filing_window_days' => [1, 'int', 'Days after returning that sick leave can still be filed'],
         'leave.vl_notice_days' => [14, 'int', 'Days ahead that vacation leave must be filed'],
         // Deliveries (App\Support\DeliveryDispatch)
         'delivery.delay_notice_hours' => [2, 'int', 'Hours before a reassigned or queued delivery that the store is told it may be late'],
         'delivery.arrival_radius_m' => [150, 'int', 'How close (meters) the Driver and the Salesman must be to the store pin to press Arrived; a delivery is confirmed only after both have arrived'],
-        'plant.latitude' => [14.7502926, 'number', 'Plant location (latitude): stores that are not on a route are listed nearest to the plant first'],
-        'plant.longitude' => [121.0739105, 'number', 'Plant location (longitude)'],
+        'plant.latitude' => [14.8031, 'number', 'Plant location (latitude): each route lists the stores nearest to the plant first'],
+        'plant.longitude' => [121.0515, 'number', 'Plant location (longitude)'],
         'delivery.not_timed_in_minutes' => [60, 'int', 'Minutes after their shift starts that a Driver with no Time In counts as absent and their pending deliveries today are reassigned'],
-        'delivery.max_top_ups_per_day' => [3, 'int', 'Most urgent top-ups one store can get after one delivery in a day'],
         // FIFO and rolling stock (owner, 2026-11-10; DeliveryDispatch, TruckStock)
-        // Off since 2026-11-10: trucks are loaded full every trip and sold out (hidden from the Settings page)
-        'delivery.allow_rolling_stock_fifo' => [false, 'bool', 'Keep the ice left on each truck as dated loads and deliver the oldest load first (FIFO). Off: loads and deliveries are not tracked per truck'],
+        'delivery.allow_rolling_stock_fifo' => [true, 'bool', 'Keep the ice left on each truck as dated loads and deliver the oldest load first (FIFO). Off: loads and deliveries are not tracked per truck'],
         'delivery.auto_queue_on_trip_completion' => [true, 'bool', 'Give queued deliveries on their own to the Driver who finished their list first. Off: Admin picks a Driver for each queued delivery'],
         'delivery.max_transit_hours_before_alert' => [4, 'int', 'Hours a delivery may stay In transit before Admin is alerted (0 = no alert)'],
         // Truck load and stops per Driver per day (client, 2026-11-10; App\Support\RouteCapacity)
@@ -84,9 +82,11 @@ class Settings
         'performance.goal_maintenance' => [8, 'int', 'Maintenance goal per pay period: parts requests and projects filed'],
         // 13th month
         'thirteenth.credit_date' => ['12-01', 'month-day', 'Date the 13th month pay is credited (MM-DD; legal deadline 12-24)'],
-        // Retention (nothing is deleted on its own; Admin reviews)
-        'archive.expiry_action' => ['REVIEW', 'enum:REVIEW,ANONYMIZE,PURGE', 'What happens each day to inactive employees past the retention period: Admin reviews them, or they are anonymized or deleted'],
-        'retention.years' => [2, 'int', 'Years inactive employees and old timesheets are kept before Admin reviews them'],
+        // Retention (QA review, 2026-11-11): personal data goes a month after
+        // deactivation; the records DOLE needs stay 3 years, then are anonymized
+        'archive.expiry_action' => ['ANONYMIZE', 'enum:REVIEW,ANONYMIZE,PURGE', 'What happens each day to inactive employees past the retention period: anonymized, reviewed by Admin, or deleted'],
+        'retention.years' => [3, 'int', 'Years the records of inactive employees and old timesheets are kept (DOLE: at least 3)'],
+        'retention.personal_purge_days' => [30, 'int', 'Days after deactivation that the login, face, documents, contact and biodata are deleted (data privacy); attendance, leave and payroll stay'],
     ];
 
     public static function get(string $key): mixed
@@ -109,10 +109,6 @@ class Settings
     // HR must not let itself unlock kiosks or turn on automatic deletion.
     // Admin changes them on Settings > Admin PIN and Settings > Old records.
     public const ADMIN_KEYS = ['kiosk.hr_can_override', 'archive.expiry_action'];
-
-    // Kept and read by the code but not shown on any page (client, 2026-11-10:
-    // rolling truck stock is off and hidden).
-    public const HIDDEN_KEYS = ['delivery.allow_rolling_stock_fifo'];
 
     // HR > Rates and rules: one page per section (/hr/rates/{page}), each
     // loading only its own keys (GET /api/settings/{page}). page => key prefixes
@@ -155,7 +151,6 @@ class Settings
         $prefixes = self::PAGES[$page] ?? [];
 
         return array_values(array_filter(self::all(), fn ($s) => ! in_array($s['key'], self::ADMIN_KEYS, true)
-            && ! in_array($s['key'], self::HIDDEN_KEYS, true)
             && collect($prefixes)->contains(fn ($p) => str_starts_with($s['key'], $p))));
     }
 
