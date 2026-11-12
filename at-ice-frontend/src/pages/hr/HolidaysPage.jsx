@@ -40,7 +40,9 @@ const typeOf = (t) => TYPES.find(([k]) => k === t) || [t, t, "bg-slate-50 text-s
 const inputCls = "px-2.5 py-1.5 border border-slate-300 rounded-md text-xs text-slate-700 bg-white focus:outline-none focus:border-cyan-400";
 const labelCls = "text-[10px] font-semibold uppercase tracking-wider text-slate-500";
 const EMPTY = { date: "", name: "", type: "REGULAR", is_double: false };
-const NO_FILTER = { q: "", month: "", date: "", type: "" };
+const MAX_RANGE_DAYS = 31;
+const daysBetween = (from, to) => Math.round((new Date(`${to}T00:00:00`) - new Date(`${from}T00:00:00`)) / 86400000) + 1;
+const NO_FILTER ={ q: "", month: "", date: "", type: "" };
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const fmt = (d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 
@@ -68,6 +70,11 @@ function HolidayModal({ holiday, onClose, onSaved }) {
   }, [pickedYear]);
   const taken = form.date ? sameYear.find((h) => h.date === form.date && h.id !== editing) : null;
   const takenMsg = taken ? `${taken.name} is already on this date. Edit it instead.` : "";
+  const endDate = !editing && form.end_date && form.end_date !== form.date ? form.end_date : "";
+  const rangeDays = endDate && form.date ? daysBetween(form.date, endDate) : 1;
+  const rangeError = endDate && form.date
+    ? (rangeDays < 1 ? "The end date must be on or after the start date." : rangeDays > MAX_RANGE_DAYS ? `A holiday range can be at most ${MAX_RANGE_DAYS} days (${rangeDays} days chosen).` : "")
+    : "";
   const close = useCallback(() => { clear(); onClose(); }, [clear, onClose]);
 
   useEffect(() => {
@@ -78,10 +85,13 @@ function HolidayModal({ holiday, onClose, onSaved }) {
 
   const save = async (e) => {
     e.preventDefault();
+    if (rangeError) return toast.error(rangeError);
     setBusy(true);
     try {
-      await api(editing ? `/api/holidays/${editing}` : "/api/holidays", { method: editing ? "PUT" : "POST", body: JSON.stringify(form) });
-      toast.success(editing ? `${form.name} was updated.` : `${form.name} was added.`);
+      const { end_date: _end, ...fields } = form;
+      const body = editing ? fields : { ...fields, end_date: endDate || null };
+      const res = await api(editing ? `/api/holidays/${editing}` : "/api/holidays", { method: editing ? "PUT" : "POST", body: JSON.stringify(body) });
+      toast.success(editing ? `${form.name} was updated.` : res?.message || `${form.name} was added.`);
       draft.clear();
       onSaved(form.date);
     } catch (err) {
@@ -102,10 +112,23 @@ function HolidayModal({ holiday, onClose, onSaved }) {
         <div className="modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain">
         <div className="p-5 flex flex-col gap-3.5">
         <DraftHint draft={draft} onDiscard={onClose} />
-        <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Date<Req /></span>
-          <input name="date" type="date" required autoFocus value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
-            ref={(el) => el?.setCustomValidity(takenMsg)} aria-invalid={!!taken || undefined} aria-describedby={taken ? "holiday-date-taken" : undefined} className={inputCls} />
-          {taken && <span id="holiday-date-taken" role="alert" className="text-[11px] text-red-600">{takenMsg}</span>}</label>
+        <div className="flex flex-col gap-1">
+          <div className={editing ? "" : "grid grid-cols-2 gap-2"}>
+            <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">{editing ? "Date" : "From"}<Req /></span>
+              <input name="date" type="date" required autoFocus value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
+                ref={(el) => el?.setCustomValidity(takenMsg)} aria-invalid={!!taken || undefined} aria-describedby={taken ? "holiday-date-taken" : undefined} className={inputCls} />
+              {taken && <span id="holiday-date-taken" role="alert" className="text-[11px] text-red-600">{takenMsg}</span>}</label>
+            {!editing && (
+              <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">To (optional)</span>
+                <input name="end_date" type="date" min={form.date || undefined} value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value })} className={inputCls} /></label>
+            )}
+          </div>
+          {!editing && (
+            <span className={`text-[11px] ${rangeError ? "text-red-600" : "text-slate-500"}`}>
+              {rangeError || (endDate ? `${rangeDays} days: one holiday is added for each date.` : `Leave "To" empty for one day. Up to ${MAX_RANGE_DAYS} days.`)}
+            </span>
+          )}
+        </div>
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Holiday name<Req /></span>
           <input name="name" required maxLength={50} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Eid'l Adha" className={inputCls} /></label>
         <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-slate-600">Type</span>
