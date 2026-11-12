@@ -1,0 +1,50 @@
+route,stop_order,store_name,address,lat,lng,km_from_previous
+A,1,Alfamart Purok III Graceville SJDM,"Brgy Graceville, San Jose del Monte, Bulacan",14.787419,121.060819,4.36
+A,2,Alfamart Brgy Gaya-Gaya SJDM,"Brgy Gaya-Gaya, San Jose del Monte, Bulacan",14.794973,121.052335,1.24
+A,3,Alfamart Gaya-Gaya SJDM,"Brgy Gaya-Gaya, San Jose del Monte, Bulacan",14.794973,121.052335,0.00
+A,4,Alfamart Gov. F Halili Gaya-Gaya SJDM,"Governor Fortunato Halili Avenue, Brgy Gaya-Gaya, San Jose del Monte, Bulacan",14.794973,121.052335,0.00
+A,5,Alfamart F Homes Narra SJDM,"Brgy Francisco Homes-Narra, San Jose del Monte, Bulacan",14.808559,121.056878,1.59
+A,6,Alfamart F Homes Narra 2 SJDM,"Brgy Francisco Homes-Narra, San Jose del Monte, Bulacan",14.808559,121.056878,0.00
+A,7,Alfamart Andrew Subd Poblacion I SJDM,"Andrew Subdivision, Brgy Poblacion I, San Jose del Monte, Bulacan",14.808817,121.045604,1.21
+A,8,Alfamart Poblacion SJDM,"Brgy Poblacion, San Jose del Monte, Bulacan",14.814953,121.041792,0.80
+A,9,Alfamart Dulong Bayan SJDM,"Brgy Dulong Bayan, San Jose del Monte, Bulacan",14.826810,121.044677,1.35
+A,10,Alfamart Brgy Fatima II SJDM,"Brgy Fatima II, San Jose del Monte, Bulacan",14.843253,121.044045,1.83
+A,11,Alfamart Brgy Fatima IV SJDM,"Brgy Fatima IV, San Jose del Monte, Bulacan",14.843492,121.046532,0.27
+A,12,Alfamart EVR Ave Sta Cruz I SJDM,"EVR Avenue, Brgy Santa Cruz I, San Jose del Monte, Bulacan",14.852086,121.052679,1.16
+A,13,Alfamart Sta. Cruz I SJDM,"Brgy Santa Cruz I, San Jose del Monte, Bulacan",14.852086,121.052679,0.00
+B,1,Alfamart Brgy Gumaok Central SJDM,"Brgy Gumaok Central, San Jose del Monte, Bulacan",14.800175,121.065933,5.61
+B,2,Alfamart Amaresa Subd Francisco Homes,"Amaresa Subdivision, Brgy Francisco Homes, San Jose del Monte, Bulacan",14.810823,121.066189,1.18
+B,3,Alfamart Brgy Kaypian SJDM,"Brgy Kaypian, San Jose del Monte, Bulacan",14.821589,121.062591,1.26
+B,4,Alfamart San Pedro SJDM,"Brgy San Pedro, San Jose del Monte, Bulacan",14.846086,121.055874,2.82
+B,5,Alfamart Purok 7 Bagong Buhay SJDM,"Brgy Bagong Buhay, San Jose del Monte, Bulacan",14.855772,121.058684,1.12
+B,6,Alfamart Bagong Buhay II SJDM,"Brgy Bagong Buhay II, San Jose del Monte, Bulacan",14.859038,121.058830,0.36
+B,7,Alfamart St Martin SJDM,"Brgy San Martin I, San Jose del Monte, Bulacan",14.863068,121.058537,0.45
+B,8,Alfamart San Martin II SJDM,"Brgy San Martin II, San Jose del Monte, Bulacan",14.862346,121.055640,0.32
+B,9,Alfamart Sta. Cruz V SJDM,"Brgy Santa Cruz V, San Jose del Monte, Bulacan",14.856658,121.047748,1.06
+B,10,Alfamart Brgy San Rafael III SJDM,"Brgy San Rafael III, San Jose del Monte, Bulacan",14.853777,121.044444,0.48
+B,11,Alfamart San Rafael SJDM,"Brgy San Rafael I, San Jose del Monte, Bulacan",14.853097,121.044618,0.08
+B,12,Alfamart Tigbe Norzagaray,"Brgy Tigbe, Norzagaray, Bulacan",14.866976,121.037815,1.71
+B,13,Alfamart Tigbe Norzagaray 2,"Brgy Tigbe, Norzagaray, Bulacan",14.866976,121.037815,0.00
+C,1,Alfamart Farmview Tungkong Mangga SJDM,"Farmview Subdivision, Brgy Tungkong Mangga, San Jose del Monte, Bulacan",14.788968,121.072337,4.30
+C,2,Alfamart Maharlika SJDM,"Brgy Maharlika, San Jose del Monte, Bulacan",14.795151,121.072183,0.69
+C,3,Alfamart Northwinds 3B Brgy Kaypian SJDM,"Northwinds, Brgy Kaypian, San Jose del Monte, Bulacan",14.818280,121.066078,2.65
+C,4,Alfamart Phase 7 Palmera Homes,"Palmera Homes, San Jose del Monte, Bulacan",14.825237,121.068071,0.80
+C,5,Alfamart Minuyan 2 SJDM,"Brgy Minuyan II, San Jose del Monte, Bulacan",14.843195,121.075566,2.15
+C,6,Alfamart Rd 2 Minuyan SJDM,"Brgy Minuyan II, San Jose del Monte, Bulacan",14.843195,121.075566,0.00
+C,7,Alfamart Ipo Rd Brgy Minuyan SJDM,"Ipo Road, Brgy Minuyan, San Jose del Monte, Bulacan",14.842766,121.078610,0.33
+C,8,Alfamart Brgy Minuyan IV SJDM,"Brgy Minuyan IV, San Jose del Monte, Bulacan",14.846557,121.074336,0.62
+C,9,Alfamart Minuyan IV SJDM,"Brgy Minuyan IV, San Jose del Monte, Bulacan",14.846557,121.074336,0.00
+C,10,Alfamart Brgy Citrus SJDM,"Brgy Citrus, San Jose del Monte, Bulacan",14.849182,121.064727,1.07
+C,11,Alfamart Lawang Pari SJDM,"Brgy Lawang Pari, San Jose del Monte, Bulacan",14.858243,121.071120,1.22
+C,12,Alfamart Assumption SJDM,"Brgy Assumption, San Jose del Monte, Bulacan",14.862799,121.063807,0.94
+C,13,Alfamart Bitungol Norzagaray,"Brgy Bitungol, Norzagaray, Bulacan",14.882347,121.061150,2.19
+D,1,SM City San Jose del Monte (40 tenants),"SM City San Jose del Monte, Tungkong Mangga, San Jose del Monte, Bulacan",14.786069,121.074641,3.98
+D,2,Alfamart Igay Road Sto Cristo SJDM,"Igay Road, Brgy Santo Cristo, San Jose del Monte, Bulacan",14.808667,121.084891,2.74
+D,3,Alfamart Sto Cristo SJDM,"Brgy Santo Cristo, San Jose del Monte, Bulacan",14.825311,121.078907,1.96
+D,4,Alfamart Sto Cristo 2 SJDM,"Brgy Santo Cristo, San Jose del Monte, Bulacan",14.825311,121.078907,0.00
+D,5,Alfamart Towerville Sto Cristo SJDM,"Towerville, Brgy Santo Cristo, San Jose del Monte, Bulacan",14.837141,121.085803,1.51
+D,6,Alfamart Bigte Norzagaray,"Brgy Bigte, Norzagaray, Bulacan",14.857169,121.085565,2.23
+D,7,Alfamart Bigte 2 Norzagaray,"Brgy Bigte, Norzagaray, Bulacan",14.857169,121.085565,0.00
+D,8,Alfamart Brgy Minuyan Norzagaray,"Brgy Minuyan, Norzagaray, Bulacan",14.867739,121.080334,1.30
+D,9,Alfamart Villarama Rd Minuyan Norzagaray,"Villarama Road, Brgy Minuyan, Norzagaray, Bulacan",14.867739,121.080334,0.00
+D,10,Alfamart Brgy San Mateo Norzagaray,"Brgy San Mateo, Norzagaray, Bulacan",14.873458,121.127712,5.13
