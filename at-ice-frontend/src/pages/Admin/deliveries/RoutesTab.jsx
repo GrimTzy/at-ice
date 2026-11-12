@@ -87,6 +87,7 @@ export default function RoutesTab({ stores, live, search = "", type = "" }) {
                 key={r.id}
                 type="button"
                 onClick={() => setPicked(active ? null : r.id)}
+                data-dest-trigger
                 aria-expanded={active}
                 className={`driver-card text-left rounded-xl border p-3 transition-colors bg-white ${active ? "border-cyan-500 ring-2 ring-cyan-500/40" : "border-black/[0.09] hover:border-black/20"}`}
               >
