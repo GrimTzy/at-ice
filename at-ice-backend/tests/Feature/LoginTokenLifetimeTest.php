@@ -13,6 +13,20 @@ class LoginTokenLifetimeTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const APP_KEY = 'test-app-key';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['appclient.key' => self::APP_KEY]);
+    }
+
+    // what the Android app sends: its header and its key
+    private function appHeader(): array
+    {
+        return ['X-AT-ICE-App' => 'android', 'X-AT-ICE-App-Key' => self::APP_KEY];
+    }
+
     private function user(string $role, ?string $subRole = null): User
     {
         return User::create([
@@ -68,7 +82,7 @@ class LoginTokenLifetimeTest extends TestCase
     public function test_an_app_login_of_a_mobile_role_has_no_end_time(): void
     {
         foreach ([['driver', null], ['employee', 'checker'], ['employee', 'salesman'], ['employee', 'maintenance']] as [$role, $sub]) {
-            $token = $this->login($this->user($role, $sub), ['X-AT-ICE-App' => 'android']);
+            $token = $this->login($this->user($role, $sub), $this->appHeader());
 
             $stored = PersonalAccessToken::findToken($token);
             $this->assertSame('android-app', $stored->name);
@@ -78,16 +92,17 @@ class LoginTokenLifetimeTest extends TestCase
 
     public function test_an_app_login_still_works_long_after(): void
     {
-        $token = $this->login($this->user('driver'), ['X-AT-ICE-App' => 'android']);
+        $token = $this->login($this->user('driver'), $this->appHeader());
 
         $this->travel(40)->days();
-        $this->me($token)->assertOk();
+        $this->app['auth']->forgetGuards();
+        $this->flushHeaders()->withHeaders(['Authorization' => 'Bearer '.$token] + $this->appHeader())->getJson('/api/me')->assertOk();
         $this->assertNull(PersonalAccessToken::findToken($token)->expires_at);
     }
 
-    public function test_the_app_header_gives_other_roles_no_longer_login(): void
+    public function test_a_copied_app_header_without_the_key_is_a_website_session(): void
     {
-        foreach ([['admin', null], ['hr', null], ['customer', null]] as [$role, $sub]) {
+        foreach ([['driver', null], ['employee', 'checker']] as [$role, $sub]) {
             $token = $this->login($this->user($role, $sub), ['X-AT-ICE-App' => 'android']);
 
             $stored = PersonalAccessToken::findToken($token);
@@ -96,13 +111,50 @@ class LoginTokenLifetimeTest extends TestCase
         }
     }
 
+    public function test_a_wrong_app_key_is_a_website_session(): void
+    {
+        $token = $this->login($this->user('driver'), ['X-AT-ICE-App' => 'android', 'X-AT-ICE-App-Key' => 'wrong']);
+
+        $this->assertSame('auth_token', PersonalAccessToken::findToken($token)->name);
+    }
+
+    public function test_the_app_header_gives_other_roles_no_longer_login(): void
+    {
+        foreach ([['admin', null], ['hr', null], ['customer', null]] as [$role, $sub]) {
+            $token = $this->login($this->user($role, $sub), $this->appHeader());
+
+            $stored = PersonalAccessToken::findToken($token);
+            $this->assertSame('auth_token', $stored->name);
+            $this->assertNotNull($stored->expires_at);
+        }
+    }
+
+    public function test_an_app_session_is_refused_from_a_browser_without_the_key(): void
+    {
+        $token = $this->login($this->user('driver'), $this->appHeader());
+
+        $this->app['auth']->forgetGuards();
+        $this->flushHeaders()->withHeaders(['Authorization' => 'Bearer '.$token])->getJson('/api/me')->assertUnauthorized();
+
+        $this->app['auth']->forgetGuards();
+        $this->flushHeaders()->withHeaders(['Authorization' => 'Bearer '.$token] + $this->appHeader())->getJson('/api/me')->assertOk();
+    }
+
+    public function test_a_website_session_works_without_the_key(): void
+    {
+        $token = $this->login($this->user('driver'));
+
+        $this->app['auth']->forgetGuards();
+        $this->flushHeaders()->withHeaders(['Authorization' => 'Bearer '.$token])->getJson('/api/me')->assertOk();
+    }
+
     public function test_logging_out_ends_a_session(): void
     {
-        foreach ([[], ['X-AT-ICE-App' => 'android']] as $i => $headers) {
+        foreach ([[], $this->appHeader()] as $i => $headers) {
             $token = $this->login($this->user('driver', $i ? 'x' : null), $headers);
 
             $this->app['auth']->forgetGuards();
-            $this->flushHeaders()->withHeaders(['Authorization' => 'Bearer '.$token])
+            $this->flushHeaders()->withHeaders(['Authorization' => 'Bearer '.$token] + ($i ? $this->appHeader() : []))
                 ->postJson('/api/logout')->assertOk();
             $this->assertNull(PersonalAccessToken::findToken($token));
         }

@@ -20,8 +20,8 @@ class DeviceTokenController extends Controller
             'token.max' => 'The device token is too long.',
         ]);
 
-        // Only the four mobile roles use the app; other accounts get no push address.
-        if (! $request->user()->usesMobileApp()) {
+        // Only the verified app, for the four mobile roles, gets a push address.
+        if (! \App\Support\AppClient::verified($request) || ! $request->user()->usesMobileApp()) {
             return response()->json(['message' => 'Push notifications are for the mobile app only.'], 403);
         }
 

@@ -25,6 +25,7 @@ class PhonePushTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['appclient.key' => 'test-app-key']);
 
         $test = $this;
         $this->app->instance(PushSender::class, new class($test) implements PushSender {
@@ -111,6 +112,18 @@ class PhonePushTest extends TestCase
         $this->assertSame([str_repeat('a', 40)], $this->sent[0]['tokens']);
     }
 
+    public function test_a_notice_carries_the_record_it_is_about(): void
+    {
+        $driver = $this->user('driver');
+        $this->phone($driver, str_repeat('r', 40));
+
+        $event = $this->notice(['driver']);
+        $event->update(['subject_type' => 'delivery', 'subject_id' => 12]);
+        PushNotifier::forLiveEvent($event->fresh());
+
+        $this->assertSame('delivery:12', $this->sent[0]['data']['record']);
+    }
+
     public function test_the_person_who_did_the_action_gets_no_notice(): void
     {
         $doer = $this->user('driver');
@@ -158,7 +171,7 @@ class PhonePushTest extends TestCase
     public function test_the_app_saves_a_phone_for_a_mobile_role_only(): void
     {
         $this->actingAs($this->user('driver'), 'sanctum')
-            ->postJson('/api/device-tokens', ['token' => str_repeat('k', 40)])
+            ->postJson('/api/device-tokens', ['token' => str_repeat('k', 40)], ['X-AT-ICE-App' => 'android', 'X-AT-ICE-App-Key' => 'test-app-key'])
             ->assertOk();
         $this->assertDatabaseHas('device_tokens', ['token' => str_repeat('k', 40)]);
 
@@ -168,13 +181,21 @@ class PhonePushTest extends TestCase
         $this->assertDatabaseMissing('device_tokens', ['token' => str_repeat('m', 40)]);
     }
 
+    public function test_a_phone_address_without_the_app_key_is_refused(): void
+    {
+        $this->actingAs($this->user('driver'), 'sanctum')
+            ->postJson('/api/device-tokens', ['token' => str_repeat('n', 40)], ['X-AT-ICE-App' => 'android'])
+            ->assertForbidden();
+        $this->assertDatabaseMissing('device_tokens', ['token' => str_repeat('n', 40)]);
+    }
+
     public function test_a_phone_moves_to_whoever_signs_in_on_it_last(): void
     {
         $first = $this->user('driver');
         $second = $this->user('employee', 'checker');
         $this->phone($first, str_repeat('p', 40));
 
-        $this->actingAs($second, 'sanctum')->postJson('/api/device-tokens', ['token' => str_repeat('p', 40)])->assertOk();
+        $this->actingAs($second, 'sanctum')->postJson('/api/device-tokens', ['token' => str_repeat('p', 40)], ['X-AT-ICE-App' => 'android', 'X-AT-ICE-App-Key' => 'test-app-key'])->assertOk();
 
         $this->assertSame(1, DeviceToken::where('token', str_repeat('p', 40))->count());
         $this->assertSame($second->id, DeviceToken::where('token', str_repeat('p', 40))->value('user_id'));

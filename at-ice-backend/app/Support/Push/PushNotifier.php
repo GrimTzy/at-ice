@@ -25,7 +25,13 @@ class PushNotifier
                 $tokens,
                 'AT-ICE',
                 $event->message,
-                ['module' => (string) $event->module, 'action' => (string) $event->action, 'event_id' => (string) $event->id],
+                array_filter([
+                    'module' => (string) $event->module,
+                    'action' => (string) $event->action,
+                    'event_id' => (string) $event->id,
+                    // the record the notice is about: the app opens it (e.g. delivery:12)
+                    'record' => $event->subject_type && $event->subject_id ? $event->subject_type.':'.$event->subject_id : null,
+                ]),
             );
 
             if ($invalid !== []) {
