@@ -9,6 +9,8 @@ import { ANY_REGEX, ANY_MESSAGE, localDigits, toStoredPhone } from "../../lib/ph
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
+import { NameHelp } from "../../components/FieldError";
+import { LIMITS, SHORT_WORD, nameError } from "../../lib/textRules";
 import { useLiveTick } from "../../lib/live";
 import { useNoticeRecord } from "../../lib/noticeRecord";
 import AddressFields from "../../components/AddressFields";
@@ -84,6 +86,7 @@ export default function CheckerSupplierManagementPage() {
     if (submitting) return;
     setFormError("");
     if (!form.name.trim()) return setFormError("Enter the supplier name.");
+    if (nameError(form.name, "store", LIMITS.NAME, "Supplier name", SHORT_WORD) || nameError(form.contact_person, "person", LIMITS.FULL, "Contact person")) return; // shown under the field
     if (form.contact_number && !ANY_REGEX.test(form.contact_number)) return setFormError(ANY_MESSAGE);
     setSubmitting(true);
     try {
@@ -196,11 +199,15 @@ export default function CheckerSupplierManagementPage() {
           {!editingId && <p className="text-[13px] text-slate-500">The supplier code is assigned automatically.</p>}
           <div>
             <label htmlFor="sup-name" className={LABEL}>Supplier name *</label>
-            <input id="sup-name" value={form.name} maxLength={50} onChange={(e) => setForm({ ...form, name: e.target.value })} className={FIELD} />
+            <input id="sup-name" value={form.name} maxLength={LIMITS.NAME} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              aria-invalid={nameError(form.name, "store", LIMITS.NAME, "Supplier name", SHORT_WORD) ? true : undefined} aria-describedby="sup-name-error" className={FIELD} />
+            <NameHelp id="sup-name-error" value={form.name} max={LIMITS.NAME} error={nameError(form.name, "store", LIMITS.NAME, "Supplier name", SHORT_WORD)} />
           </div>
           <div>
             <label htmlFor="sup-person" className={LABEL}>Contact person</label>
-            <input id="sup-person" value={form.contact_person} maxLength={50} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} className={FIELD} />
+            <input id="sup-person" value={form.contact_person} maxLength={LIMITS.FULL} onChange={(e) => setForm({ ...form, contact_person: e.target.value })}
+              aria-invalid={nameError(form.contact_person, "person", LIMITS.FULL, "Contact person") ? true : undefined} aria-describedby="sup-person-error" className={FIELD} />
+            <NameHelp id="sup-person-error" value={form.contact_person} max={LIMITS.FULL} error={nameError(form.contact_person, "person", LIMITS.FULL, "Contact person")} />
           </div>
           <div>
             <label htmlFor="supplier-contact" className={LABEL}>Contact number</label>
@@ -209,18 +216,18 @@ export default function CheckerSupplierManagementPage() {
           </div>
           <div>
             <label htmlFor="sup-email" className={LABEL}>Email</label>
-            <input id="sup-email" type="email" inputMode="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={FIELD} />
+            <input id="sup-email" type="email" inputMode="email" maxLength={255} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={FIELD} />
           </div>
           <div>
             <label htmlFor="sup-address" className={LABEL}>House no., street, subdivision</label>
-            <input id="sup-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={FIELD} />
+            <input id="sup-address" maxLength={LIMITS.ADDRESS} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={FIELD} />
           </div>
           <div className="grid grid-cols-1 gap-3">
             <AddressFields value={form} onChange={handleAddress} details={false} inputClassName={`${FIELD} disabled:opacity-60`} />
           </div>
           <div>
             <label htmlFor="sup-notes" className={LABEL}>Notes</label>
-            <textarea id="sup-notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={TEXTAREA} />
+            <textarea id="sup-notes" rows={2} maxLength={LIMITS.NOTE} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={TEXTAREA} />
           </div>
         </form>
       </BottomSheet>

@@ -3,6 +3,8 @@ import { toast } from "../../../lib/toast";
 import { api, todayStr, storeName, inputCls, labelCls, btnPrimary, btnGhost } from "./utils";
 import { Modal, StorePicker, PlusIcon } from "./shared";
 import Req from "../../../components/Req";
+import { NameHelp } from "../../../components/FieldError";
+import { LIMITS, SHORT_WORD, nameError } from "../../../lib/textRules";
 import Pagination from "../../../components/Pagination";
 import { usePagination } from "../../../lib/usePagination";
 
@@ -213,7 +215,9 @@ function RouteForm({ route, routes, stores, onClose, onSaved }) {
         {error && <div role="alert" className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
         <div>
           <label htmlFor="route-name" className={labelCls}>Route name<Req /></label>
-          <input id="route-name" name="name" required maxLength={50} value={name} onChange={(e) => { setName(e.target.value); setError(""); }} placeholder="e.g. Route A" className={inputCls} />
+          <input id="route-name" name="name" required maxLength={LIMITS.NAME} value={name} onChange={(e) => { setName(e.target.value); setError(""); }} placeholder="e.g. Route A"
+            aria-invalid={nameError(name, "store", LIMITS.NAME, "Route name", SHORT_WORD) ? true : undefined} aria-describedby="route-name-error" className={inputCls} />
+          <NameHelp id="route-name-error" value={name} max={LIMITS.NAME} error={nameError(name, "store", LIMITS.NAME, "Route name", SHORT_WORD)} />
         </div>
         <div>
           <div className={labelCls}>Stores on this route</div>

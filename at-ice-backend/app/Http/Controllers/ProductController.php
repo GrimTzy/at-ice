@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Support\TextRules;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -79,13 +80,13 @@ class ProductController extends Controller
 
         $validated = $request->validate([
             'product_code' => 'nullable|string|max:50|unique:products,product_code',
-            'name' => 'required|string|max:50|unique:products,name',
-            'category' => 'nullable|string|max:100',
+            'name' => ['required', ...TextRules::name(TextRules::NAME, 'Item name'), 'unique:products,name'],
+            'category' => 'nullable|string|max:'.TextRules::NAME, // picked from a list; old codes like spare_parts stay valid
             'unit' => 'nullable|string|max:50',
             'unit_price' => 'nullable|numeric|min:0',
             'minimum_stock' => $this->limitRule($request, Product::MIN_LIMIT_CAP),
             'maximum_stock' => $this->limitRule($request, Product::MAX_LIMIT_CAP),
-            'description' => 'nullable|string|max:1000',
+            'description' => ['nullable', ...TextRules::note()],
         ], [
             'name.unique' => 'An item with this name already exists.',
             'minimum_stock.max' => 'Minimum stock can have at most 2 digits (up to '.Product::MIN_LIMIT_CAP.').',
@@ -142,13 +143,13 @@ class ProductController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => ['sometimes', 'required', 'string', 'max:50', Rule::unique('products', 'name')->ignore($product->id)],
-            'category' => 'nullable|string|max:100',
+            'name' => ['sometimes', 'required', ...TextRules::name(TextRules::NAME, 'Item name'), Rule::unique('products', 'name')->ignore($product->id)],
+            'category' => 'nullable|string|max:'.TextRules::NAME, // picked from a list; old codes like spare_parts stay valid
             'unit' => 'nullable|string|max:50',
             'unit_price' => 'nullable|numeric|min:0',
             'minimum_stock' => $this->limitRule($request, Product::MIN_LIMIT_CAP),
             'maximum_stock' => $this->limitRule($request, Product::MAX_LIMIT_CAP),
-            'description' => 'nullable|string|max:1000',
+            'description' => ['nullable', ...TextRules::note()],
         ], [
             'name.unique' => 'An item with this name already exists.',
             'minimum_stock.max' => 'Minimum stock can have at most 2 digits (up to '.Product::MIN_LIMIT_CAP.').',

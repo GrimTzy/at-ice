@@ -81,6 +81,17 @@ function NavBadge({ count, of }) {
   );
 }
 
+// The same count on the icon, shown only while the rail is collapsed
+// (controls.css .nav-rail-count). A group counts all of its pages.
+function RailCount({ count, of }) {
+  if (!count) return null;
+  return (
+    <span className="nav-rail-count" aria-hidden="true" title={`${count} waiting in ${of}`}>
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
 // counts: { "/hr/leave-requests": 3, ... } from useNavCounts. A group shows the
 // sum of its pages while it is closed, so nothing waiting is hidden.
 export default function SideNav({ items, onNavigate, counts = {} }) {
@@ -197,7 +208,13 @@ export default function SideNav({ items, onNavigate, counts = {} }) {
               aria-current={isActive && !item.children ? "page" : undefined}
               className={`flex items-center gap-2.5 px-[18px] ${item.children ? "pr-9" : ""} py-[7px] text-[13px] cursor-pointer transition-[color,background-color,border-color,box-shadow,transform] duration-100 border-l-2 ${isActive ? "text-cyan-500 bg-cyan-500/[0.08] border-cyan-500" : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50"}`}
             >
-              <span className="opacity-80 flex-shrink-0">{item.icon}</span>
+              <span className="opacity-80 flex-shrink-0 relative">
+                {item.icon}
+                {/* the collapsed rail shows only icons: the count sits on the icon */}
+                <RailCount of={item.label} count={item.children
+                  ? item.children.reduce((s, c) => s + (Number(counts[splitTo(c.to).path]) || 0), 0)
+                  : Number(counts[splitTo(item.to).path]) || 0} />
+              </span>
               <span className="rail-label truncate flex-1">{item.label}</span>
               <NavBadge
                 of={item.label}

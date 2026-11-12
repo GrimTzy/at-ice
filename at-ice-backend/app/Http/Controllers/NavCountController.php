@@ -2,40 +2,43 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Applicant;
-use App\Models\EmployeeMemo;
-use App\Models\LeaveRequest;
-use App\Models\StockOutRequest;
-use App\Models\SupportMessage;
+use App\Support\NavCounts;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
-// Counts for the blue badges in the side menu: how many items wait for the
-// signed-in role on each page. Only plain counts, keyed by the page path the
-// menu links to (lib/nav.jsx), so the web app needs no mapping of its own.
+// The "waiting" counts of the side menu, the bottom tabs and the bell, for
+// the signed-in user (App\Support\NavCounts). The live-feed poll sends the
+// same counts, so they update without a refresh.
 class NavCountController extends Controller
 {
-    public function admin(): JsonResponse
+    // GET nav-counts (every role): { counts: { "/path": n }, seen_paths: [...] }
+    public function index(Request $request): JsonResponse
     {
-        return response()->json([
-            '/admin/stock-out-approvals' => StockOutRequest::where('status', 'pending')->count(),
-            // Formal memos HR endorsed, waiting for approval
-            '/admin/memo-approvals' => EmployeeMemo::where('status', 'for_approval')->count(),
-            // New tickets, plus escalated ones still being worked on
-            '/admin/support-inbox' => SupportMessage::where('status', 'open')
-                ->orWhere(fn ($q) => $q->whereNotNull('escalated_at')->where('status', 'in_progress'))
-                ->count(),
-        ]);
+        return response()->json(self::payload($request->user()));
     }
 
-    public function hr(): JsonResponse
+    // POST nav-counts/seen { path }: the user opened a news page; its badge goes to 0.
+    public function seen(Request $request): JsonResponse
     {
-        return response()->json([
-            '/hr/leave-requests' => LeaveRequest::where('status', 'pending')->count(),
-            // Pending applicants with an interview still ahead
-            '/hr/interviews' => Applicant::where('status', 'pending')
-                ->whereNotNull('interview_date')
-                ->where('interview_date', '>=', now()->startOfDay())
-                ->count(),
-        ]);
+        $data = $request->validate(['path' => 'required|string|max:100']);
+        NavCounts::markSeen($request->user(), $data['path']);
+
+        return response()->json(self::payload($request->user()));
+    }
+
+    // GET nav-counts/admin and nav-counts/hr (older clients): the plain counts.
+    public function admin(Request $request): JsonResponse
+    {
+        return response()->json(NavCounts::for($request->user()));
+    }
+
+    public function hr(Request $request): JsonResponse
+    {
+        return response()->json(NavCounts::for($request->user()));
+    }
+
+    public static function payload($user): array
+    {
+        return ['counts' => (object) NavCounts::for($user), 'seen_paths' => NavCounts::seenPaths($user)];
     }
 }

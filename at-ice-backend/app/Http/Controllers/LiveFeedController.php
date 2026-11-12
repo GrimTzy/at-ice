@@ -34,8 +34,18 @@ class LiveFeedController extends Controller
             DeliveryDispatch::run();
         }
 
+        // The badges and the bell ride on the same poll, so they never disagree
+        // with the notices and update without a refresh (App\Support\NavCounts).
+        // A failed count never stops the notices; the badges then stay as they were.
+        try {
+            $nav = NavCountController::payload($user);
+        } catch (\Throwable $e) {
+            report($e);
+            $nav = null;
+        }
+
         if ($after === null || $after === '') {
-            return response()->json(['last_id' => (int) LiveEvent::max('id'), 'events' => []]);
+            return response()->json(['last_id' => (int) LiveEvent::max('id'), 'events' => [], 'nav' => $nav]);
         }
 
         $rows = LiveEvent::where('id', '>', (int) $after)->orderBy('id')->limit(100)->get();
@@ -54,6 +64,7 @@ class LiveFeedController extends Controller
         return response()->json([
             'last_id' => (int) ($rows->max('id') ?? $after),
             'events' => $events,
+            'nav' => $nav,
         ]);
     }
 }

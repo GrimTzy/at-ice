@@ -8,6 +8,8 @@ import { CARD, FIELD, TEXTAREA, LABEL } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
+import { NameHelp } from "../../components/FieldError";
+import { LIMITS, SHORT_WORD, nameError } from "../../lib/textRules";
 import { useLiveTick } from "../../lib/live";
 import { useNoticeRecord } from "../../lib/noticeRecord";
 import { useTimedIn } from "../../lib/timeIn";
@@ -105,6 +107,7 @@ export default function CheckerInventoryManagementPage() {
     setFormError("");
     const name = form.name.trim();
     if (!name) return setFormError("Enter the item name.");
+    if (nameError(name, "name", LIMITS.NAME, "Item name", SHORT_WORD)) return; // shown under the field
     setSaving(true);
     try {
       // Minimum and maximum stock are set by Admin only, so they are not sent.
@@ -266,7 +269,9 @@ export default function CheckerInventoryManagementPage() {
           <ErrorBanner>{formError}</ErrorBanner>
           <div>
             <label htmlFor="item-name" className={LABEL}>Item name *</label>
-            <input id="item-name" value={form.name} maxLength={50} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Plastic bags (tube ice)" className={FIELD} />
+            <input id="item-name" value={form.name} maxLength={LIMITS.NAME} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Plastic bags (tube ice)"
+              aria-invalid={nameError(form.name, "name", LIMITS.NAME, "Item name", SHORT_WORD) ? true : undefined} aria-describedby="item-name-error" className={FIELD} />
+            <NameHelp id="item-name-error" value={form.name} max={LIMITS.NAME} error={nameError(form.name, "name", LIMITS.NAME, "Item name", SHORT_WORD)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -292,7 +297,7 @@ export default function CheckerInventoryManagementPage() {
           </div>
           <div>
             <label htmlFor="item-desc" className={LABEL}>Description</label>
-            <textarea id="item-desc" rows={2} maxLength={1000} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Size, brand, or where it is used" className={TEXTAREA} />
+            <textarea id="item-desc" rows={2} maxLength={LIMITS.NOTE} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Size, brand, or where it is used" className={TEXTAREA} />
           </div>
           <p className="text-[13px] text-slate-500">
             {isNew ? "New items start at 0. Add stock through Stock in, which a second Checker confirms." : `Current stock: ${editing?.current_stock ?? 0}. Stock changes only through Stock in / out.`}

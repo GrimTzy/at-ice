@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
+use App\Support\TextRules;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -27,16 +28,16 @@ class ProjectController extends Controller
         $req = $creating ? 'required' : 'sometimes|required';
 
         return [
-            'name' => "{$req}|string|max:50",
+            'name' => [...explode('|', $req), ...TextRules::name(TextRules::STORE, 'Project name', TextRules::LONG_WORD)],
             'description' => 'nullable|string|max:2000',
             // Address of the job site (text). Coordinates are kept for a possible geofence later.
-            'location' => 'nullable|string|max:500',
+            'location' => ['nullable', ...TextRules::address()],
             'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
             'geofence_radius_m' => 'nullable|integer|min:10|max:100000',
             'status' => ['sometimes', Rule::in(Project::STATUSES)],
             'priority' => ['sometimes', Rule::in(Project::PRIORITIES)],
-            'owner' => 'nullable|string|max:50',
+            'owner' => ['nullable', ...TextRules::person(TextRules::FULL)],
             'start_date' => 'nullable|date',
             'due_date' => 'nullable|date|after_or_equal:start_date',
             'budget' => 'nullable|numeric|min:0|max:99999999',

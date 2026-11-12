@@ -9,6 +9,8 @@ node_modules/
 /.atice/
 # Local generated outputs (test logs, comparison reports)
 /local-outputs/
+# Vite dev server cache (made by npm run dev)
+/at-ice-frontend/.vite/
 # Local test accounts with passwords: never share
 /at-ice-backend/database/seeders/LocalTestAccountsSeeder.php
 # OS and editor files (the frontend keeps its own .vscode/extensions.json rule)

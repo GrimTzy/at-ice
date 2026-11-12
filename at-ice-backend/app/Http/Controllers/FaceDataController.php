@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\FaceData;
 use App\Support\StoredFiles;
+use App\Support\TextRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -59,7 +60,7 @@ class FaceDataController extends Controller
     public function enroll(Request $request)
     {
         $validated = $request->validate([
-            'worker_name' => 'required|string|max:255',
+            'worker_name' => ['required', ...TextRules::person(TextRules::FULL)],
             'role' => 'required|in:driver,salesman,checker,maintenance,guard,bagger',
             'employee_id' => [
                 'nullable',

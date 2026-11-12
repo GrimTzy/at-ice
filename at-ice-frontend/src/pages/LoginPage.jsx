@@ -203,7 +203,7 @@ export default function LoginPage() {
         return;
       }
       if (!res.ok) {
-        setError(data?.message || "Invalid credentials. Please try again.");
+        setError(data?.message || "The email address or password is not correct. Check them and try again.");
         return;
       }
 

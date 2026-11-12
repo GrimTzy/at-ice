@@ -23,6 +23,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 const ApplyPage = lazy(() => import('./pages/ApplyPage'))
 const AttendanceStation = lazy(() => import('./pages/AttendanceStation'))
 import KioskGate from './components/KioskGate'
+import { NavSeen } from './components/NotificationBell'
 const LeaveRequestPage = lazy(() => import('./pages/LeaveRequestPage'))
 
 // -- Admin Module (folder is "Admin" with a capital A: Linux servers are
@@ -88,6 +89,7 @@ function App() {
       <SoftPickers />
       <Toaster />
       <AppUpdatePrompt />
+      <NavSeen />
       <ActionGuard />
       <AttachmentViewer />
       <OverflowTitle />

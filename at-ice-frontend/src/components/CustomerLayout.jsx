@@ -6,12 +6,13 @@ import { NightStyle, NightToggle } from "./NightMode";
 import { ambientStyle, useNightMode } from "../lib/theme";
 import { useLogoutConfirm } from "../lib/useLogoutConfirm";
 import HeaderAvatar from "./HeaderAvatar";
-import NoticeBell from "./NoticeBell";
 import SidebarSignOut from "./SidebarSignOut";
 import LiveClock from "./LiveClock";
 import { initialsOf } from "../lib/initials";
 import SideNav from "./SideNav";
 import Rail from "./Rail";
+import NotificationBell from "./NotificationBell";
+import { useNavCounts } from "../lib/navCounts";
 import { CUSTOMER_NAV } from "../lib/nav";
 import { Icon } from "./icons";
 
@@ -20,6 +21,7 @@ const MenuIcon = () => <Icon name="menu" size={20} />;
 const XIcon = () => <Icon name="x" size={18} />;
 
 function SidebarNav({ onNavigate, onClose }) {
+  const counts = useNavCounts();
   return (
     <>
       <div
@@ -34,7 +36,7 @@ function SidebarNav({ onNavigate, onClose }) {
           <div className="rail-label text-[10px] text-slate-400 tracking-widest uppercase">Customer Portal</div>
         </div>
       </div>
-      <SideNav items={CUSTOMER_NAV} onNavigate={onClose} />
+      <SideNav items={CUSTOMER_NAV} onNavigate={onClose} counts={counts} />
     </>
   );
 }
@@ -130,7 +132,7 @@ export default function CustomerLayout({ pageTitle, breadcrumb, headerActions, c
           </div>
           <div className="flex-1" />
           {headerActions}
-          <NoticeBell />
+          <NotificationBell />
           <NightToggle dark={dark} onToggle={() => setDark((d) => !d)} />
           <LiveClock compact />
           <HeaderAvatar initials={initials} name={user?.name || "Customer"} subtitle={user?.email || "Customer"} onSignOut={askLogout} />

@@ -6,13 +6,13 @@ import { NightStyle, NightToggle } from "./NightMode";
 import { ambientStyle, useNightMode } from "../lib/theme";
 import { useLogoutConfirm } from "../lib/useLogoutConfirm";
 import HeaderAvatar from "./HeaderAvatar";
-import NoticeBell from "./NoticeBell";
 import SidebarSignOut from "./SidebarSignOut";
 import LiveClock from "./LiveClock";
 import { initialsOf } from "../lib/initials";
 import SideNav from "./SideNav";
 import { useNavCounts } from "../lib/navCounts";
 import Rail from "./Rail";
+import NotificationBell from "./NotificationBell";
 import { HR_NAV } from "../lib/nav";
 import { Icon } from "./icons";
 
@@ -21,7 +21,7 @@ const MenuIcon = () => <Icon name="menu" size={20} />;
 const XIcon = () => <Icon name="x" size={18} />;
 
 export default function HrLayout({ pageTitle, breadcrumb, headerActions, children }) {
-  const navCounts = useNavCounts("hr");
+  const navCounts = useNavCounts();
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [dark, setDark] = useNightMode();
@@ -106,7 +106,7 @@ export default function HrLayout({ pageTitle, breadcrumb, headerActions, childre
           </div>
           <div className="flex-1" />
           {headerActions}
-          <NoticeBell />
+          <NotificationBell />
           <NightToggle dark={dark} onToggle={() => setDark((d) => !d)} />
           <LiveClock compact />
           <HeaderAvatar initials={initials} name={user?.name || "HR Staff"} subtitle={user?.email || "HR"} onSignOut={askLogout} />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "./toast";
+import { setNavCounts } from "./navCounts";
 
 // Realtime notices for every flow (leave filed, delivery in transit, stock-out
 // approved...). The backend writes one row per event (App\Support\LiveFeed);
@@ -35,6 +36,8 @@ async function poll() {
     });
     if (res.ok) {
       const data = await res.json();
+      // the badges and the bell come with every poll (lib/navCounts.js)
+      if (data.nav) setNavCounts(data.nav);
       if (lastId !== null) {
         for (const e of data.events || []) {
           toast.info(e.message);

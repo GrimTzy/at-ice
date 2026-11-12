@@ -47,7 +47,7 @@ class DeactivatedAccountTest extends TestCase
         $this->employee('checker2@atice.cloud', userActive: true, employeeActive: false);
 
         $this->postJson('/api/login', ['email' => 'checker2@atice.cloud', 'password' => 'Wrong123!'])
-            ->assertUnauthorized()->assertJsonPath('message', 'Invalid credentials.');
+            ->assertUnauthorized()->assertJsonPath('message', 'The email address or password is not correct. Check them and try again.');
     }
 
     public function test_an_old_token_stops_working_and_is_revoked(): void

@@ -10,6 +10,7 @@ use App\Services\AddressFormatter;
 use App\Services\EmailVerifier;
 use App\Services\GeocodingService;
 use App\Services\PhoneFormatter;
+use App\Support\TextRules;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -90,7 +91,7 @@ class CustomerController extends Controller
     // GET /api/customers/invoice-code?name=...: the code a new customer would get.
     public function suggestInvoiceCode(Request $request)
     {
-        $request->validate(['name' => 'required|string|max:50']);
+        $request->validate(['name' => 'required|string|max:'.TextRules::STORE]);
 
         return response()->json(['invoice_code' => Customer::invoiceCodeFor($request->name)]);
     }
@@ -108,7 +109,7 @@ class CustomerController extends Controller
         $this->cleanInvoiceCode($request);
 
         $request->validate([
-            'name' => 'required|string|max:50',
+            'name' => ['required', ...TextRules::store(TextRules::STORE, 'Business name')],
             // The contact email is also the portal login, so it must be free.
             // The account itself must exist (ExistingMailbox), not just the domain.
             'email' => ['bail', 'required', 'email:rfc,filter,dns', 'max:255', 'unique:users,email', new ExistingMailbox],
@@ -116,16 +117,16 @@ class CustomerController extends Controller
             'mop' => 'nullable|in:cash,gcash,check,bank_transfer',
             ...self::groupRules(),
             'contact_number' => ['required', 'regex:'.self::CONTACT_REGEX],
-            'street' => 'required|string|max:255',
-            'barangay' => 'required|string|max:255',
-            'city' => 'required|string|max:255',
-            'province' => 'required|string|max:255',
-            'block_lot' => 'nullable|string|max:255',
-            'subdivision' => 'nullable|string|max:255',
+            'street' => ['required', ...TextRules::address()],
+            'barangay' => ['required', ...TextRules::address()],
+            'city' => ['required', ...TextRules::address()],
+            'province' => ['required', ...TextRules::address()],
+            'block_lot' => ['nullable', ...TextRules::address()],
+            'subdivision' => ['nullable', ...TextRules::address()],
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
             ...AddressFormatter::PSGC_RULES,
-            'contact_person' => 'required|string|max:50',
-            'notes' => 'nullable|string|max:1000',
+            'contact_person' => ['required', ...TextRules::person(TextRules::FULL)],
+            'notes' => ['nullable', ...TextRules::note()],
             'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
             // Made from the name when left blank.
@@ -228,7 +229,7 @@ class CustomerController extends Controller
         $changing = fn (string $field) => $request->exists($field) && ! $same($request->input($field), $customer->{$field});
 
         $request->validate([
-            'name' => 'sometimes|required|string|max:50',
+            'name' => ['sometimes', 'required', ...TextRules::store(TextRules::STORE, 'Business name')],
             // A changed email must be an existing account, not another customer's email
             // and not another account's login. An unchanged one is not checked again.
             'email' => $changing('email')
@@ -242,14 +243,14 @@ class CustomerController extends Controller
             'street' => $addressRule,
             'barangay' => $addressRule,
             // City and Province can never be emptied: old customers already have them
-            'city' => 'sometimes|required|string|max:255',
-            'province' => 'sometimes|required|string|max:255',
-            'block_lot' => 'nullable|string|max:255',
-            'subdivision' => 'nullable|string|max:255',
+            'city' => ['sometimes', 'required', ...TextRules::address()],
+            'province' => ['sometimes', 'required', ...TextRules::address()],
+            'block_lot' => ['nullable', ...TextRules::address()],
+            'subdivision' => ['nullable', ...TextRules::address()],
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
             ...AddressFormatter::PSGC_RULES,
-            'contact_person' => $changing('contact_person') ? 'required|string|max:50' : 'nullable|string|max:50',
-            'notes' => 'nullable|string|max:1000',
+            'contact_person' => [$changing('contact_person') ? 'required' : 'nullable', ...TextRules::person(TextRules::FULL)],
+            'notes' => ['nullable', ...TextRules::note()],
             'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
             // A saved number in an old format stays editable as long as it is not changed.
@@ -298,7 +299,14 @@ class CustomerController extends Controller
             $data['longitude'] = $coords['longitude'];
         }
 
+        $before = $customer->only(array_keys($data));
         $customer->update($data);
+        // what changed, so an unexpected edit can be traced (Admin > Recent changes)
+        $changed = $customer->getChanges();
+        unset($changed['updated_at']);
+        if ($changed) {
+            \App\Support\Audit::log('customer.updated', $customer, array_intersect_key($before, $changed), $changed);
+        }
 
         return response()->json($customer->fresh());
     }

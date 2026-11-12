@@ -24,6 +24,8 @@ class HolidayCalendarTest extends TestCase
 
     public function test_hr_and_admin_manage_holidays_others_cannot(): void
     {
+        // before Eid'l Adha, so it is still today or later (holidays before today are locked)
+        $this->travelTo(\Carbon\Carbon::parse('2026-05-01 09:00', 'Asia/Manila'));
         Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
         $this->postJson('/api/holidays', ['date' => '2026-05-27', 'name' => "Eid'l Adha", 'type' => 'REGULAR'])->assertCreated();
         $this->postJson('/api/holidays', ['date' => '2026-05-27', 'name' => 'Again', 'type' => 'REGULAR'])->assertStatus(422);

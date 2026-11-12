@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Supplier;
 use App\Services\AddressFormatter;
 use App\Services\PhoneFormatter;
+use App\Support\TextRules;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -38,16 +39,16 @@ class SupplierController extends Controller
     private function rules(?Supplier $supplier = null): array
     {
         return [
-            'name' => ['required', 'string', 'max:50', Rule::unique('suppliers', 'name')->ignore($supplier?->id)],
-            'contact_person' => 'nullable|string|max:50',
+            'name' => ['required', ...TextRules::store(TextRules::NAME, 'Supplier name', TextRules::SHORT_WORD), Rule::unique('suppliers', 'name')->ignore($supplier?->id)],
+            'contact_person' => ['nullable', ...TextRules::person(TextRules::FULL)],
             'contact_number' => ['nullable', 'regex:'.self::PHONE_REGEX],
             'email' => 'nullable|email:rfc,filter,dns|max:255',
-            'address' => 'nullable|string|max:500',
-            'barangay' => 'nullable|string|max:255',
+            'address' => ['nullable', ...TextRules::address()],
+            'barangay' => ['nullable', ...TextRules::address()],
             'city' => 'nullable|string|max:100',
             'province' => 'nullable|string|max:100',
             ...AddressFormatter::PSGC_RULES,
-            'notes' => 'nullable|string|max:1000',
+            'notes' => ['nullable', ...TextRules::note()],
         ];
     }
 

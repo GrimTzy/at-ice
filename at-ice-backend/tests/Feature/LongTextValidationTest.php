@@ -37,23 +37,25 @@ class LongTextValidationTest extends TestCase
         ];
     }
 
-    public function test_employee_names_longer_than_50_characters_are_refused(): void
+    // Names are capped at 40 each (owner, 2026-11-12, App\Support\TextRules)
+    public function test_employee_names_longer_than_40_characters_are_refused(): void
     {
         Sanctum::actingAs(User::create(['name' => 'HR', 'email' => 'hr@atice.cloud', 'password' => 'secret-password', 'role' => 'hr']));
+        $forty = 'Maria Clara Luisa Theresa Anne Rosalinda'; // 40 characters
+        $this->assertSame(40, strlen($forty));
 
-        $this->postJson('/api/employees', $this->employeePayload(['first_name' => str_repeat('A', 51), 'last_name' => str_repeat('B', 51)]))
+        $this->postJson('/api/employees', $this->employeePayload(['first_name' => $forty.'s', 'last_name' => $forty.'s']))
             ->assertUnprocessable()->assertJsonValidationErrors(['first_name', 'last_name']);
         $this->assertSame(0, Employee::count());
 
-        // 50 characters each (the name limit) still fit the login name and email (users.name, users.email)
-        $id = $this->postJson('/api/employees', $this->employeePayload(['first_name' => str_repeat('A', 50), 'last_name' => str_repeat('B', 50)]))
+        $id = $this->postJson('/api/employees', $this->employeePayload(['first_name' => $forty, 'last_name' => 'Dela Cruz']))
             ->assertCreated()->json('employee.id');
 
-        $this->putJson("/api/employees/{$id}", ['first_name' => str_repeat('C', 51)])
+        $this->putJson("/api/employees/{$id}", ['first_name' => $forty.'s'])
             ->assertUnprocessable()->assertJsonValidationErrors('first_name');
     }
 
-    public function test_customer_notes_longer_than_1000_characters_are_refused(): void
+    public function test_customer_notes_longer_than_500_characters_are_refused(): void
     {
         Sanctum::actingAs($this->admin);
         $payload = [
@@ -62,16 +64,16 @@ class LongTextValidationTest extends TestCase
             'customer_type' => 'dealer', 'latitude' => 14.81, 'longitude' => 121.05,
         ];
 
-        $this->postJson('/api/customers', $payload + ['notes' => str_repeat('n', 1001)])
+        $this->postJson('/api/customers', $payload + ['notes' => str_repeat('n', 501)])
             ->assertUnprocessable()->assertJsonValidationErrors('notes');
         $this->assertSame(0, Customer::count());
 
-        $id = $this->postJson('/api/customers', $payload + ['notes' => str_repeat('n', 1000)])->assertCreated()->json('id');
-        $this->putJson("/api/customers/{$id}", ['notes' => str_repeat('n', 1001)])
+        $id = $this->postJson('/api/customers', $payload + ['notes' => str_repeat('n', 500)])->assertCreated()->json('id');
+        $this->putJson("/api/customers/{$id}", ['notes' => str_repeat('n', 501)])
             ->assertUnprocessable()->assertJsonValidationErrors('notes');
     }
 
-    public function test_delivery_notes_and_cancel_reason_longer_than_1000_characters_are_refused(): void
+    public function test_delivery_notes_and_cancel_reason_over_their_limits_are_refused(): void
     {
         Sanctum::actingAs($this->admin);
         $driver = $this->timedIn(User::create(['name' => 'Driver', 'email' => 'driver@atice.cloud', 'password' => 'secret-password', 'role' => 'driver']));
@@ -80,18 +82,18 @@ class LongTextValidationTest extends TestCase
 
         $this->postJson('/api/deliveries', [
             'driver_id' => $driver->id, 'customer_id' => $store->id, 'delivery_type' => 'outbound',
-            'scheduled_date' => DriverAvailability::today(), 'notes' => str_repeat('n', 1001),
+            'scheduled_date' => DriverAvailability::today(), 'notes' => str_repeat('n', 501),
             'items' => [['product_type' => 'bags', 'quantity_ordered' => 10]],
         ])->assertUnprocessable()->assertJsonValidationErrors('notes');
         $this->assertSame(0, Delivery::count());
 
         $d = Delivery::create(['delivery_no' => 'DEL-0001', 'driver_id' => $driver->id, 'customer_id' => $store->id, 'status' => 'pending', 'scheduled_date' => DriverAvailability::today(), 'prepared_by' => $this->admin->id]);
-        $this->putJson("/api/deliveries/{$d->id}/cancel", ['reason' => str_repeat('r', 1001)])
+        $this->putJson("/api/deliveries/{$d->id}/cancel", ['reason' => str_repeat('r', 201)])
             ->assertUnprocessable()->assertJsonValidationErrors('reason');
         $this->assertSame('pending', $d->fresh()->status);
     }
 
-    public function test_stock_movement_reference_and_source_longer_than_255_characters_are_refused(): void
+    public function test_stock_movement_reference_source_and_reason_over_their_limits_are_refused(): void
     {
         $checker = $this->timedIn(User::create(['name' => 'Checker', 'email' => 'checker@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'checker']));
         $product = Product::create(['product_code' => 'SUP-001', 'name' => 'Gloves', 'unit' => 'pair', 'current_stock' => 10, 'minimum_stock' => 2, 'is_active' => true]);
@@ -99,23 +101,23 @@ class LongTextValidationTest extends TestCase
 
         $this->postJson('/api/stock-movements', [
             'product_id' => $product->id, 'type' => 'stock_in', 'quantity' => 1,
-            'reference_no' => str_repeat('R', 256), 'source' => str_repeat('S', 256), 'reason' => str_repeat('x', 1001),
+            'reference_no' => str_repeat('R', 51), 'source' => str_repeat('Supplier ', 7), 'reason' => str_repeat('x', 501),
         ])->assertUnprocessable()->assertJsonValidationErrors(['reference_no', 'source', 'reason']);
 
         $this->postJson('/api/stock-movements', [
             'product_id' => $product->id, 'type' => 'stock_in', 'quantity' => 1,
-            'reference_no' => str_repeat('R', 255), 'source' => str_repeat('S', 255),
+            'reference_no' => str_repeat('R', 50), 'source' => 'Supplier delivery, Muzon warehouse',
         ])->assertCreated();
     }
 
-    public function test_pickup_log_notes_longer_than_1000_characters_are_refused(): void
+    public function test_pickup_log_notes_longer_than_500_characters_are_refused(): void
     {
         $checker = $this->timedIn(User::create(['name' => 'Checker', 'email' => 'checker@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'checker']));
         Sanctum::actingAs($checker);
 
         $this->postJson('/api/pickup-logs', [
             'company_name' => 'J-Maxine', 'product_type' => 'bags', 'quantity' => 5, 'pickup_date' => DriverAvailability::today(),
-            'notes' => str_repeat('n', 1001),
+            'notes' => str_repeat('n', 501),
         ])->assertUnprocessable()->assertJsonValidationErrors('notes');
     }
 

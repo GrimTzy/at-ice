@@ -10,6 +10,7 @@ use App\Services\DriverLicense;
 use App\Services\PhoneFormatter;
 use App\Support\Biodata;
 use App\Support\StoredFiles;
+use App\Support\TextRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -68,11 +69,11 @@ class PublicApplicationController extends Controller
         $driver = $request->input('position_applied') === 'Driver';
 
         $data = $request->validate([
-            'name' => 'required|string|min:3|max:50',
+            'name' => ['required', 'min:3', ...TextRules::person(TextRules::FULL, 'Full name')],
             'phone' => ['required', 'regex:'.PhoneFormatter::MOBILE_REGEX],
             'email' => ['nullable', 'email:rfc,filter', 'max:255', Rule::unique('applicants', 'email')],
             'position_applied' => ['required', Rule::in(Applicant::PUBLIC_POSITIONS)],
-            'notes' => 'nullable|string|max:1000',
+            'notes' => ['nullable', ...TextRules::note()],
             // Resume or CV: PDF or Word, up to 5 MB
             'resume' => Applicant::RESUME_RULE,
             // Data Privacy Act of 2012: nothing is kept without this consent

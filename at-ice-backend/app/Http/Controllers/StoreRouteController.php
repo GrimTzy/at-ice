@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\StoreRoute;
 use App\Support\Audit;
 use App\Support\DriverAvailability;
+use App\Support\TextRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -27,7 +28,7 @@ class StoreRouteController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:50', $this->uniqueName()],
+            'name' => ['required', ...TextRules::store(TextRules::NAME, 'Route name'), $this->uniqueName()],
             'store_ids' => ['sometimes', 'array'],
             'store_ids.*' => ['integer', 'distinct', Rule::exists('customers', 'id')->where('is_active', true)],
         ], $this->messages());
@@ -47,7 +48,7 @@ class StoreRouteController extends Controller
     {
         $route = StoreRoute::findOrFail($id);
         $data = $request->validate([
-            'name' => ['sometimes', 'string', 'max:50', $this->uniqueName($route->id)],
+            'name' => ['sometimes', ...TextRules::store(TextRules::NAME, 'Route name'), $this->uniqueName($route->id)],
             'store_ids' => ['sometimes', 'array'],
             'store_ids.*' => ['integer', 'distinct', Rule::exists('customers', 'id')->where('is_active', true)],
         ], $this->messages());

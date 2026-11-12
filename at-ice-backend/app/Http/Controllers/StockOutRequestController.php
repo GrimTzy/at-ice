@@ -6,6 +6,7 @@ use App\Models\InventoryAlert;
 use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\StockOutRequest;
+use App\Support\TextRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -82,7 +83,7 @@ class StockOutRequestController extends Controller
         $validated = $request->validate([
             'product_id' => ['required', Rule::exists('products', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'quantity' => 'required|integer|min:1|max:'.config('atice.max_stock_quantity'),
-            'purpose' => 'required|string|max:1000',
+            'purpose' => ['required', ...TextRules::note()],
             // The project on Admin's board it is for (optional; only open projects).
             'project_id' => ['nullable', Rule::exists('projects', 'id')->whereIn('status', ['planned', 'working', 'stuck'])],
         ], [
@@ -191,7 +192,7 @@ class StockOutRequestController extends Controller
         }
 
         $validated = $request->validate([
-            'rejection_reason' => 'required|string|max:1000',
+            'rejection_reason' => ['required', ...TextRules::note()],
         ]);
 
         $stockOutRequest->update([

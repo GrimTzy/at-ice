@@ -282,7 +282,7 @@ export default function MaintenanceStockOutRequestPage() {
           </div>
           <div>
             <label htmlFor="sor-purpose" className={LABEL}>Purpose *</label>
-            <textarea id="sor-purpose" rows={3} placeholder="e.g. Delivery truck needs brake pad replacement" value={purpose}
+            <textarea id="sor-purpose" rows={3} maxLength={500} placeholder="e.g. Delivery truck needs brake pad replacement" value={purpose}
               onChange={(e) => { setPurpose(e.target.value); setAutoPurpose(""); }} className={TEXTAREA} />
           </div>
         </form>

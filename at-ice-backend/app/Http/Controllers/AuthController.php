@@ -43,7 +43,7 @@ class AuthController extends Controller
                 return $this->lockedResponse($seconds);
             }
 
-            return response()->json(['message' => 'Invalid credentials.'], 401);
+            return response()->json(['message' => 'The email address or password is not correct. Check them and try again.'], 401);
         }
 
         // A valid sign-in resets the lockout history for this email/IP pair.

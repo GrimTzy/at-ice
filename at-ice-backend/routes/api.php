@@ -110,6 +110,9 @@ Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,a
     // The web app sends this while the person is working, so a page they are
     // reading (no requests of their own) does not count as idle.
     Route::post('/session/ping', fn () => response()->json(['ok' => true]));
+    // The waiting counts for the side menu, bottom tabs and bell (every role)
+    Route::get('nav-counts', [NavCountController::class, 'index']);
+    Route::post('nav-counts/seen', [NavCountController::class, 'seen']);
     // Whether the signed-in employee or Driver has timed in at the kiosk
     // (Checker, Salesman, Maintenance and Driver pages).
     Route::get('my-time-in', fn (\Illuminate\Http\Request $request) => response()->json([
@@ -393,6 +396,9 @@ Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,a
         // Holiday calendar (HR and Admin)
         Route::get('holidays', [HolidayController::class, 'index']);
         Route::post('holidays', [HolidayController::class, 'store']);
+        // next year's holidays: preview, then save the rows HR kept
+        Route::get('holidays/next-year', [HolidayController::class, 'nextYear']);
+        Route::post('holidays/next-year', [HolidayController::class, 'saveNextYear']);
         Route::put('holidays/{id}', [HolidayController::class, 'update']);
         Route::delete('holidays/{id}', [HolidayController::class, 'destroy']);
 

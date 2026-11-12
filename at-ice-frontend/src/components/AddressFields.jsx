@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { findByName, loadBarangays, loadPsgcIndex, matchPlaces } from "@/lib/psgc";
+import { LIMITS } from "../lib/textRules";
 
 // The one address form used everywhere (employees, customers, suppliers):
 // Region > Province > City/Municipality > Barangay dropdowns from the official
@@ -167,6 +168,7 @@ export default function AddressFields({
         required={extra.isRequired}
         placeholder={placeholder}
         inputMode={extra.inputMode}
+        maxLength={extra.maxLength || LIMITS.ADDRESS}
         className={inputClassName}
       />
       {errors[key] && <span className="text-[10px] text-red-500">{errors[key][0]}</span>}
