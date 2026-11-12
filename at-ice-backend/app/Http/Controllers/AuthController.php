@@ -57,7 +57,13 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // The Android app (header sent by the app's login) keeps the four mobile roles signed in with
+        // no end date. Every other login is a website session: it ends sanctum.web_expiration minutes
+        // (24 hours) after the login.
+        $fromApp = $request->header('X-AT-ICE-App') === 'android' && $user->usesMobileApp();
+        $token = $fromApp
+            ? $user->createToken('android-app')->plainTextToken
+            : $user->createToken('auth_token', ['*'], now()->addMinutes((int) config('sanctum.web_expiration', 1440)))->plainTextToken;
 
         return response()->json([
             'token' => $token,

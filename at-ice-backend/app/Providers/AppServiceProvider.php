@@ -13,7 +13,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function register(): void
     {
-        //
+        // The phone notices (Firebase). Tests replace the sender with a fake.
+        $this->app->bind(\App\Support\Push\PushSender::class, \App\Support\Push\FirebasePushSender::class);
     }
 
     // Bootstrap any application services.

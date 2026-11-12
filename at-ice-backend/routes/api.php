@@ -44,6 +44,8 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\StockOutRequestController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\AppVersionController;
+use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\SupportMessageController;
 use App\Http\Controllers\TimesheetController;
 use Illuminate\Support\Facades\Route;
@@ -57,6 +59,9 @@ use Illuminate\Support\Facades\Route;
 // A blocked request gets HTTP 429 "Too Many Attempts."
 
 // Public
+// The Android app asks this on opening to find out if a newer APK is offered.
+Route::get('/app-version', [AppVersionController::class, 'show'])->middleware('throttle:60,1,app-version');
+Route::get('/app-download', [AppVersionController::class, 'download'])->middleware('throttle:20,1,app-download');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1,login');
 
 // Forgot password: email a 6-digit code, then set a new password with it.
@@ -93,6 +98,9 @@ Route::get('live-feed', [LiveFeedController::class, 'index'])
 Route::middleware(['auth:sanctum', 'password.changed', 'throttle:300,1,api'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
+    // Push-notification address of the Android app (see DeviceTokenController)
+    Route::post('/device-tokens', [DeviceTokenController::class, 'store']);
+    Route::delete('/device-tokens', [DeviceTokenController::class, 'destroy']);
     Route::get('/me', [AuthController::class, 'me']);
     // Whether the signed-in employee or Driver has timed in at the kiosk
     // (Checker, Salesman, Maintenance and Driver pages).

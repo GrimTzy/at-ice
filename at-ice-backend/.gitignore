@@ -22,3 +22,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Android app build + its version file (made by npm run apk in at-ice-frontend)
+/public/downloads

@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models;
 use App\Models\LiveEvent;
+use App\Support\Push\PushNotifier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -80,7 +81,7 @@ class LiveFeed
                 return;
             }
 
-            LiveEvent::create([
+            $event = LiveEvent::create([
                 'module' => $n[0],
                 'action' => $action,
                 'message' => mb_substr($n[1], 0, 255),
@@ -88,6 +89,10 @@ class LiveFeed
                 'user_ids' => array_values(array_unique(array_filter($n[3] ?? []))),
                 'actor_id' => auth()->id(),
             ]);
+
+            // The same notice to the phones of the people it is addressed to, sent after the
+            // response (no queue worker needed).
+            app()->terminating(fn () => PushNotifier::forLiveEvent($event));
 
             // keep the table small: drop rows older than a week now and then (the
             // Admin dashboard lists the latest ones)
