@@ -28,7 +28,7 @@ class Settings
         // R3, undecided: the 21.83 (261-day) divisor assumes paid regular holidays
         'payroll.monthly_unworked_holiday_deduct' => [false, 'bool', 'Deduct an unworked holiday from monthly-rated pay'],
         'payroll.negative_net_handling' => ['CARRY_OVER', 'enum:CARRY_OVER,EMPLOYER_SHOULDERED', 'When deductions are more than the pay: carry the shortfall to the next cut-off, or the employer pays it'],
-        'payroll.gov_deduction_strategy' => ['SPLIT_FIRST_TWO', 'enum:FIRST_PAYROLL_OF_MONTH,SPLIT_FIRST_TWO', 'When SSS, PhilHealth and Pag-IBIG are deducted'],
+        'payroll.gov_deduction_strategy' => ['SECOND_PAYROLL_OF_MONTH', 'enum:SECOND_PAYROLL_OF_MONTH,FIRST_PAYROLL_OF_MONTH,SPLIT_FIRST_TWO', 'When SSS, PhilHealth and Pag-IBIG are deducted'],
         // Night differential (Labor Code Art. 86): for every hour worked from
         // 10:00 PM to 6:00 AM, at least 10% of the hourly rate of that hour.
         'payroll.night_diff_rate' => [0.10, 'number', 'Night differential: extra pay for each hour worked from 10:00 PM to 6:00 AM, as a share of that hour\'s rate (0.10 = 10%, the legal minimum)'],

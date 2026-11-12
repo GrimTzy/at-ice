@@ -131,6 +131,7 @@ const emptyForm = {
   employment_type: "regular", sub_role: "",
   // New hires start probationary (no leave filing until regular)
   employment_status: "probationary", pay_basis: "daily", monthly_rate: "",
+  gov_deductions: "deduct", gov_skip_reason: "",
   shift_start: "09:00", shift_end: "18:00",
   // Edit only: the saved hours, and when and why a change starts (schedule history)
   _shiftStart0: "", _shiftEnd0: "", shift_effective_date: "", shift_reason: "",
@@ -304,6 +305,8 @@ export default function EmployeesPage() {
       employment_type: emp.employment_type || "regular",
       employment_status: emp.employment_status || "regular",
       pay_basis: emp.pay_basis || "daily",
+      gov_deductions: emp.skip_gov_deductions ? "skip" : "deduct",
+      gov_skip_reason: emp.gov_skip_reason || "",
       monthly_rate: emp.monthly_rate != null ? String(Number(emp.monthly_rate)) : "",
       shift_start: (emp.shift_start || "09:00").slice(0, 5),
       shift_end: (emp.shift_end || "18:00").slice(0, 5),
@@ -523,6 +526,7 @@ export default function EmployeesPage() {
           daily_rate: Number(form.daily_rate) || 0, date_hired: form.date_hired,
           employment_type: form.employment_type,
           employment_status: form.employment_status, pay_basis: form.pay_basis,
+          skip_gov_deductions: form.gov_deductions === "skip", gov_skip_reason: form.gov_deductions === "skip" ? form.gov_skip_reason.trim() : null,
           monthly_rate: form.pay_basis === "monthly" ? Number(form.monthly_rate) || null : null,
           shift_start: form.shift_start || null, shift_end: form.shift_end || null,
           sub_role: form.sub_role || null,
@@ -543,6 +547,7 @@ export default function EmployeesPage() {
           daily_rate: Number(form.daily_rate) || 0,
           employment_type: form.employment_type,
           employment_status: form.employment_status, pay_basis: form.pay_basis,
+          skip_gov_deductions: form.gov_deductions === "skip", gov_skip_reason: form.gov_deductions === "skip" ? form.gov_skip_reason.trim() : null,
           monthly_rate: form.pay_basis === "monthly" ? Number(form.monthly_rate) || null : null,
           shift_start: form.shift_start || null, shift_end: form.shift_end || null,
           ...(shiftEdited ? { shift_effective_date: form.shift_effective_date || null, shift_reason: form.shift_reason.trim() || null } : {}),
@@ -559,7 +564,7 @@ export default function EmployeesPage() {
       if (res.status === 422 && data?.errors) {
         // Fields that show their own error under the input. Any other
         // field error is shown at the top so it is never silently hidden.
-        const SHOWN = [...Object.keys(STEP_OF_FIELD), "first_name", "middle_initial", "last_name", "suffix", "email", "phone", "department", "daily_rate", "street", "barangay", "city", "province", "region", "barangay_code", "block_lot", "subdivision", "postal_code", "position", "sub_role", "vehicle_plate", "license_number", "license_expiry", "shift", "employment_type", "date_hired", "employment_status", "pay_basis", "monthly_rate", "shift_start", "shift_end"];
+        const SHOWN = [...Object.keys(STEP_OF_FIELD), "first_name", "middle_initial", "last_name", "suffix", "email", "phone", "department", "daily_rate", "street", "barangay", "city", "province", "region", "barangay_code", "block_lot", "subdivision", "postal_code", "position", "sub_role", "vehicle_plate", "license_number", "license_expiry", "shift", "employment_type", "date_hired", "employment_status", "pay_basis", "skip_gov_deductions", "gov_skip_reason", "monthly_rate", "shift_start", "shift_end"];
         const hidden = Object.keys(data.errors).filter((k) => !SHOWN.includes(k));
         showErrors(hidden.length ? { ...data.errors, _general: data.errors[hidden[0]] } : data.errors);
         return;
@@ -1036,6 +1041,18 @@ export default function EmployeesPage() {
                       </Field>
                     )}
                   </div>
+                  <Field label="SSS, PhilHealth, Pag-IBIG" required>
+                    <select name="gov_deductions" required value={form.gov_deductions} onChange={handleChange("gov_deductions")} className={inputCls}>
+                      <option value="deduct">Deduct (required by law)</option>
+                      <option value="skip">Skip for this employee (HR exemption)</option>
+                    </select>
+                  </Field>
+                  {form.gov_deductions === "skip" && (
+                    <Field label="Reason for skipping" required error={formErrors.gov_skip_reason}>
+                      <input name="gov_skip_reason" required maxLength={255} value={form.gov_skip_reason} onChange={handleChange("gov_skip_reason")} placeholder="e.g. Job order, already covered elsewhere" className={inputCls} />
+                      <span className="mt-1 block px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-700">Nothing is deducted. SSS, PhilHealth and Pag-IBIG are mandatory for covered employees, so HR is responsible for this choice. It may affect the employee's loans and benefits.</span>
+                    </Field>
+                  )}
                 </>
               )}
 
