@@ -100,4 +100,5 @@ Tapping a notice opens the app on its home page.
   `AndroidManifest.xml`). Tracking runs while the app is open; the system does not send the
   driver's position in the background, so no background service is needed.
 - App icon source: `assets/icon-only.png`, `icon-foreground.png`, `icon-background.png`.
-  After changing them: `npx capacitor-assets generate --android --iconBackgroundColor '#7c3aed'`.
+  After changing them, regenerate with the tool run once outside the project (it is not a project
+  dependency: its audit flags moderate issues that CI rejects): `npx @capacitor/assets@4 generate --android --iconBackgroundColor '#7c3aed'`.
