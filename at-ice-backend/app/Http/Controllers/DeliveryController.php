@@ -342,26 +342,8 @@ class DeliveryController extends Controller
     public function show($id)
     {
         return response()->json(
-            Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs', 'preparedBy', 'parent:id,delivery_no', 'topUps:id,parent_delivery_id,delivery_no,status,ordered_at', 'adjustments.user:id,name'])->findOrFail($id)
+            Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs', 'preparedBy', 'adjustments.user:id,name'])->findOrFail($id)
         );
-    }
-
-    // POST /api/deliveries/{id}/top-up (Admin): another delivery today to the
-    // same store, by a later time (App\Support\DeliveryAdjust::topUp)
-    public function topUp(Request $request, $id)
-    {
-        $data = $request->validate([
-            'items' => 'required|array',
-            'items.*' => 'integer|min:0|max:'.config('atice.max_product_quantity'),
-            'deliver_by' => 'required|date_format:H:i',
-            'notes' => 'nullable|string|max:200',
-        ]);
-        $parent = Delivery::with('customer')->findOrFail($id);
-        $items = array_intersect_key($data['items'], DeliveryItem::PRODUCT_TYPES);
-
-        $delivery = DeliveryAdjust::topUp($parent, $items, $data['deliver_by'], 'admin', $data['notes'] ?? null);
-
-        return response()->json($delivery->load(['driver', 'customer', 'items']), 201);
     }
 
     // POST /api/deliveries/{id}/adjust (Admin): add or reduce sacks on a

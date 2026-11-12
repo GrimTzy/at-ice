@@ -58,38 +58,17 @@ class DeliveryAdjustTest extends TestCase
         return $d;
     }
 
-    public function test_the_store_asks_for_a_4pm_top_up_after_its_morning_delivery(): void
+    // QA review 2026-11-11: the client allows no extra urgent delivery after the day's one.
+    public function test_the_urgent_top_up_is_gone_for_the_store_and_for_admin(): void
     {
         $morning = $this->morningDelivery();
 
         Sanctum::actingAs($this->customerUser);
-        $top = $this->postJson("/api/my-deliveries/{$morning->id}/top-up", ['items' => ['small_sack' => 15], 'deliver_by' => '16:00'])
-            ->assertCreated()->json();
-
-        $this->assertTrue($top['is_top_up']);
-        $this->assertSame($morning->id, $top['parent_delivery_id']);
-        $this->assertSame('pending', $top['status']);
-        $this->assertSame($this->driver->id, $top['driver_id']);
-        $this->assertSame(15, $top['items'][0]['quantity_ordered']);
-        // the morning delivery is untouched
-        $this->assertSame(20, $morning->items()->where('product_type', 'small_sack')->value('quantity_ordered'));
-        $this->assertDatabaseHas('delivery_adjustments', ['delivery_id' => $top['id'], 'kind' => 'top_up', 'source' => 'customer']);
-
-        // too soon, or past the daily cap
-        $this->postJson("/api/my-deliveries/{$morning->id}/top-up", ['items' => ['small_sack' => 5], 'deliver_by' => '10:15'])
-            ->assertStatus(422)->assertJsonValidationErrors('deliver_by');
-    }
-
-    public function test_a_top_up_is_queued_when_no_driver_is_free_and_never_blocks_the_one_off_booking_rule(): void
-    {
-        $morning = $this->morningDelivery();
-        Attendance::query()->update(['time_out' => '09:30:00']); // the only Driver went home
+        $this->postJson("/api/my-deliveries/{$morning->id}/top-up", ['items' => ['small_sack' => 15], 'deliver_by' => '16:00'])->assertStatus(404);
 
         Sanctum::actingAs($this->admin);
-        $top = $this->postJson("/api/deliveries/{$morning->id}/top-up", ['items' => ['big_sack' => 4], 'deliver_by' => '16:00'])
-            ->assertCreated()->json();
-        $this->assertSame('queued', $top['status']);
-        $this->assertNull($top['driver_id']);
+        $this->postJson("/api/deliveries/{$morning->id}/top-up", ['items' => ['big_sack' => 4], 'deliver_by' => '16:00'])->assertStatus(404);
+        $this->assertSame(0, Delivery::where('is_top_up', true)->count());
     }
 
     public function test_admin_changes_one_stores_delivery_with_a_reason_and_there_is_no_day_wide_cut(): void
@@ -216,15 +195,5 @@ class DeliveryAdjustTest extends TestCase
         $open->update(['status' => 'delivered']);
         $this->postJson("/api/deliveries/{$open->id}/adjust", ['mode' => 'add', 'by' => 'count', 'value' => 1, 'reason' => 'Late add'])
             ->assertStatus(422);
-    }
-
-    public function test_a_customer_cannot_top_up_another_stores_delivery(): void
-    {
-        $morning = $this->morningDelivery();
-        $other = User::create(['name' => 'Other', 'email' => 'other@example.com', 'password' => 'secret-password', 'role' => 'customer']);
-        Customer::create(['name' => 'Other Store', 'customer_code' => 'CUST-OTH-001', 'invoice_code' => 'OTH', 'is_active' => true, 'user_id' => $other->id]);
-
-        Sanctum::actingAs($other);
-        $this->postJson("/api/my-deliveries/{$morning->id}/top-up", ['items' => ['small_sack' => 5], 'deliver_by' => '16:00'])->assertNotFound();
     }
 }

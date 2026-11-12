@@ -221,16 +221,12 @@ class Docs
         $tard = DB::table('employee_memos')->where('employee_id', $c->emp['E08'])->where('status', 'sent')->value('memo_no');
         $L[] = "- **Account:** {$this->who('E08')}, login {$this->login('E08')} > memos > **Acknowledge** {$tard} (it lists her late days).";
         $L[] = '';
-        $L[] = '### 6. Delivery to invoice to payment [D-01, D-14, D-15, C-05]';
+        $L[] = '### 6. Delivery to invoice to payment [D-01, D-14, C-05]';
         $short = $this->deliveries()->join('delivery_proofs as p', 'p.delivery_id', '=', 'd.id')->whereNotNull('p.notes')->orderBy('d.scheduled_date')->get(['d.delivery_no', 'cu.name as customer', 'd.scheduled_date']);
         $re = $this->deliveries()->whereNotNull('d.reassigned_from_driver_id')->orderBy('d.scheduled_date')->get();
-        $top = $this->deliveries()->where('d.is_top_up', true)->first();
         $L[] = '- **Account:** Admin > **Deliveries** (`/admin/deliveries`), history:';
         $L[] = '  - short deliveries (invoice charges only what was delivered): '.$this->list($short, fn ($r) => "{$r->delivery_no} ({$r->customer}, {$this->dShort($r->scheduled_date)})");
         $L[] = '  - reassigned from '.$this->name('E06').' with a "may be delayed" notice: '.$this->list($re, fn ($r) => "{$r->delivery_no} ({$this->dShort($r->scheduled_date)})");
-        if ($top) {
-            $L[] = "  - urgent top-up: {$top->delivery_no} ({$top->customer}, {$this->dShort($top->scheduled_date)})";
-        }
         $k2 = $this->cust('K2');
         $r = DB::table('receipts')->whereIn('id', $this->ids('receipts'))->where('customer_id', $k2->id ?? 0);
         $pend = DB::table('payment_proofs as pp')->join('receipts as r', 'r.id', '=', 'pp.receipt_id')->whereIn('pp.id', $this->ids('payment_proofs'))->get(['pp.status', 'r.receipt_no']);
@@ -402,7 +398,6 @@ class Docs
             ['D-06', 'Cancelled (skip day / emergency)', $this->list($this->deliveries()->where('d.status', 'cancelled')->orderBy('d.scheduled_date')->get(), fn ($x) => "{$x->delivery_no} ({$x->customer}): {$x->cancel_reason}"), ''],
             ['D-07..D-09', 'Contracts pending / approved / cancelled', $this->list(DB::table('delivery_contracts')->whereIn('id', $this->ids('delivery_contracts'))->orderBy('id')->get(), fn ($k) => "{$k->contract_no} {$k->status}"), 'Admin > CRM > Customers > Contracts button'],
             ['D-14', 'Short delivery', $del($this->deliveries()->join('delivery_proofs as p', 'p.delivery_id', '=', 'd.id')->whereNotNull('p.notes')), 'Invoice = delivered quantity'],
-            ['D-15', 'Urgent top-up', $del($this->deliveries()->where('d.is_top_up', true)), ''],
             ['D-16', 'Change requests', $this->list(DB::table('delivery_adjustment_requests as r')->join('deliveries as d', 'd.id', '=', 'r.delivery_id')->whereIn('r.id', $this->ids('delivery_adjustment_requests'))->get(['r.status', 'd.delivery_no']), fn ($x) => "{$x->status} {$x->delivery_no}"), 'Admin applies or declines the pending one'],
             ['C-05', 'Payment proofs', $this->list(DB::table('payment_proofs as pp')->join('receipts as r', 'r.id', '=', 'pp.receipt_id')->whereIn('pp.id', $this->ids('payment_proofs'))->get(['pp.status', 'r.receipt_no']), fn ($x) => "{$x->status} {$x->receipt_no}"), 'Admin approves the pending one'],
             ['S-01..S-08', 'Support tickets', $this->list(DB::table('support_messages')->whereIn('id', $this->ids('support_messages'))->orderBy('created_at')->get(), fn ($x) => "{$x->ticket_no} ".str_replace('_', ' ', $x->topic).' '.str_replace('_', ' ', $x->status), 10), 'Admin > Support Inbox'],

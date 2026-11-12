@@ -248,7 +248,7 @@
   margin-inline: auto;
 }
 /* A tag or short note that goes with a cell's main text (PROBATIONARY, Night,
-   MED CERT, DOUBLE, Top-up): on its own line under the text, centered, so a
+   MED CERT, DOUBLE): on its own line under the text, centered, so a
    row never gets wider because of it. Every table uses this one rule. */
 .cell-note {
   display: block;

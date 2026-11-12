@@ -184,7 +184,7 @@ Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,a
         // Driver View / Store View for one day (?date=)
         Route::get('deliveries/board', [DeliveryController::class, 'board']);
         Route::post('deliveries', [DeliveryController::class, 'store']);
-        // Same-day changes (App\Support\DeliveryAdjust): top-up, add/reduce sacks on one delivery
+        // Same-day changes (App\Support\DeliveryAdjust): add/reduce sacks on one delivery
         // Stores' requests to change the sacks on one delivery: Admin applies or declines
         Route::get('delivery-adjustment-requests', [DeliveryAdjustmentRequestController::class, 'index']);
         Route::post('delivery-adjustment-requests/{id}/apply', [DeliveryAdjustmentRequestController::class, 'apply']);
@@ -192,7 +192,6 @@ Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,a
         Route::get('deliveries/{id}', [DeliveryController::class, 'show']);
         Route::put('deliveries/{id}', [DeliveryController::class, 'update']);
         Route::put('deliveries/{id}/cancel', [DeliveryController::class, 'cancel']);
-        Route::post('deliveries/{id}/top-up', [DeliveryController::class, 'topUp']);
         Route::post('deliveries/{id}/adjust', [DeliveryController::class, 'adjust']);
 
         // Delivery contracts: Admin approves, the daily deliveries are generated
@@ -522,8 +521,6 @@ Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,a
         // customer via customers.user_id (see CustomerPortalController).
         Route::get('my-profile', [CustomerPortalController::class, 'myProfile']);
         Route::get('my-delivery-history', [CustomerPortalController::class, 'myDeliveries']);
-        // Ran out after today's delivery: ask for an urgent top-up (5 a minute)
-        Route::post('my-deliveries/{id}/top-up', [CustomerPortalController::class, 'requestTopUp'])->middleware('throttle:5,1,top-up');
         // Ask to change the sacks on a delivery not yet delivered (Admin answers)
         Route::post('my-deliveries/{id}/adjustment-requests', [CustomerPortalController::class, 'requestAdjustment'])->middleware('throttle:5,1,adjust-request');
         Route::post('my-adjustment-requests/{id}/withdraw', [CustomerPortalController::class, 'withdrawAdjustment']);

@@ -123,18 +123,7 @@ class Delivery extends Model
         return $this->hasMany(DeliveryArrival::class);
     }
 
-    // An urgent top-up points at the delivery it followed (App\Support\DeliveryAdjust).
-    public function parent()
-    {
-        return $this->belongsTo(Delivery::class, 'parent_delivery_id');
-    }
-
-    public function topUps()
-    {
-        return $this->hasMany(Delivery::class, 'parent_delivery_id');
-    }
-
-    // Top-ups and add/reduce sacks changes, newest first.
+    // Add/reduce sacks changes, newest first.
     public function adjustments()
     {
         return $this->hasMany(DeliveryAdjustment::class)->latest();

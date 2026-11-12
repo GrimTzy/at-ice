@@ -3,8 +3,7 @@ import CustomerLayout from "../../components/CustomerLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
-import { formatDateTime, manilaDate, todayManila } from "../../lib/time";
-import TopUpForm from "../../components/TopUpForm";
+import { formatDateTime } from "../../lib/time";
 import AdjustmentRequestPanel from "./AdjustmentRequestPanel";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
@@ -86,7 +85,6 @@ export default function CustomerDeliveries() {
   });
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
-  const [topUp, setTopUp] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   // Notices about their deliveries: may be delayed, moved to another driver, cancelled
   const [notices, setNotices] = useState([]);
@@ -188,7 +186,6 @@ export default function CustomerDeliveries() {
                       <tr key={d.id} className="hover:bg-slate-50">
                         <td className="px-5 py-3 font-medium text-slate-800">
                           {d.delivery_no}
-                          {d.is_top_up && <span className="cell-note px-1.5 py-0.5 rounded-full text-[10px] font-semibold border bg-cyan-50 text-cyan-800 border-cyan-200">Top-up</span>}
                         </td>
                         <td className="px-3 py-3 text-slate-600">
                           {fmtDate(d.scheduled_date)}
@@ -309,26 +306,6 @@ export default function CustomerDeliveries() {
                 onChanged={() => { setSelected(null); setReloadTick((t) => t + 1); }}
               />
             </div>
-
-            {/* Ran out after today's delivery: an urgent top-up by a later time
-                (App\Support\DeliveryAdjust::topUp); its own delivery and invoice. */}
-            {selected.status !== "cancelled" && manilaDate(selected.scheduled_date) === todayManila() && (
-              <div className="px-5 pb-5">
-                <div className="rounded-lg border border-cyan-200 bg-cyan-50/50 p-3">
-                  {topUp ? (
-                    <>
-                      <div className="text-[13px] font-semibold text-slate-800 mb-2">Urgent top-up for today</div>
-                      <TopUpForm url={`/api/my-deliveries/${selected.id}/top-up`} onCancel={() => setTopUp(false)} onDone={() => { setTopUp(false); setSelected(null); setReloadTick((t) => t + 1); }} />
-                    </>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="mr-auto text-[12px] text-slate-700">Ran out of ice? Ask for more sacks later today.</div>
-                      <button type="button" data-no-confirm onClick={() => setTopUp(true)} title="Ask for another delivery today" className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium cursor-pointer">Request urgent top-up</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 </div>
           </div>
         </div>

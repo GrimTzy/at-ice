@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 // New customers only (existing customers are never touched), their prices,
 // contracts, and the connected delivery history: loading count, crew,
 // arrivals, Salesman proof, invoice, payment and payment proofs, plus
-// reassigned, cancelled, short, top-up and adjusted deliveries, upcoming
+// reassigned, cancelled, short and adjusted deliveries, upcoming
 // deliveries with no driver (Admin assigns one live), and support tickets.
 // Quantities, prices, invoice totals and payments agree by construction.
 class CommerceBuilder
@@ -271,7 +271,7 @@ class CommerceBuilder
         $c = $this->c;
         $map = [];
         foreach ([[5, 'K2', 'short'], [2, 'K4', 'short'], [3, 'K1', 'cancel_pending'], [1, 'K5', 'cancel_transit'],
-            [1, 'K4', 'top_up'], [2, 'K3a', 'admin_add'], [1, 'K2', 'request_applied']] as [$n, $store, $kind]) {
+            [2, 'K3a', 'admin_add'], [1, 'K2', 'request_applied']] as [$n, $store, $kind]) {
             $map[$c->paidFromEnd($n)['start']][$store] = $kind;
         }
 
@@ -333,11 +333,11 @@ class CommerceBuilder
     }
 
     // One delivery with everything that follows it. $special: short | cancel_pending
-    // | cancel_transit | top_up | admin_add | request_applied | null
-    private function deliver(string $ymd, string $k, string $drv, string $sales, int $stop, ?string $reassignedFrom, ?array $contract, ?string $special, ?int $parentId = null): ?int
+    // | cancel_transit | admin_add | request_applied | null
+    private function deliver(string $ymd, string $k, string $drv, string $sales, int $stop, ?string $reassignedFrom, ?array $contract, ?string $special): ?int
     {
         $c = $this->c;
-        $key = "delivery:{$ymd}:{$k}".($parentId ? ':topup' : '');
+        $key = "delivery:{$ymd}:{$k}";
         if ($id = $c->m->id($key)) {
             return $id;
         }
@@ -349,8 +349,6 @@ class CommerceBuilder
             foreach ($contract['items'] as $it) {
                 $items[$it['product_type']] = $it['quantity'];
             }
-        } elseif ($parentId) {
-            $items = ['bags' => 20];
         } else {
             foreach (self::ORDERS[$type] as $product => [$lo, $hi]) {
                 if (! isset($this->price[$k][$product]) || $this->price[$k][$product] <= 0) {
@@ -365,7 +363,7 @@ class CommerceBuilder
         $orderedAt = $c->stamp($ymd, $contract ? '07:30:00' : '08:00:00');
         $loadAt = CarbonImmutable::parse("{$ymd} 09:05:00", Context::TZ)->addMinutes($stop * 6);
         $dispatched = CarbonImmutable::parse("{$ymd} 09:35:00", Context::TZ)->addMinutes($stop * 5);
-        $deliveredAt = CarbonImmutable::parse("{$ymd} ".($parentId ? '15:10:00' : '10:20:00'), Context::TZ)
+        $deliveredAt = CarbonImmutable::parse("{$ymd} 10:20:00", Context::TZ)
             ->addMinutes($stop * 150 + Context::pick("{$ymd}{$k}t", 0, 50));
         $utc = fn (CarbonImmutable $t) => $t->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');
 
@@ -385,15 +383,13 @@ class CommerceBuilder
             'ordered_at' => $orderedAt,
             'dispatched_at' => $special === 'cancel_pending' ? null : $utc($dispatched),
             'delivered_at' => $status === 'delivered' ? $utc($deliveredAt) : null,
-            'notes' => $contract ? "Contract {$contract['no']}" : ($parentId ? 'Urgent top-up requested by the store' : null),
+            'notes' => $contract ? "Contract {$contract['no']}" : null,
             'cancel_reason' => match ($special) {
                 'cancel_pending' => 'Store closed for the barangay fiesta; customer asked to skip this day.',
                 'cancel_transit' => 'Emergency: truck tire blowout on the way. Sacks returned to the plant.',
                 default => null,
             },
             'prepared_by' => $c->adminUserId,
-            'parent_delivery_id' => $parentId,
-            'is_top_up' => (bool) $parentId,
             'created_at' => $orderedAt,
             'updated_at' => $status === 'delivered' ? $utc($deliveredAt) : $utc($dispatched),
         ]);
@@ -491,16 +487,6 @@ class CommerceBuilder
         ]);
         $this->receipt($id, $proof, $k, $sales, $delivered, $items, $total, $qtyTotal, $deliveredAt);
         $this->deliveries[] = ['id' => $id, 'k' => $k, 'ymd' => $ymd];
-
-        if ($special === 'top_up') {
-            $top = $this->deliver($ymd, $k, $drv, $sales, 0, null, null, null, $id);
-            $c->m->insert("adj:{$top}", 'delivery_adjustments', [
-                'delivery_id' => $top, 'kind' => 'top_up', 'source' => 'customer', 'reason' => 'Ran out of ice before noon (hot weather).',
-                'changes' => json_encode([['product_type' => 'bags', 'before' => 0, 'after' => 20]]),
-                'user_id' => DB::table('customers')->where('id', $c->cust[$k])->value('user_id'),
-                'created_at' => $c->stamp($ymd, '12:15:00'), 'updated_at' => $c->stamp($ymd, '12:15:00'),
-            ]);
-        }
 
         return $id;
     }

@@ -653,11 +653,10 @@ class BiController extends Controller
         ];
     }
 
-    // Same-day delivery changes (App\Support\DeliveryAdjust): urgent top-ups and
-    // sacks added or reduced, today and over the last 30 days.
+    // Same-day delivery changes (App\Support\DeliveryAdjust): sacks added or
+    // reduced, today and over the last 30 days.
     private function sameDayStats(): array
     {
-        $today = now(config('atice.timezone'))->toDateString();
         $since = now(config('atice.timezone'))->subDays(30);
         $net = function ($rows) {
             $total = 0;
@@ -671,9 +670,7 @@ class BiController extends Controller
         };
 
         return [
-            'top_ups_today' => Delivery::where('is_top_up', true)->whereDate('scheduled_date', $today)->where('status', '!=', 'cancelled')->count(),
-            'top_ups_30_days' => Delivery::where('is_top_up', true)->where('scheduled_date', '>=', $since->toDateString())->where('status', '!=', 'cancelled')->count(),
-            'sacks_added_30_days' => $net(DeliveryAdjustment::whereIn('kind', ['add', 'top_up'])->where('created_at', '>=', $since->copy()->timezone(config('app.timezone')))->pluck('changes')),
+            'sacks_added_30_days' => $net(DeliveryAdjustment::where('kind', 'add')->where('created_at', '>=', $since->copy()->timezone(config('app.timezone')))->pluck('changes')),
             'sacks_reduced_30_days' => -$net(DeliveryAdjustment::where('kind', 'reduce')->where('created_at', '>=', $since->copy()->timezone(config('app.timezone')))->pluck('changes')),
         ];
     }
@@ -909,7 +906,7 @@ class BiController extends Controller
     Attendance today: '.$data['attendance']['total_in'].' / '.$data['attendance']['total_employees'].' employees present
     Overdue receivables: ₱'.number_format($data['overdue']['total_overdue_amount']).' across '.$data['overdue']['overdue_customers'].' customer(s)
     HR memos this month: '.$data['discipline']['memos_this_month'].' ('.$data['discipline']['missed_time_outs_this_month'].' for missed Time Outs, '.$data['discipline']['zero_tolerance_this_month'].' zero-tolerance), '.$data['discipline']['drafts'].' drafts waiting for HR, '.$data['discipline']['pending_investigations'].' employee(s) under investigation
-    Urgent top-ups: '.$data['same_day']['top_ups_today'].' today, '.$data['same_day']['top_ups_30_days'].' in 30 days; sacks added '.$data['same_day']['sacks_added_30_days'].', reduced '.$data['same_day']['sacks_reduced_30_days'].' in 30 days (store requests)
+    Same-day changes: sacks added '.$data['same_day']['sacks_added_30_days'].', reduced '.$data['same_day']['sacks_reduced_30_days'].' in 30 days (store requests)
 
     Respond with ONLY the summary paragraph, no labels or headers.';
         $payload = [
