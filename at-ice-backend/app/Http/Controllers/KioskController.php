@@ -25,7 +25,10 @@ use Illuminate\Validation\ValidationException;
 // unlocks it. HR cannot unlock a kiosk. Every attempt is logged.
 class KioskController extends Controller
 {
-    private const DEVICE_RULE = ['required', 'string', 'regex:/^[A-Za-z0-9-]{16,64}$/'];
+    // Wrong Admin override PINs allowed from one network address in an hour.
+    private const MAX_WRONG_ADMIN_PINS_PER_IP = 5;
+
+    private const DEVICE_RULE =['required', 'string', 'regex:/^[A-Za-z0-9-]{16,64}$/'];
 
     // POST /api/kiosk/unlock (public) { device_id, pin }
     public function unlock(Request $request)
@@ -174,9 +177,26 @@ class KioskController extends Controller
         if (! $setting->hasAdminPin() && ! $setting->hasHrOverridePin()) {
             return response()->json(['message' => 'No override PIN has been set. Admin sets one in Settings, HR in Kiosk PIN.'], 409);
         }
+        // The override PIN is only 4 digits, so wrong ones are also counted per
+        // network address across every kiosk for an hour (the route throttle
+        // only covers one minute).
+        $ipKey = 'kiosk-admin-pin:'.sha1($ip);
+        if (RateLimiter::tooManyAttempts($ipKey, self::MAX_WRONG_ADMIN_PINS_PER_IP)) {
+            $device->log('blocked', $ip);
+
+            return response()->json([
+                'message' => 'Too many wrong Admin PINs from this network. Try again in '.(int) ceil(RateLimiter::availableIn($ipKey) / 60).' minutes.',
+                'code' => 'kiosk_override_ip_blocked',
+            ], 403);
+        }
+
         $pin = (string) $request->admin_pin;
         $by = $setting->checkAdminPin($pin) ? 'admin' : ($setting->checkHrOverridePin($pin) ? 'hr' : null);
         if (! $by) {
+            RateLimiter::hit($ipKey, 3600);
+            if (RateLimiter::attempts($ipKey) === self::MAX_WRONG_ADMIN_PINS_PER_IP) {
+                Audit::log('kiosk.override_ip_blocked', $device, null, ['ip' => $ip, 'wrong_pins' => self::MAX_WRONG_ADMIN_PINS_PER_IP]);
+            }
             $device->log('override_wrong', $ip);
             Audit::log('kiosk.override_failed', $device, null, ['ip' => $ip]);
 
