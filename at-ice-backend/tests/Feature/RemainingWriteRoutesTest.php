@@ -6,9 +6,7 @@ use App\Models\Attendance;
 use App\Models\Customer;
 use App\Models\DeliveryContract;
 use App\Models\Employee;
-use App\Models\Order;
 use App\Models\PickupLog;
-use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Support\DriverAvailability;
@@ -17,8 +15,7 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 // Happy paths for the write routes that no other test covered: suppliers,
-// delivery contracts, pickup logs, the older order and payment routes, and the
-// realtime channel login.
+// delivery contracts, pickup logs and the realtime channel login.
 class RemainingWriteRoutesTest extends TestCase
 {
     use RefreshDatabase;
@@ -95,39 +92,6 @@ class RemainingWriteRoutesTest extends TestCase
 
         $this->deleteJson("/api/pickup-logs/{$id}")->assertOk();
         $this->assertDatabaseMissing('pickup_logs', ['id' => $id, 'deleted_at' => null]);
-    }
-
-    public function test_admin_places_an_order_moves_its_status_and_cancels_it(): void
-    {
-        $product = Product::create(['product_code' => 'ICE-100', 'name' => 'Ice Bag', 'unit' => 'bag', 'unit_price' => 45, 'current_stock' => 100, 'minimum_stock' => 1]);
-
-        $orderId = $this->postJson('/api/orders', [
-            'customer_id' => $this->store->id,
-            'order_date' => now()->toDateString(),
-            'items' => [['product_id' => $product->id, 'quantity' => 4]],
-        ])->assertCreated()->json('id');
-        $this->assertEquals(180, (float) Order::find($orderId)->total_amount);
-
-        $this->putJson("/api/orders/{$orderId}/status", ['status' => 'confirmed'])->assertOk();
-        $this->assertSame('confirmed', Order::find($orderId)->status);
-
-        $this->putJson("/api/orders/{$orderId}/cancel")->assertOk();
-        $this->assertSame('cancelled', Order::find($orderId)->status);
-    }
-
-    public function test_admin_records_a_payment_against_an_order(): void
-    {
-        $product = Product::create(['product_code' => 'ICE-101', 'name' => 'Ice Bag', 'unit' => 'bag', 'unit_price' => 45, 'current_stock' => 100, 'minimum_stock' => 1]);
-        $orderId = $this->postJson('/api/orders', [
-            'customer_id' => $this->store->id, 'order_date' => now()->toDateString(),
-            'items' => [['product_id' => $product->id, 'quantity' => 2]],
-        ])->assertCreated()->json('id');
-
-        $this->postJson('/api/payments', [
-            'order_id' => $orderId, 'amount' => 90, 'mop' => 'gcash', 'payment_date' => now()->toDateString(),
-        ])->assertCreated();
-
-        $this->assertDatabaseHas('payments', ['order_id' => $orderId, 'mop' => 'gcash']);
     }
 
     public function test_only_allowed_roles_get_a_realtime_channel_login(): void

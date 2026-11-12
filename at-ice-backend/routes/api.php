@@ -253,14 +253,7 @@ Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,a
         Route::delete('customers/{id}', [CustomerController::class, 'destroy']);
         Route::post('customers/{id}/create-account', [CustomerController::class, 'createAccount']);
 
-        Route::get('orders', [OrderController::class, 'index']);
-        Route::post('orders', [OrderController::class, 'store']);
-        Route::get('orders/{id}', [OrderController::class, 'show']);
-        Route::put('orders/{id}/status', [OrderController::class, 'updateStatus']);
-        Route::put('orders/{id}/cancel', [OrderController::class, 'cancel']);
 
-        Route::get('payments', [PaymentController::class, 'index']);
-        Route::post('payments', [PaymentController::class, 'store']);
 
         // Support Tickets: customer Contact Support messages (dispatch room)
         Route::get('support-messages', [SupportMessageController::class, 'index']);
@@ -517,13 +510,6 @@ Route::middleware(['auth:sanctum', 'idle', 'password.changed', 'throttle:300,1,a
 
     // CUSTOMER ROUTES
     Route::middleware('role:customer')->group(function () {
-
-        // my-orders/my-payments read from Order/Payment, which are dead
-        // code as of v29.9 (the real flow is Delivery -> DeliveryProof ->
-        // Receipt). Left in place, unused by the portal below, no
-        // functional risk in leaving them.
-        Route::get('my-orders', [OrderController::class, 'myOrders']);
-        Route::get('my-payments', [PaymentController::class, 'myPayments']);
 
         // Customer Portal: real endpoints, scoped to the logged-in
         // customer via customers.user_id (see CustomerPortalController).
