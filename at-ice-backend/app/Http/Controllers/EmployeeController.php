@@ -117,6 +117,9 @@ class EmployeeController extends Controller
             'employment_status' => 'sometimes|in:probationary,regular',
             'regularized_at' => 'nullable|date',
             'pay_basis' => 'sometimes|in:daily,monthly',
+            // HR exemption from the SSS, PhilHealth and Pag-IBIG deduction; a reason is required
+            'skip_gov_deductions' => 'sometimes|boolean',
+            'gov_skip_reason' => 'nullable|required_if:skip_gov_deductions,true,1|string|max:255',
             'monthly_rate' => 'nullable|required_if:pay_basis,monthly|numeric|min:0|max:1000000',
             'shift_start' => 'nullable|date_format:H:i',
             'shift_end' => 'nullable|date_format:H:i|different:shift_start',
@@ -405,6 +408,8 @@ class EmployeeController extends Controller
             'shift_start' => $request->shift_start,
             'shift_end' => $request->shift_end,
             'pay_basis' => $request->pay_basis ?? 'daily',
+            'skip_gov_deductions' => $request->boolean('skip_gov_deductions'),
+            'gov_skip_reason' => $request->boolean('skip_gov_deductions') ? $request->gov_skip_reason : null,
             'monthly_rate' => $request->pay_basis === 'monthly' ? $request->monthly_rate : null,
             // New hires start probationary unless HR says otherwise.
             'employment_status' => $request->employment_status ?? 'probationary',
@@ -530,6 +535,8 @@ class EmployeeController extends Controller
             'employment_status',
             'regularized_at',
             'pay_basis',
+            'skip_gov_deductions',
+            'gov_skip_reason',
             'monthly_rate',
             'shift_start',
             'shift_end',

@@ -19,6 +19,7 @@ const PAY_RATES_ID = "settings-rates-pay";
 const ENUM_LABELS = {
   CARRY_OVER: "Carry over to the next cut-off",
   EMPLOYER_SHOULDERED: "The employer pays the shortfall",
+  SECOND_PAYROLL_OF_MONTH: "All on the second pay day of the month (end-of-month cut-off)",
   FIRST_PAYROLL_OF_MONTH: "All on the first pay day of the month",
   SPLIT_FIRST_TWO: "Half on each of the first two pay days",
   REVIEW: "Admin reviews them",

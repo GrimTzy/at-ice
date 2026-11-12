@@ -46,7 +46,9 @@ const n = (v) => Number(v || 0);
 const govHelp = (strategy) => "Employee share only; the employer pays its own. Each is a monthly amount from the rates in HR > Rates (SSS by salary bracket, PhilHealth and Pag-IBIG as a percent of monthly pay with limits). "
   + (strategy === "FIRST_PAYROLL_OF_MONTH"
     ? "The whole month is deducted on the first pay day of the month."
-    : "The 50% is not a rate and not half of the salary: the month's amount is taken in two halves, on the 1st and 2nd pay days of the month, and none on a 3rd pay day.")
+    : strategy === "SPLIT_FIRST_TWO"
+      ? "The month's amount is taken in two halves, on the 1st and 2nd pay days of the month, and none on a 3rd pay day. The half is not a rate and not half of the salary."
+      : "The whole month's amount is deducted once, on the 2nd pay day of the month (the end-of-month cut-off); the other pay days of the month have none.")
   + " Change this in HR > Rates > Payroll.";
 
 const govShareText = (share) => {

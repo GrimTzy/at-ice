@@ -63,7 +63,7 @@ class SharedUtilitiesTest extends TestCase
 
     public function test_settings_have_defaults_hr_can_change_them_and_it_is_audited(): void
     {
-        $this->assertSame('SPLIT_FIRST_TWO', Settings::get('payroll.gov_deduction_strategy'));
+        $this->assertSame('SECOND_PAYROLL_OF_MONTH', Settings::get('payroll.gov_deduction_strategy'));
         $this->assertSame(0, Settings::get('attendance.grace_minutes'));
 
         $hr = User::factory()->create(['role' => 'hr']);

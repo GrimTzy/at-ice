@@ -33,7 +33,7 @@ class ExpectedPayroll
             'divisor' => (float) $get('payroll.monthly_to_daily_divisor', 21.83),
             'monthly_unworked' => (bool) $get('payroll.monthly_unworked_holiday_deduct', false),
             'negative' => (string) $get('payroll.negative_net_handling', 'CARRY_OVER'),
-            'gov' => (string) $get('payroll.gov_deduction_strategy', 'SPLIT_FIRST_TWO'),
+            'gov' => (string) $get('payroll.gov_deduction_strategy', 'SECOND_PAYROLL_OF_MONTH'),
             'break' => (float) $get('attendance.break_hours', 1),
             'night_share' => max(0.10, (float) $get('payroll.night_diff_rate', 0.10)),
             'work_days' => array_map('intval', explode(',', (string) $get('attendance.work_days', '1,2,3,4,5'))),
@@ -156,7 +156,11 @@ class ExpectedPayroll
     {
         $n = $this->payDayNumber($payDay);
 
-        return $this->set['gov'] === 'FIRST_PAYROLL_OF_MONTH' ? ($n === 1 ? 1.0 : 0.0) : (in_array($n, [1, 2], true) ? 0.5 : 0.0);
+        return match ($this->set['gov']) {
+            'FIRST_PAYROLL_OF_MONTH' => $n === 1 ? 1.0 : 0.0,
+            'SPLIT_FIRST_TWO' => in_array($n, [1, 2], true) ? 0.5 : 0.0,
+            default => $n === 2 ? 1.0 : 0.0, // SECOND_PAYROLL_OF_MONTH
+        };
     }
 
     // $employee: raw employees row. $adjustments: [[label, amount, taxable]]. $carryIn: previous expected carry_over_out.

@@ -39,6 +39,8 @@ use Carbon\CarbonPeriod;
 //   adjustments     bonus, incentive, allowance... (taxable or not)
 // Government (mandatory; employee shares from contribution_rates on the pay day)
 //   monthly amounts, deducted by payroll.gov_deduction_strategy:
+//   SECOND_PAYROLL_OF_MONTH all on the 2nd pay day of the month (the usual end-of-month
+//                           cutoff in Philippine payroll; the default, 2026-11-12)
 //   FIRST_PAYROLL_OF_MONTH  all on the first pay day of the month
 //   SPLIT_FIRST_TWO         half on the 1st and 2nd pay days, none on a 3rd
 // Withholding tax (TRAIN): the period's taxable income x 26 = yearly; tax on
@@ -95,6 +97,10 @@ class PayrollCalculator
         $gross = max(0, $basic + $paidLeavePay + $hp['holiday_pay'] + $hp['holiday_ot_pay'] + $hp['overtime_pay'] + $nightPay + $adjTotal - $late - $absence - $leaveDeduction);
 
         $gov = self::government($monthly ?? $daily * (float) Settings::get('payroll.monthly_to_daily_divisor'), $payDay);
+        if ($employee->skip_gov_deductions) {
+            // HR exemption (reason saved on the employee): nothing is taken this pay day
+            $gov = ['share' => 0.0, 'sss' => 0.0, 'philhealth' => 0.0, 'pagibig' => 0.0];
+        }
         $taxable = max(0, $gross - $adjNonTaxable - $gov['sss'] - $gov['philhealth'] - $gov['pagibig']);
         $tax = self::withholdingTax($taxable, $payDay);
         $net = $gross - $gov['sss'] - $gov['philhealth'] - $gov['pagibig'] - $tax;
@@ -461,7 +467,8 @@ class PayrollCalculator
 
         return match ((string) Settings::get('payroll.gov_deduction_strategy')) {
             'FIRST_PAYROLL_OF_MONTH' => $n === 1 ? 1.0 : 0.0,
-            default => in_array($n, [1, 2], true) ? 0.5 : 0.0, // SPLIT_FIRST_TWO
+            'SPLIT_FIRST_TWO' => in_array($n, [1, 2], true) ? 0.5 : 0.0,
+            default => $n === 2 ? 1.0 : 0.0, // SECOND_PAYROLL_OF_MONTH
         };
     }
 
